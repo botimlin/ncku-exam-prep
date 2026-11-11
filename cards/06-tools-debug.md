@@ -184,11 +184,11 @@ Task (EN): Using the diagnosis, output a minimal patch (max 8 changed lines), ke
 驗證指令（1 行）：
 成功的樣子：
 範例（只示範格式，內容不要照抄）：
-sum.c:42
-修改前：for (i = 0; i <= n; i++)
-修改後：for (i = 0; i < n; i++)
-為什麼：buf 只有 n 格
-驗證指令：gcc -g -fsanitize=address sum.c -o s && ./s < in.txt
+foo.c:77
+修改前：for (k = 0; k <= len; k++)
+修改後：for (k = 0; k < len; k++)
+為什麼：tmp 只有 len 格
+驗證指令：gcc -g -fsanitize=address foo.c -o foo && ./foo
 成功的樣子：沒有 ERROR，輸出和 expected.txt 相同
 
 ---
