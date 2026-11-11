@@ -1,0 +1,1047 @@
+# 實作卡（cards/12-implement.md）：位元欄位（1）、封包（2）、PIO 解讀（3）、PIO 修改（4）、DMA（5）、雙核（6）、組語（7）、機器碼（8）、ROS 2 node（9）
+# 標準答案驗證方式（2026-11-12）：
+#   C 位元 / 封包程式：主機 gcc -Wall -Wextra 編譯執行 PASS（bitops.h、bitstream.c 原檔）
+#   struct：python3 struct.calcsize / unpack_from 實際跑過
+#   PIO：pioasm 2.2.0 組譯（指令清單照抄 .pio.h 輸出；.side_set 1 opt + [15] 確認會報 delay limit 7）
+#   DMA / PIO init / 雙核修正：pico-sdk 2.2.0、PICO_BOARD=pico2 編譯 0 error 0 warning
+#   RISC-V 機器碼：GNU as 2.42 -march=rv32i + objdump -M no-aliases,numeric；組語片段用 riscv64-unknown-elf-gcc 組譯過
+
+# ---------------------------------------------------------------- 實作 1：位元欄位
+- id: impl-bits-signed
+  tags: [impl, bits, trap]
+  desc: 10-bit 二補數 TEMP 要 sign_extend；HUMID 同寬度但無號（陷阱：不能也當有號）
+  card: {file: "12-implement.md", title: "實作 1/9"}
+  fills:
+    - match: "位元表"
+      value: |2
+        SENSOR_STAT 暫存器（32-bit）
+        bit 31      VALID  1 = 資料有效
+        bit 30..28  MODE   量測模式 0..7
+        bit 27..18  TEMP   溫度，10-bit 二補數（可為負），單位 0.25°C
+        bit 17..8   HUMID  濕度 0..1023
+        bit 7..0    SEQ    序號
+    - {match: "資料來源", value: "uint32_t 暫存器"}
+    - {match: "範例值", value: "0xBF9C0A05 → VALID=1, MODE=3, TEMP=-25（= -6.25°C）, HUMID=10, SEQ=5"}
+  checks:
+    - {type: table_cell, key: '^\W*TEMP', col: 3, regex: '\b10\W*$', name: temp_width}
+    - {type: table_cell, key: '^\W*TEMP', col: 4, regex: '0x3FF', name: temp_mask}
+    - {type: table_cell, key: '^\W*TEMP', col: 5, regex: '是|有號|yes', name: temp_signed}
+    - {type: table_cell, key: '^\W*HUMID', col: 5, regex: '否|無號|no', name: humid_unsigned}
+    - {type: table_cell, key: '^\W*MODE', col: 3, regex: '\b3\W*$', name: mode_width}
+    - {type: answer_field, field: "有號欄位", regex: '^(?!.*HUMID).*TEMP', name: signed_list}
+    - {type: answer_field, field: "組 ?32-bit", regex: '直接用', name: assemble}
+    - {type: regex, pattern: '^(?!.*==).*sign_extend\s*\([^;\n]*,\s*10\s*\)', name: sign_extend_10_in_decode}
+    - {type: regex, pattern: 'GET_FIELD\s*\(', name: uses_get_field}
+    - {type: regex, pattern: 'SET_FIELD\s*\([^\n]*-\s*\d', name: selfcheck_negative}
+    - {type: card_slots, min_fraction: 0.8}
+  golden: |
+    | 欄位 | hi | lo | 寬度 | mask | 有號 |
+    | VALID | 31 | 31 | 31 − 31 + 1 = 1 | (1u << 1) − 1 = 0x1 | 否 |
+    | MODE | 30 | 28 | 30 − 28 + 1 = 3 | (1u << 3) − 1 = 0x7 | 否 |
+    | TEMP | 27 | 18 | 27 − 18 + 1 = 10 | (1u << 10) − 1 = 0x3FF | 是 |
+    | HUMID | 17 | 8 | 17 − 8 + 1 = 10 | (1u << 10) − 1 = 0x3FF | 否 |
+    | SEQ | 7 | 0 | 7 − 0 + 1 = 8 | (1u << 8) − 1 = 0xFF | 否 |
+    組 32-bit：直接用
+    有號欄位：TEMP
+    程式（≤ 12 行）：
+    ```c
+    #include "bitops.h"
+    typedef struct { uint32_t valid, mode, humid, seq; int32_t temp; } stat_t;
+    stat_t decode(uint32_t x) {
+        stat_t s;
+        s.valid = GET_FIELD(x, 31, 31);
+        s.mode  = GET_FIELD(x, 30, 28);
+        s.temp  = sign_extend(GET_FIELD(x, 27, 18), 10);
+        s.humid = GET_FIELD(x, 17, 8);
+        s.seq   = GET_FIELD(x, 7, 0);
+        return s;
+    }
+    ```
+    自我檢查（≤ 4 行）：
+    ```c
+    uint32_t t = SET_FIELD(0u, 27, 18, (uint32_t)-25);
+    int ok = sign_extend(GET_FIELD(t, 27, 18), 10) == -25 && GET_FIELD(SET_FIELD(0u, 17, 8, 1023u), 17, 8) == 1023u;
+    stat_t e = decode(0xBF9C0A05u);
+    ok = ok && e.valid == 1 && e.mode == 3 && e.temp == -25 && e.humid == 10 && e.seq == 5; puts(ok ? "PASS" : "FAIL");
+    ```
+    驗證：gcc -Wall -I bits-riscv t.c -o t && ./t，印出 PASS
+
+- id: impl-bits-be-cross
+  tags: [impl, bits, trap]
+  desc: big-endian byte 陣列要 load_be32；FLAGS 跨 byte、LEN 11 bit、CHAN 9 bit；沒有有號欄位（不能亂加 sign_extend）
+  card: {file: "12-implement.md", title: "實作 1/9"}
+  fills:
+    - match: "位元表"
+      value: |2
+        封包頭 HDR：4 bytes，網路順序（big-endian），收在 uint8_t hdr[4]。組成 32-bit 後：
+        bit 31..28  VER    版本
+        bit 27..20  FLAGS  旗標（跨 hdr[0] 低 4 bit 和 hdr[1] 高 4 bit）
+        bit 19..9   LEN    長度（words）
+        bit 8..0    CHAN   通道編號
+    - {match: "資料來源", value: "uint8_t 陣列（大端）"}
+    - {match: "範例值", value: "hdr = {0x2A, 0x51, 0x23, 0x45} → VER=2, FLAGS=0xA5, LEN=145, CHAN=325"}
+  checks:
+    - {type: answer_field, field: "組 ?32-bit", regex: 'load_be32', name: load_be32}
+    - {type: table_cell, key: '^\W*FLAGS', col: 3, regex: '\b8\W*$', name: flags_width}
+    - {type: table_cell, key: '^\W*FLAGS', col: 4, regex: '0xFF\b', name: flags_mask}
+    - {type: table_cell, key: '^\W*LEN', col: 3, regex: '\b11\W*$', name: len_width}
+    - {type: table_cell, key: '^\W*LEN', col: 4, regex: '0x7FF\b', name: len_mask}
+    - {type: table_cell, key: '^\W*CHAN', col: 3, regex: '\b9\W*$', name: chan_width}
+    - {type: table_cell, key: '^\W*CHAN', col: 4, regex: '0x1FF\b', name: chan_mask}
+    - {type: answer_field, field: "有號欄位", regex: '^\W*無', name: no_signed}
+    - {type: not_regex, pattern: 'sign_extend\s*\(', name: no_sign_extend}
+    - {type: regex, pattern: 'GET_FIELD\s*\(\s*\w+\s*,\s*27\s*,\s*20\s*\)', name: flags_get}
+  golden: |
+    | 欄位 | hi | lo | 寬度 | mask | 有號 |
+    | VER | 31 | 28 | 31 − 28 + 1 = 4 | (1u << 4) − 1 = 0xF | 否 |
+    | FLAGS | 27 | 20 | 27 − 20 + 1 = 8 | (1u << 8) − 1 = 0xFF | 否 |
+    | LEN | 19 | 9 | 19 − 9 + 1 = 11 | (1u << 11) − 1 = 0x7FF | 否 |
+    | CHAN | 8 | 0 | 8 − 0 + 1 = 9 | (1u << 9) − 1 = 0x1FF | 否 |
+    組 32-bit：load_be32(p)
+    有號欄位：無
+    程式（≤ 12 行）：
+    ```c
+    #include "bitops.h"
+    static uint32_t load_be32(const uint8_t *p) { return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3]; }  // 同 packet_fields.c
+    void parse_hdr(const uint8_t *hdr, uint32_t *ver, uint32_t *flags, uint32_t *len, uint32_t *chan) {
+        uint32_t x = load_be32(hdr);
+        *ver = GET_FIELD(x, 31, 28); *flags = GET_FIELD(x, 27, 20);
+        *len = GET_FIELD(x, 19, 9);  *chan  = GET_FIELD(x, 8, 0);
+    }
+    ```
+    自我檢查（≤ 4 行）：
+    ```c
+    uint8_t h[4] = {0x2A, 0x51, 0x23, 0x45}; uint32_t v, f, l, c;
+    parse_hdr(h, &v, &f, &l, &c);
+    uint32_t y = SET_FIELD(0u, 19, 9, 2047u);
+    int ok = v == 2 && f == 0xA5 && l == 145 && c == 325 && GET_FIELD(y, 19, 9) == 2047u && GET_FIELD(y, 8, 0) == 0; puts(ok ? "PASS" : "FAIL");
+    ```
+    驗證：gcc -Wall -I bits-riscv t.c -o t && ./t，印出 PASS
+
+# ---------------------------------------------------------------- 實作 2：封包 / 位元流
+- id: impl-pkt-bigendian
+  tags: [impl, packet, trap]
+  desc: 全部 big-endian（陷阱：length 大端、temp 有號 h）；offset 0,1,2,4,6,10；crc 在 10+length；格式 >BBHhI
+  card: {file: "12-implement.md", title: "實作 2/9"}
+  fills:
+    - match: "封包規格"
+      value: |2
+        感測封包，全部欄位 big-endian（網路順序），依序：
+        magic    1 byte   固定 0x7E
+        type     1 byte
+        length   2 bytes  無號，payload 的 byte 數
+        temp     2 bytes  有號（二補數），單位 0.01°C
+        ts_ms    4 bytes  無號，開機後毫秒
+        payload  length bytes
+        crc16    2 bytes  無號
+    - {match: "語言", value: "Python"}
+  checks:
+    - {type: answer_field, field: "大小端", regex: '^(?!.*小端).*(大端|>)', name: big_endian}
+    - {type: choice, option: "struct（欄位都是整 byte", field_in_answer: "解析方式"}
+    - {type: table_cell, key: '^\W*length', col: 1, regex: '\b2\W*$', name: off_length}
+    - {type: table_cell, key: '^\W*temp', col: 1, regex: '\b4\W*$', name: off_temp}
+    - {type: table_cell, key: '^\W*temp', col: 3, regex: '是|有號', name: temp_signed}
+    - {type: table_cell, key: '^\W*ts_ms', col: 1, regex: '\b6\W*$', name: off_ts}
+    - {type: table_cell, key: '^\W*crc', col: 1, regex: '10\s*\+\s*(len|length)', name: off_crc}
+    - {type: answer_field, field: "固定部分總長", regex: '\b10\b', name: fixed_len}
+    - {type: regex, pattern: '格式字串[:：]\s*[`''"]?>BBHhI\b', ignore_case: false, name: fmt}
+    - {type: contains_any, items: ["unpack"], name: uses_unpack}
+  golden: |
+    大小端：大端 >
+    解析方式（照抄選項的字母和文字）：A struct（欄位都是整 byte，Python）
+    | 欄位 | offset | 大小 | 有號 | struct 字元 |
+    | magic | 0 | 1 | 否 | B |
+    | type | 0 + 1 = 1 | 1 | 否 | B |
+    | length | 1 + 1 = 2 | 2 | 否 | H |
+    | temp | 2 + 2 = 4 | 2 | 是 | h |
+    | ts_ms | 4 + 2 = 6 | 4 | 否 | I |
+    | payload | 6 + 4 = 10 | length | 否 | （不放進格式字串） |
+    | crc16 | 10 + length | 2 | 否 | H |
+    固定部分總長：10
+    格式字串：>BBHhI
+    程式（≤ 10 行）：
+    ```python
+    import struct
+    def parse(buf):
+        magic, typ, length, temp, ts_ms = struct.unpack_from('>BBHhI', buf, 0)
+        payload = buf[10:10 + length]
+        (crc16,) = struct.unpack_from('>H', buf, 10 + length)
+        return magic, typ, length, temp / 100, ts_ms, payload, crc16
+    ```
+    驗證：python3 -c "import struct;print(struct.calcsize('>BBHhI'))" 要等於固定部分總長 10
+
+- id: impl-pkt-le-packed
+  tags: [impl, packet, trap]
+  desc: packed little-endian 紀錄（陷阱：沒寫 < 會補 padding，BIhH 原生 = 12）；offset 0,1,5,7；總長 9；格式 <BIhH
+  card: {file: "12-implement.md", title: "實作 2/9"}
+  fills:
+    - match: "封包規格"
+      value: |2
+        log 檔：Pico 端 C struct 加 __attribute__((packed)) 直接寫出，little-endian，N 筆緊接著排：
+        uint8_t  id;
+        uint32_t value;
+        int16_t  delta;
+        uint16_t flags;
+    - {match: "語言", value: "Python"}
+  checks:
+    - {type: answer_field, field: "大小端", regex: '^(?!.*大端).*(小端|<)', name: little_endian}
+    - {type: choice, option: "struct（欄位都是整 byte", field_in_answer: "解析方式"}
+    - {type: table_cell, key: '^\W*value', col: 1, regex: '\b1\W*$', name: off_value}
+    - {type: table_cell, key: '^\W*delta', col: 1, regex: '\b5\W*$', name: off_delta}
+    - {type: table_cell, key: '^\W*delta', col: 3, regex: '是|有號', name: delta_signed}
+    - {type: table_cell, key: '^\W*flags', col: 1, regex: '\b7\W*$', name: off_flags}
+    - {type: answer_field, field: "固定部分總長", regex: '\b9\b', name: total_9}
+    - {type: regex, pattern: '格式字串[:：]\s*[`''"]?<BIhH\b', ignore_case: false, name: fmt}
+  golden: |
+    大小端：小端 <
+    解析方式（照抄選項的字母和文字）：A struct（欄位都是整 byte，Python）
+    | 欄位 | offset | 大小 | 有號 | struct 字元 |
+    | id | 0 | 1 | 否 | B |
+    | value | 0 + 1 = 1 | 4 | 否 | I |
+    | delta | 1 + 4 = 5 | 2 | 是 | h |
+    | flags | 5 + 2 = 7 | 2 | 否 | H |
+    固定部分總長：9
+    格式字串：<BIhH
+    程式（≤ 10 行）：
+    ```python
+    import struct
+    def parse_log(buf):
+        return [rec for rec in struct.iter_unpack('<BIhH', buf)]   # 每筆 (id, value, delta, flags)
+    ```
+    驗證：python3 -c "import struct;print(struct.calcsize('<BIhH'))" 要等於固定部分總長 9（不寫 < 會變 12）
+
+- id: impl-pkt-bitstream
+  tags: [impl, packet, bitstream]
+  desc: 欄位 3/5/12/1 bit 緊接著排、MSB-first → 選 B read_msb，不能用 struct
+  card: {file: "12-implement.md", title: "實作 2/9"}
+  fills:
+    - match: "封包規格"
+      value: |2
+        感測位元流，MSB-first（每個 byte 先用 bit7），欄位緊接著排、不補齊 byte，每筆 21 bits：
+        type   3 bits
+        count  5 bits
+        value  12 bits（無號）
+        flag   1 bit
+        資料在 uint8_t buf[]。範例：B3 AB C8 → type=5, count=19, value=0xABC, flag=1
+    - {match: "語言", value: "C"}
+  checks:
+    - {type: choice, option: "read_msb（欄位不是整 byte，高位先", field_in_answer: "解析方式"}
+    - {type: regex, pattern: 'read_msb\s*\(\s*&?\w+\s*,\s*3\s*\)', name: read3}
+    - {type: regex, pattern: 'read_msb\s*\(\s*&?\w+\s*,\s*12\s*\)', name: read12}
+    - {type: not_regex, pattern: 'unpack|read_lsb\s*\(', name: not_struct_or_lsb}
+  golden: |
+    大小端：大端 >（MSB-first）
+    解析方式（照抄選項的字母和文字）：B read_msb（欄位不是整 byte，高位先；bitstream.c）
+    | 欄位 | offset | 大小 | 有號 | struct 字元 |
+    | type | 0 bit | 3 bit | 否 | 不用 |
+    | count | 0 + 3 = 3 bit | 5 bit | 否 | 不用 |
+    | value | 3 + 5 = 8 bit | 12 bit | 否 | 不用 |
+    | flag | 8 + 12 = 20 bit | 1 bit | 否 | 不用 |
+    固定部分總長：21 bits
+    格式字串：不用（不是整 byte）
+    程式（≤ 10 行）：
+    ```c
+    BitStream s = { buf, 0 };            // bitstream.c
+    uint32_t type  = read_msb(&s, 3);
+    uint32_t count = read_msb(&s, 5);
+    uint32_t value = read_msb(&s, 12);
+    uint32_t flag  = read_msb(&s, 1);    // 下一筆從 s.pos = 21 繼續
+    ```
+    驗證：用範例 B3 AB C8 跑，應得 type=5、count=19、value=0xABC、flag=1
+
+# ---------------------------------------------------------------- 實作 3：PIO 解讀（先貼 pio.md）
+- id: impl-pio-read-byteout
+  tags: [impl, pio, reference]
+  desc: out pins,8 + side-set；沒有 pull → autopull 開 32；低位 byte 先 → 右移；6 cycle/byte → clkdiv 25
+  turns:
+    - card: {file: "pio.md", title: "RP2350 PIO 2/8"}
+      assistant: "收到"
+    - card: {file: "pio.md", title: "RP2350 PIO 3/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 3/9"}
+  fills:
+    - match: "指令清單"
+      value: |-
+        static const uint16_t byte_out_program_instructions[] = {
+                    //     .wrap_target
+            0x6208, //  0: out    pins, 8         side 0 [2]
+            0xb242, //  1: nop                    side 1 [2]
+                    //     .wrap
+        };
+    - {match: "C 端 init", value: "無"}
+    - {match: "規格要求", value: "CPU 每次 put 一個 32-bit word，裡面 4 個 byte，低位 byte 先送；DATA0..DATA7 = GP8..GP15，CLK = GP16（side-set）；每個 byte 一個 CLK 脈衝，byte 速率 1 MHz；clk_sys 150 MHz"}
+  checks:
+    - {type: table_cell, key: 'autopull', col: 1, regex: '(?=.*開)(?=.*32)', name: autopull_on_32}
+    - {type: table_cell, key: 'out shift', col: 1, regex: '右', name: shift_right}
+    - {type: table_cell, key: 'autopush', col: 1, regex: '關|不用|不需|無', name: autopush_off}
+    - {type: table_cell, key: '腳位', col: 1, regex: '(?=.*\b8\b)(?=.*16)', name: pins}
+    - {type: table_cell, key: 'cycle', col: 1, regex: '(?=.*\b6\b)(?=.*\b25\b)', name: cycles_clkdiv}
+    - {type: table_rows, min: 9}
+  golden: |
+    | 行 | 指令 | 做什麼 | 動到（X/Y/ISR/OSR/pins/FIFO） | side / delay |
+    | 0 | out pins, 8 | 從 OSR 移出 8 bit 到 DATA0..7 | OSR、pins | side 0（CLK=0）/ [2] |
+    | 1 | nop | 不做事，只讓 CLK=1 | pins（side-set） | side 1（CLK=1）/ [2] |
+    | 設定 | 要的值 | 依據（哪一行） |
+    | 1 autopull（開/關、門檻） | 開，門檻 32（每個 word 4 個 byte × 8 bit） | 行 0 只有 out 沒有 pull |
+    | 2 out shift（右移 = LSB 先 / 左移） | 右移（低位 byte 先送） | 規格「低位 byte 先送」 |
+    | 3 autopush（開/關、門檻） | 關（沒有 in） | 沒有 in / push |
+    | 4 in shift | 不用 | 沒有 in |
+    | 5 腳位（out / set / in / sideset 的 base、count） | out base GP8、count 8；sideset base GP16 | 行 0 out pins, 8；side 0/1 |
+    | 6 每圈或每 bit 幾 cycle（列算式）、clkdiv | (1+2)+(1+2) = 6 cycle/byte；clkdiv = 150 MHz ÷ (1 MHz × 6) = 25 | 行 0 [2]、行 1 [2] |
+    C 端和上表不同的地方：無（沒有給 C 端 init）
+
+- id: impl-pio-read-rx8
+  tags: [impl, pio, reference, trap]
+  desc: 有 push 卻開 autopush（多推 0）；右移只收 8 bit → 資料在 ISR 高位，C 端 & 0xFF 要改 >> 24；8 cycle/bit
+  turns:
+    - card: {file: "pio.md", title: "RP2350 PIO 2/8"}
+      assistant: "收到"
+    - card: {file: "pio.md", title: "RP2350 PIO 8/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 3/9"}
+  fills:
+    - match: "指令清單"
+      value: |-
+        static const uint16_t serial_rx8_program_instructions[] = {
+                    //     .wrap_target
+            0x2020, //  0: wait   0 pin, 0
+            0xea27, //  1: set    x, 7                   [10]
+            0x4001, //  2: in     pins, 1
+            0x0642, //  3: jmp    x--, 2                 [6]
+            0x8020, //  4: push   block
+                    //     .wrap
+        };
+    - match: "C 端 init"
+      value:
+        number_lines: 1
+        text: |-
+          static inline void serial_rx8_init(PIO pio, uint sm, uint offset, uint pin, uint baud) {
+              pio_sm_config c = serial_rx8_program_get_default_config(offset);
+              sm_config_set_in_pins(&c, pin);
+              sm_config_set_in_shift(&c, true, true, 8);
+              sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+              sm_config_set_clkdiv(&c, (float)clock_get_hz(clk_sys) / (8 * baud));
+              pio_gpio_init(pio, pin);
+              pio_sm_init(pio, sm, offset, &c);
+              pio_sm_set_enabled(pio, sm, true);
+          }
+          uint8_t serial_rx8_getc(PIO pio, uint sm) {
+              return (uint8_t)(pio_sm_get_blocking(pio, sm) & 0xFF);
+          }
+    - {match: "規格要求", value: "UART 接收 8N1，LSB 先，115200 baud；RX 腳 = GP5；getc 回傳收到的那個 byte"}
+  checks:
+    - {type: table_cell, key: 'autopush', col: 1, regex: '關', name: autopush_off}
+    - {type: table_cell, key: 'in shift', col: 1, regex: '(?=.*右)(?=.*24)', name: right_shift_high_byte}
+    - {type: table_cell, key: 'cycle', col: 1, regex: '\b8\b', name: eight_cycles}
+    - {type: regex, pattern: '不同的地方[\s\S]*(autopush|in_shift|true,\s*true)', name: diff_autopush}
+    - {type: regex, pattern: '不同的地方[\s\S]*>>\s*24', name: diff_shift24}
+  golden: |
+    | 行 | 指令 | 做什麼 | 動到（X/Y/ISR/OSR/pins/FIFO） | side / delay |
+    | 0 | wait 0 pin, 0 | 等 RX 腳變 0（起始位） | 無（stall） | 無 / 0 |
+    | 1 | set x, 7 [10] | X = 7，再等 10 cycle 到第一個 bit 中間 | X | 無 / 10 |
+    | 2 | in pins, 1 | 取樣 RX 1 bit 移進 ISR | ISR | 無 / 0 |
+    | 3 | jmp x--, 2 [6] | X≠0 跳回行 2，X 減 1；共跑 8 次 | X | 無 / 6 |
+    | 4 | push block | ISR → RX FIFO，ISR 清 0 | ISR、FIFO | 無 / 0 |
+    | 設定 | 要的值 | 依據（哪一行） |
+    | 1 autopull（開/關、門檻） | 關（沒有 out） | 沒有 out / pull |
+    | 2 out shift | 不用 | 沒有 out |
+    | 3 autopush（開/關、門檻） | 關 | 行 4 有 push |
+    | 4 in shift | 右移（LSB 先）；只收 8 bit → 資料在 ISR 高位，C 端要 >> 24 | 行 2 in pins, 1 跑 8 次 |
+    | 5 腳位（out / set / in / sideset 的 base、count） | in base = GP5 | 行 0 wait pin 0、行 2 in pins |
+    | 6 每圈或每 bit 幾 cycle（列算式）、clkdiv | 每 bit = 1（行 2）+ 1 + 6（行 3）= 8 cycle；clkdiv = clk_sys ÷ (8 × 115200) ≈ 162.76 | 行 2、行 3 [6] |
+    C 端和上表不同的地方：第 4 行 sm_config_set_in_shift(&c, true, true, 8) 的 autopush 要改 false（和 push 一起會多推 0）；第 12 行 & 0xFF 要改成 >> 24（資料在 ISR 高位）
+
+# ---------------------------------------------------------------- 實作 4：PIO 修改（先貼 pio.md）
+- id: impl-pio-mod-2bit
+  tags: [impl, pio, patch, reference]
+  desc: shift_out 改每 CLK 送 2 bit：.pio out pins,2；C out_pins count 2、mask 和 pio_gpio_init 加 data_pin+1
+  turns:
+    - card: {file: "pio.md", title: "RP2350 PIO 1/8"}
+      assistant: "收到"
+    - card: {file: "pio.md", title: "RP2350 PIO 3/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 4/9"}
+  fills:
+    - {match: "要改成什麼", value: "每個 CLK 送 2 bit：DATA 用 2 支相鄰的腳（data_pin、data_pin + 1），每次從 OSR 拿 2 bit；CLK 時序不變"}
+    - match: '\.pio 原文'
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true}
+    - match: "C 端 init"
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true}
+  checks:
+    - {type: patch_format, max_patches: 5}
+    - {type: regex, pattern: '修改後[^\n]*out\s+pins\s*,\s*2', name: out2}
+    - {type: regex, pattern: 'set_out_pins\s*\(\s*&c\s*,\s*data_pin\s*,\s*2\s*\)', name: out_pins_count2}
+    - {type: regex, pattern: '修改後[^\n]*data_pin\s*\+\s*1', name: second_pin}
+    - {type: table_cell, key: '^\W*4\b', col: 1, regex: 'OK', name: threshold_ok}
+  golden: |
+    shift_out.pio:11
+    修改前：    out pins, 1   side 0 [1]   ; OSR 拿 1 bit 到 DATA，CLK=0，再多等 1 cycle
+    修改後：    out pins, 2   side 0 [1]   ; OSR 拿 2 bit 到 DATA、DATA+1，CLK=0，再多等 1 cycle
+    shift_out.pio:21
+    修改前：    sm_config_set_out_pins(&c, data_pin, 1);        // out pins 的起點、幾支
+    修改後：    sm_config_set_out_pins(&c, data_pin, 2);        // out pins 的起點、幾支
+    shift_out.pio:26
+    修改前：    uint32_t mask = (1u << data_pin) | (1u << clk_pin);
+    修改後：    uint32_t mask = (1u << data_pin) | (1u << (data_pin + 1)) | (1u << clk_pin);
+    shift_out.pio:29
+    修改前：    pio_gpio_init(pio, data_pin);
+    修改後：    pio_gpio_init(pio, data_pin);  pio_gpio_init(pio, data_pin + 1);
+    | 檢查 | 結果 OK / 有問題 | 依據 |
+    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | 還是 2 條 |
+    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | .side_set 1 上限 15，用 [1] |
+    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒動 |
+    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 2 bit × 16 次 = 32 |
+    | 5 shift 方向和資料放的位置一致 | OK | 左移、門檻 32，整個 word 都用 |
+    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | out_pins count 2、mask、gpio_init 都加了 data_pin + 1 |
+    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒用 v1 指令 |
+    驗證：建置沒有 pioasm 錯誤，再跑 app 的測試
+
+- id: impl-pio-mod-byte
+  tags: [impl, pio, patch, reference, trap]
+  desc: 每次 put 1 個 byte、MSB 先（陷阱：門檻 32 會多送 24 個 0）→ 門檻 8 + 呼叫端 b << 24；不能改成右移
+  turns:
+    - card: {file: "pio.md", title: "RP2350 PIO 1/8"}
+      assistant: "收到"
+    - card: {file: "pio.md", title: "RP2350 PIO 8/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 4/9"}
+  fills:
+    - {match: "要改成什麼", value: "呼叫端改成每次 `pio_sm_put_blocking(pio, sm, b);` 只放 1 個 byte（uint8_t b，在低 8 bit），線上只能送這 8 bit、MSB 先，不能多送 0。呼叫端那行在 app_pio.c:71，也可以改。"}
+    - match: '\.pio 原文'
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true}
+    - match: "C 端 init"
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true}
+  checks:
+    - {type: patch_format, max_patches: 5}
+    - {type: regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*false\s*,\s*true\s*,\s*8\s*\)', name: threshold8}
+    - {type: regex, pattern: 'pio_sm_put(_blocking)?\s*\([^\n]*<<\s*(24|\(\s*32\s*-\s*8\s*\))', name: put_high_byte}
+    - {type: not_regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*true', name: keeps_left_shift}
+  golden: |
+    shift_out.pio:23
+    修改前：    sm_config_set_out_shift(&c, false, true, 32);   // 左移 = MSB 先送；autopull 每 32 bits
+    修改後：    sm_config_set_out_shift(&c, false, true, 8);    // 左移 = MSB 先送；autopull 每 8 bits
+    app_pio.c:71
+    修改前：pio_sm_put_blocking(pio, sm, b);
+    修改後：pio_sm_put_blocking(pio, sm, (uint32_t)b << 24);   // 左移從 bit31 送，byte 要放高位
+    | 檢查 | 結果 OK / 有問題 | 依據 |
+    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | .pio 沒改，2 條 |
+    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | 沒改 |
+    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒改 |
+    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 1 bit × 8 次 = 門檻 8 |
+    | 5 shift 方向和資料放的位置一致 | OK | 左移 + 門檻 8 → put(b << 24) |
+    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
+    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒有 |
+    驗證：建置沒有 pioasm 錯誤，再跑 app 的測試（loopback 收到的值要等於送出的 byte）
+
+- id: impl-pio-mod-baud
+  tags: [impl, pio, patch, reference, trap]
+  desc: 只改 baud → 只改 C 的 UART_BAUD；.side_set 1 opt 的 delay 上限 7（陷阱：不能把 [7] 改大）
+  turns:
+    - card: {file: "pio.md", title: "RP2350 PIO 3/8"}
+      assistant: "收到"
+    - card: {file: "pio.md", title: "RP2350 PIO 6/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 4/9"}
+  fills:
+    - {match: "要改成什麼", value: "baud 從 115200 改成 9600，其他不變（clk_sys 150 MHz）"}
+    - match: '\.pio 原文'
+      value:
+        prefix: "（uart_tx8.pio）\n"
+        number_lines: 1
+        text: |-
+          .program uart_tx8
+          .side_set 1 opt
+              pull       side 1 [7]
+              set x, 7   side 0 [7]
+          bitloop:
+              out pins, 1
+              jmp x-- bitloop [6]
+    - match: "C 端 init"
+      value:
+        prefix: "（app_uart.c）\n"
+        number_lines: 1
+        text: |-
+          #define UART_BAUD 115200
+          static inline void uart_tx8_init(PIO pio, uint sm, uint offset, uint pin) {
+              pio_sm_config c = uart_tx8_program_get_default_config(offset);
+              sm_config_set_out_pins(&c, pin, 1);
+              sm_config_set_sideset_pins(&c, pin);
+              sm_config_set_out_shift(&c, true, false, 32);
+              sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+              sm_config_set_clkdiv(&c, (float)clock_get_hz(clk_sys) / (8 * UART_BAUD));
+              pio_sm_set_pins_with_mask(pio, sm, 1u << pin, 1u << pin);
+              pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+              pio_gpio_init(pio, pin);
+              pio_sm_init(pio, sm, offset, &c);
+              pio_sm_set_enabled(pio, sm, true);
+          }
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: '修改後[^\n]*9600', name: baud_9600}
+    - {type: not_regex, pattern: '修改後[^\n]*\[(?:[89]|\d\d+)\]', name: no_delay_over_7}
+    - {type: table_cell, key: '^\W*2\b', col: 1, regex: 'OK', name: delay_ok}
+  golden: |
+    app_uart.c:1
+    修改前：#define UART_BAUD 115200
+    修改後：#define UART_BAUD 9600
+    （.pio 不用改：每 bit 仍是 8 cycle；clkdiv = 150 MHz ÷ (8 × 9600) = 1953.125，≤ 65536 可以）
+    | 檢查 | 結果 OK / 有問題 | 依據 |
+    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | 4 條，沒改 |
+    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | .side_set 1 opt 上限 7，現在最大 [7]，沒改 |
+    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒改 |
+    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 有明確 pull，不用 autopull |
+    | 5 shift 方向和資料放的位置一致 | OK | 右移、LSB 先 |
+    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
+    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒有 |
+    驗證：建置後用邏輯分析儀或另一端 9600 baud 收，字元正確
+
+# ---------------------------------------------------------------- 實作 5：DMA（先貼 pico-dma.md）
+- id: impl-dma-gen-copy
+  tags: [impl, dma, reference]
+  desc: 2048 bytes 用 32-bit → 512 筆；記憶體→記憶體 write_increment true、DREQ_FORCE；結束 unclaim
+  turns:
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 5/9"}
+  fills:
+    - {match: "規格", value: "把 static uint8_t in_buf[2048] __attribute__((aligned(4))) 整個複製到 static uint8_t out_buf[2048]（也 aligned(4)），用 32-bit 傳輸；CPU 等它做完才用 out_buf；用完通道要還"}
+    - {match: "現在的程式", value: "無"}
+  checks:
+    - {type: table_cell, key: '^\W*4\b', col: 1, regex: '512', name: count_512}
+    - {type: table_cell, key: '^\W*6\b', col: 1, regex: 'true|開|要', name: winc_true}
+    - {type: regex, pattern: 'dma_encode_transfer_count\s*\(\s*(512|2048\s*/\s*4|sizeof\s*\(?\s*in_buf\s*\)?\s*/\s*4)\s*\)', name: encode_512}
+    - {type: regex, pattern: 'channel_config_set_write_increment\s*\(\s*&\w+\s*,\s*true\s*\)', name: winc_code}
+    - {type: regex, pattern: 'dma_channel_configure\s*\(\s*\w+\s*,\s*&\w+\s*,\s*out_buf\s*,\s*in_buf', name: dst_first}
+    - {type: regex, pattern: 'DMA_SIZE_32', name: size32}
+    - {type: regex, pattern: 'dma_channel_unclaim\s*\(', name: unclaim}
+  golden: |
+    | 項目 | 規格要的 | 現在程式 | OK/NG |
+    | 1 read_addr（configure 第 4 參數） | in_buf | 沒寫 | NG |
+    | 2 write_addr（第 3 參數） | out_buf | 沒寫 | NG |
+    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_32 | 沒寫（預設 32） | OK |
+    | 4 筆數（算式） | 2048 ÷ 4 = 512 | 沒寫 | NG |
+    | 5 read_increment（預設 true） | true | 沒寫（預設 true） | OK |
+    | 6 write_increment（預設 false） | true（寫到陣列） | 沒寫（預設 false） | NG |
+    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
+    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
+    | 9 結束：wait_for_finish → unclaim | 要 | 沒寫 | NG |
+    程式（照順序，≤ 10 行）：
+    ```c
+    int ch = dma_claim_unused_channel(true);
+    dma_channel_config c = dma_channel_get_default_config(ch);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, true);
+    dma_channel_configure(ch, &c, out_buf, in_buf, dma_encode_transfer_count(2048 / 4), true);
+    dma_channel_wait_for_finish_blocking(ch);
+    dma_channel_unclaim(ch);
+    ```
+
+- id: impl-dma-check-mem
+  tags: [impl, dma, reference, trap]
+  desc: 現有程式 count 用 sizeof（bytes）、沒開 write_increment、沒 unclaim → 4、6、9 NG；其他 OK
+  turns:
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 5/9"}
+  fills:
+    - {match: "規格", value: "把 uint16_t samples[1000] 複製到 uint16_t copy[1000]，用 16-bit 傳輸；等完成；用完通道要還"}
+    - match: "現在的程式"
+      value:
+        number_lines: 40
+        text: |-
+          static uint16_t samples[1000], copy[1000];
+          void copy_samples(void) {
+              int ch = dma_claim_unused_channel(true);
+              dma_channel_config c = dma_channel_get_default_config(ch);
+              channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+              dma_channel_configure(ch, &c, copy, samples,
+                                    dma_encode_transfer_count(sizeof(samples)), true);
+              dma_channel_wait_for_finish_blocking(ch);
+          }
+  checks:
+    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'NG', name: count_ng}
+    - {type: table_cell, key: '^\W*4\b', col: 1, regex: '1000', name: count_1000}
+    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG', name: winc_ng}
+    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'NG', name: unclaim_ng}
+    - {type: table_cell, key: '^\W*2\b', col: 3, regex: 'OK', name: dst_ok}
+    - {type: table_cell, key: '^\W*3\b', col: 3, regex: 'OK', name: size_ok}
+    - {type: regex, pattern: 'dma_encode_transfer_count\s*\(\s*(1000|count_of\s*\(\s*samples\s*\)|sizeof\s*\(\s*samples\s*\)\s*/\s*(2|sizeof\s*\(\s*samples\s*\[\s*0\s*\]\s*\)))\s*\)', name: encode_1000}
+    - {type: regex, pattern: 'write_increment\s*\(\s*&c\s*,\s*true\s*\)', name: winc_fix}
+    - {type: regex, pattern: 'dma_channel_unclaim\s*\(', name: unclaim_fix}
+  golden: |
+    | 項目 | 規格要的 | 現在程式 | OK/NG |
+    | 1 read_addr（configure 第 4 參數） | samples | samples（:45） | OK |
+    | 2 write_addr（第 3 參數） | copy | copy（:45） | OK |
+    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_16 | DMA_SIZE_16（:44） | OK |
+    | 4 筆數（算式） | 2000 bytes ÷ 2 = 1000 | sizeof(samples) = 2000（bytes） | NG |
+    | 5 read_increment（預設 true） | true | 沒寫（預設 true） | OK |
+    | 6 write_increment（預設 false） | true（寫到陣列） | 沒寫（預設 false） | NG |
+    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
+    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
+    | 9 結束：wait_for_finish → unclaim | wait + unclaim | 只有 wait（:47） | NG |
+    程式（照順序，≤ 10 行）：
+    ```c
+    int ch = dma_claim_unused_channel(true);
+    dma_channel_config c = dma_channel_get_default_config(ch);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+    channel_config_set_write_increment(&c, true);
+    dma_channel_configure(ch, &c, copy, samples,
+                          dma_encode_transfer_count(count_of(samples)), true);
+    dma_channel_wait_for_finish_blocking(ch);
+    dma_channel_unclaim(ch);
+    ```
+
+- id: impl-dma-check-pio
+  tags: [impl, dma, pio, reference, trap]
+  desc: 送進 PIO TX FIFO：write_increment 應為 false（現在 true）、DREQ 沒設 → 6、7 NG；count 256 正確
+  turns:
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}
+      assistant: "收到"
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 4/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 5/9"}
+  fills:
+    - {match: "規格", value: "用 DMA 把 static uint32_t words[256] 送進 PIO（參數 pio、sm）的 TX FIFO，32-bit，速度要跟著 PIO（不能塞爆 FIFO）；等完成；用完通道要還"}
+    - match: "現在的程式"
+      value:
+        number_lines: 60
+        text: |-
+          static uint32_t words[256];
+          void send_words(PIO pio, uint sm) {
+              int ch = dma_claim_unused_channel(true);
+              dma_channel_config c = dma_channel_get_default_config(ch);
+              channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+              channel_config_set_read_increment(&c, true);
+              channel_config_set_write_increment(&c, true);
+              dma_channel_configure(ch, &c, &pio->txf[sm], words,
+                                    dma_encode_transfer_count(256), true);
+              dma_channel_wait_for_finish_blocking(ch);
+              dma_channel_unclaim(ch);
+          }
+  checks:
+    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG', name: winc_ng}
+    - {type: table_cell, key: '^\W*7\b', col: 3, regex: 'NG', name: dreq_ng}
+    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'OK', name: count_ok}
+    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'OK', name: unclaim_ok}
+    - {type: regex, pattern: 'pio_get_dreq\s*\(\s*pio\s*,\s*sm\s*,\s*true\s*\)', name: dreq_fix}
+    - {type: regex, pattern: '程式[:：][\s\S]*write_increment\s*\(\s*&c\s*,\s*false\s*\)', name: winc_false}
+  golden: |
+    | 項目 | 規格要的 | 現在程式 | OK/NG |
+    | 1 read_addr（configure 第 4 參數） | words | words（:67） | OK |
+    | 2 write_addr（第 3 參數） | &pio->txf[sm] | &pio->txf[sm]（:67） | OK |
+    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_32 | DMA_SIZE_32（:64） | OK |
+    | 4 筆數（算式） | 1024 bytes ÷ 4 = 256 | 256（:68） | OK |
+    | 5 read_increment（預設 true） | true | true（:65） | OK |
+    | 6 write_increment（預設 false） | false（FIFO 位址固定） | true（:66） | NG |
+    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | pio_get_dreq(pio, sm, true) | 沒寫（預設 DREQ_FORCE，會塞爆 FIFO） | NG |
+    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
+    | 9 結束：wait_for_finish → unclaim | wait + unclaim | 有（:69、:70） | OK |
+    程式（照順序，≤ 10 行）：
+    ```c
+    int ch = dma_claim_unused_channel(true);
+    dma_channel_config c = dma_channel_get_default_config(ch);
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, pio_get_dreq(pio, sm, true));
+    dma_channel_configure(ch, &c, &pio->txf[sm], words, dma_encode_transfer_count(256), true);
+    dma_channel_wait_for_finish_blocking(ch);
+    dma_channel_unclaim(ch);
+    ```
+
+# ---------------------------------------------------------------- 實作 6：雙核（先貼 multicore-sync.md）
+- id: impl-mc-lock-loop
+  tags: [impl, multicore, patch, reference, trap]
+  desc: 鎖包住整個計算迴圈（雙核比單核慢）→ 區域累加，鎖內只留 g_sum += local
+  turns:
+    - card: {file: "multicore-sync.md", title: "多核同步 5/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 6/9"}
+  fills:
+    - {match: "規格", value: "data 在 launch core1 前由 core0 填好。core0 算 data[0..N/2)、core1 算 data[N/2..N)，兩核都把結果加進 g_sum；兩核做完後 core0 印 g_sum。現在雙核版比單核還慢。"}
+    - match: "程式"
+      value:
+        number_lines: 20
+        text: |-
+          static uint32_t data[N];
+          static volatile uint32_t g_sum;          // 兩核共用
+          static spin_lock_t *lk;                  // main 裡已 spin_lock_init
+          static void work(const uint32_t *d, uint32_t n) {
+              uint32_t save = spin_lock_blocking(lk);
+              for (uint32_t i = 0; i < n; i++) {
+                  uint32_t v = (d[i] * 2654435761u) >> 16;   // 重計算
+                  g_sum += v;
+              }
+              spin_unlock(lk, save);
+          }
+          static void core1_main(void) {
+              work(data + N / 2, N / 2);
+              multicore_fifo_push_blocking(1);
+              while (true) __wfi();
+          }
+  checks:
+    - {type: table_cell, key: 'g_sum', col: 3, regex: '^[\s*「`]*(A|D)\b', name: gsum_A_or_D}
+    - {type: table_cell, key: '^\W*data', col: 3, regex: '^[\s*「`]*F\b', name: data_F}
+    - {type: answer_field, field: "鎖內的行", regex: '^(?!.*for).*g_sum\s*\+=', name: lock_only_sum}
+    - {type: regex, pattern: '修改後[\s\S]*\+=[\s\S]*spin_lock_blocking\s*\(\s*lk\s*\)[\s\S]*g_sum\s*\+=', name: lock_after_loop}
+    - {type: patch_format, max_patches: 3}
+  golden: |
+    | 變數 | 誰寫 | 誰讀 | 保護（照抄選項） |
+    | g_sum | core0、core1 | core0 | A 不共享（各核區域變數，最後合併一次） |
+    | data | core0（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
+    | lk | main（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
+    鎖內的行：g_sum += local;
+    app_multicore.c:24
+    修改前：
+        uint32_t save = spin_lock_blocking(lk);
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t v = (d[i] * 2654435761u) >> 16;   // 重計算
+            g_sum += v;
+        }
+        spin_unlock(lk, save);
+    修改後：
+        uint32_t local = 0;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t v = (d[i] * 2654435761u) >> 16;   // 重計算
+            local += v;
+        }
+        uint32_t save = spin_lock_blocking(lk);
+        g_sum += local;
+        spin_unlock(lk, save);
+    驗證：跑 2 次結果相同，且等於單核版
+
+- id: impl-mc-design
+  tags: [impl, multicore, reference]
+  desc: 分工設計：crc_table F；塊資料 / 塊編號 B queue_t（或 C FIFO 傳索引）；crc 結果 B；err_count E（或 D）
+  turns:
+    - card: {file: "multicore-sync.md", title: "多核同步 4/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 6/9"}
+  fills:
+    - {match: "規格", value: "core0 從 USB 每收滿一塊 512 個 u32 就交給 core1 算 CRC32；core1 算完把（塊編號, crc）交回 core0，core0 依序印出。兩核遇到格式錯誤都要把 err_count 加 1，最後 core0 印 err_count。crc_table[256] 在 launch core1 之前由 core0 建好，之後兩核只讀。"}
+    - match: "程式"
+      value:
+        number_lines: 10
+        text: |-
+          static uint32_t crc_table[256];
+          static uint32_t blocks[4][512];   // 4 塊 buffer 輪流用
+          static uint32_t err_count;
+          static uint32_t cur_block;        // core0 填好的塊編號，core1 要知道
+          static uint32_t cur_crc;          // core1 算好的 crc，core0 要讀
+  checks:
+    - {type: table_cell, key: 'crc_table', col: 3, regex: '^[\s*「`]*F\b', name: table_F}
+    - {type: table_cell, key: 'err_count', col: 3, regex: '^[\s*「`]*(E|D)\b', name: err_E_or_D}
+    - {type: table_cell, key: 'cur_block', col: 3, regex: '^[\s*「`]*(B|C)\b', name: block_B_or_C}
+    - {type: table_cell, key: 'cur_crc', col: 3, regex: '^[\s*「`]*B\b', name: crc_B}
+    - {type: contains_any, items: ["queue_t", "queue_init", "q_job", "q_result"], name: uses_queue}
+  golden: |
+    | 變數 | 誰寫 | 誰讀 | 保護（照抄選項） |
+    | crc_table | core0（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
+    | blocks | core0 | core1 | B queue_t（傳一筆筆資料或工作）：job_t 帶指標，交出後 core0 不碰到拿回結果 |
+    | err_count | core0、core1 | core0 | E atomic（單一 32-bit 計數） |
+    | cur_block | core0 | core1 | B queue_t（傳一筆筆資料或工作）：放進 job_t.id |
+    | cur_crc | core1 | core0 | B queue_t（傳一筆筆資料或工作）：result_t {id, crc} |
+    鎖內的行：無
+    app.c:12
+    修改前：
+    static uint32_t err_count;
+    static uint32_t cur_block;        // core0 填好的塊編號，core1 要知道
+    static uint32_t cur_crc;          // core1 算好的 crc，core0 要讀
+    修改後：
+    static atomic_uint err_count;     // #include <stdatomic.h>，用 atomic_fetch_add(&err_count, 1)
+    typedef struct { uint32_t id; const uint32_t *data; } job_t;   // 同 app_multicore.c
+    typedef struct { uint32_t id; uint32_t crc; } result_t;
+    static queue_t q_job, q_result;   // main 裡 queue_init 後才 launch core1
+    驗證：跑 2 次結果相同，且等於單核版
+
+# ---------------------------------------------------------------- 實作 7：RISC-V 組語（先貼 riscv-hazard3.md）
+- id: impl-asm-count
+  tags: [impl, riscv, asm, reference]
+  desc: bge a2,t1 → 跳過的是 limit >= arr[i]，所以計數 arr[i] > limit；迴圈 n 次
+  turns:
+    - card: {file: "riscv-hazard3.md", title: "RISC-V Hazard3 2/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 7/9"}
+  fills:
+    - match: "組語"
+      value:
+        number_lines: 1
+        text: |2-
+              .globl count_above
+          count_above:
+              li   t0, 0
+              beqz a1, 3f
+          1:  lw   t1, 0(a0)
+              bge  a2, t1, 2f
+              addi t0, t0, 1
+          2:  addi a0, a0, 4
+              addi a1, a1, -1
+              bnez a1, 1b
+          3:  mv   a0, t0
+              ret
+    - {match: "參數意思", value: "a0 = const int32_t *arr，a1 = uint32_t n，a2 = int32_t limit；回傳 a0"}
+  checks:
+    - {type: table_cell, key: '^\W*6\b', col: 2, regex: 'a2\)?\s*>=\s*(\(\w+\)\s*)?t1|t1\)?\s*<=\s*(\(\w+\)\s*)?a2', name: bge_operand_order}
+    - {type: regex, pattern: '等價的 C[\s\S]*(>\s*limit|limit\s*<|>\s*a2\b|a2\s*<\s*)', name: counts_greater}
+    - {type: answer_field, field: "迴圈跑幾次", regex: '\bn\b|a1', name: loop_n}
+    - {type: table_rows, min: 10}
+  golden: |
+    | 行 | 指令 | 運算（C 寫法） | 結果寫到 |
+    | 3 | li t0, 0 | t0 = 0 | t0 |
+    | 4 | beqz a1, 3f | if (a1 == 0) goto 3 | 跳到 label 3 |
+    | 5 | lw t1, 0(a0) | t1 = *(int32_t *)(a0 + 0) | t1 |
+    | 6 | bge a2, t1, 2f | if ((int32_t)a2 >= (int32_t)t1) goto 2 | 跳到 label 2 |
+    | 7 | addi t0, t0, 1 | t0 = t0 + 1 | t0 |
+    | 8 | addi a0, a0, 4 | a0 = a0 + 4（下一個 int32） | a0 |
+    | 9 | addi a1, a1, -1 | a1 = a1 - 1 | a1 |
+    | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
+    | 11 | mv a0, t0 | a0 = t0 | a0 |
+    | 12 | ret | return | pc = ra |
+    等價的 C（≤ 6 行）：
+    ```c
+    uint32_t count_above(const int32_t *arr, uint32_t n, int32_t limit) {
+        uint32_t c = 0;
+        for (uint32_t i = 0; i < n; i++) if (arr[i] > limit) c++;
+        return c;
+    }
+    ```
+    迴圈跑幾次：n 次（a1 = 0 時直接跳到 3，跑 0 次）
+    可疑處：無（bge 是有號比較，和 int32_t 相符）
+
+- id: impl-asm-unsigned
+  tags: [impl, riscv, asm, reference, trap]
+  desc: 規格要有號比較但用了 bgeu → 負數被當大數；可疑處要指出並改 bge
+  turns:
+    - card: {file: "riscv-hazard3.md", title: "RISC-V Hazard3 2/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 7/9"}
+  fills:
+    - match: "組語"
+      value:
+        number_lines: 1
+        text: |2-
+              .globl count_above
+          count_above:
+              li   t0, 0
+              beqz a1, 3f
+          1:  lw   t1, 0(a0)
+              bgeu a2, t1, 2f
+              addi t0, t0, 1
+          2:  addi a0, a0, 4
+              addi a1, a1, -1
+              bnez a1, 1b
+          3:  mv   a0, t0
+              ret
+    - {match: "參數意思", value: "a0 = const int32_t *arr（可能有負數），a1 = uint32_t n，a2 = int32_t limit；規格：回傳 arr 中「大於 limit」的個數，有號比較。測試 arr = {5, -3, 10, 0, 7}、limit = 4 應回 3，實際回 4"}
+  checks:
+    - {type: answer_field, field: "可疑處", regex: 'bgeu|無號|unsigned', name: flags_bgeu}
+    - {type: regex, pattern: '改[成用為]?\s*[「`]?bge(?!u)', name: fix_bge}
+    - {type: table_cell, key: '^\W*6\b', col: 2, regex: 'uint32_t|unsigned|無號', name: row6_unsigned}
+  golden: |
+    | 行 | 指令 | 運算（C 寫法） | 結果寫到 |
+    | 3 | li t0, 0 | t0 = 0 | t0 |
+    | 4 | beqz a1, 3f | if (a1 == 0) goto 3 | 跳到 label 3 |
+    | 5 | lw t1, 0(a0) | t1 = *(int32_t *)(a0 + 0) | t1 |
+    | 6 | bgeu a2, t1, 2f | if ((uint32_t)a2 >= (uint32_t)t1) goto 2 | 跳到 label 2 |
+    | 7 | addi t0, t0, 1 | t0 = t0 + 1 | t0 |
+    | 8 | addi a0, a0, 4 | a0 = a0 + 4 | a0 |
+    | 9 | addi a1, a1, -1 | a1 = a1 - 1 | a1 |
+    | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
+    | 11 | mv a0, t0 | a0 = t0 | a0 |
+    | 12 | ret | return | pc = ra |
+    等價的 C（≤ 6 行）：
+    ```c
+    uint32_t c = 0;
+    for (uint32_t i = 0; i < n; i++) if ((uint32_t)arr[i] > (uint32_t)limit) c++;
+    return c;
+    ```
+    迴圈跑幾次：n 次
+    可疑處：第 6 行 bgeu 是無號比較，-3 變成 0xFFFFFFFD 被當成大於 4，所以多算 1 個；改成 bge a2, t1, 2f
+
+# ---------------------------------------------------------------- 實作 8：機器碼（欄位由程式算）
+- id: impl-rv-blt
+  tags: [impl, riscv, decode, trap]
+  desc: 0xfeb546e3 = blt x10,x11,-20（陷阱：I/S 格式的值 -21 / -19 不能抄）
+  card: {file: "12-implement.md", title: "實作 8/9"}
+  fills:
+    - {match: "機器碼", value: "0xfeb546e3"}
+    - match: "程式印出"
+      value: |2
+        op 0x63 rd 13 f3 4 rs1 10 rs2 11 f7 0x7f
+        I -21 S -19 B -20 J -700438 U 0xfeb54
+  checks:
+    - {type: answer_field, field: "格式", regex: '^\W*B\b', name: format_B}
+    - {type: answer_field, field: "imm", regex: '^(?!.*-(21|19)\b).*-20\b', name: imm_m20}
+    - {type: answer_field, field: "組語", regex: 'blt\s+x10\s*,\s*x11\s*,\s*-20\b', name: asm}
+    - {type: card_slots, min_fraction: 0.8}
+  golden: |
+    opcode：0x63
+    格式：B
+    funct3 / funct7：4（blt）/ 不用
+    rd / rs1 / rs2：不用 / x10 / x11
+    imm：-20
+    組語（暫存器寫 xN）：blt x10, x11, -20
+
+- id: impl-rv-srai
+  tags: [impl, riscv, decode, trap]
+  desc: 0x40335293 = srai x5,x6,3（陷阱：I 的 imm 印 1027，位移量要用 rs2 欄位 3）
+  card: {file: "12-implement.md", title: "實作 8/9"}
+  fills:
+    - {match: "機器碼", value: "0x40335293"}
+    - match: "程式印出"
+      value: |2
+        op 0x13 rd 5 f3 5 rs1 6 rs2 3 f7 0x20
+        I 1027 S 1029 B 3076 J 220162 U 0x40335
+  checks:
+    - {type: answer_field, field: "組語", regex: '^(?!.*1027).*srai\s+x5\s*,\s*x6\s*,\s*(0x)?3\b', name: asm_srai}
+    - {type: answer_field, field: "格式", regex: '^\W*I\b', name: format_I}
+    - {type: card_slots, min_fraction: 0.8}
+  golden: |
+    opcode：0x13
+    格式：I
+    funct3 / funct7：5 / 0x20（srai）
+    rd / rs1 / rs2：x5 / x6 / 3（位移量）
+    imm：位移量 3（I 欄 1027 = 0x400 + 3，不直接用）
+    組語（暫存器寫 xN）：srai x5, x6, 3
+
+- id: impl-rv-sh
+  tags: [impl, riscv, decode, trap]
+  desc: 0xfc741e23 = sh x7,-36(x8)（陷阱：S 型 imm 拆兩段，I 欄 -57 不能抄）
+  card: {file: "12-implement.md", title: "實作 8/9"}
+  fills:
+    - {match: "機器碼", value: "0xfc741e23"}
+    - match: "程式印出"
+      value: |2
+        op 0x23 rd 28 f3 1 rs1 8 rs2 7 f7 0x7e
+        I -57 S -36 B -2084 J -778298 U 0xfc741
+  checks:
+    - {type: answer_field, field: "格式", regex: '^\W*S\b', name: format_S}
+    - {type: answer_field, field: "組語", regex: 'sh\s+x7\s*,\s*-36\s*\(\s*x8\s*\)', name: asm_sh}
+    - {type: not_regex, pattern: '組語[^\n]*-57', name: not_I_imm}
+  golden: |
+    opcode：0x23
+    格式：S
+    funct3 / funct7：1（sh）/ 不用
+    rd / rs1 / rs2：不用 / x8 / x7
+    imm：-36
+    組語（暫存器寫 xN）：sh x7, -36(x8)
+
+# ---------------------------------------------------------------- 實作 9：ROS 2 node（先貼 ros2.md QoS）
+- id: impl-ros-besteffort
+  tags: [impl, ros2, patch, reference, trap]
+  desc: 訂閱 sensor_data（BEST_EFFORT）publisher → sub 也要 BEST_EFFORT，pub 維持 RELIABLE；Float32；參數 gain 0.5（float）
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 3/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 9/9"}
+  fills:
+    - match: "規格原文"
+      value: |2
+        節點名稱 scaler。
+        訂閱 /imu/temp（std_msgs/msg/Float32）；發布端是感測器 driver，QoS = sensor_data（BEST_EFFORT、depth 5）。
+        每收到一筆就乘上參數 gain（預設 0.5，float），發布到 /imu/temp_scaled（std_msgs/msg/Float32，RELIABLE、depth 10）。
+    - match: "node_template"
+      value: {file: "預製程式碼/ros2/node_template.py", lines: [14, 63], number_lines: true}
+  checks:
+    - {type: table_cell, key: '/imu/temp(?!_)', col: 3, regex: 'BEST_EFFORT|best_effort|sensor_data', name: sub_qos_best_effort}
+    - {type: table_cell, key: 'temp_scaled', col: 1, regex: 'pub', name: out_is_pub}
+    - {type: regex, pattern: '(ReliabilityPolicy\.BEST_EFFORT|qos_profile_sensor_data)', name: code_best_effort}
+    - {type: regex, pattern: 'create_subscription\s*\(\s*Float32', name: sub_float32}
+    - {type: regex, pattern: 'create_publisher\s*\(\s*Float32', name: pub_float32}
+    - {type: regex, pattern: 'declare_parameter\s*\(\s*[''"]gain[''"]\s*,\s*0\.5\s*\)', name: param_gain}
+    - {type: answer_field, field: "node 名稱", regex: 'scaler', name: node_name}
+    - {type: patch_format, max_patches: 12}
+  golden: |
+    | topic | 方向 pub/sub | 型別 | QoS |
+    | /imu/temp | sub | std_msgs/msg/Float32 | BEST_EFFORT、depth 5（配合 sensor_data publisher） |
+    | /imu/temp_scaled | pub | std_msgs/msg/Float32 | RELIABLE、depth 10 |
+    node 名稱：scaler
+    參數（名稱 = 預設值）：gain = 0.5、in_topic = /imu/temp、out_topic = /imu/temp_scaled
+    node_template.py:17
+    修改前：from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+    修改後：from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
+    node_template.py:18
+    修改前：from std_msgs.msg import Int32  # TODO(改這裡) 換訊息型別，例如 Int32MultiArray / String / UInt8MultiArray
+    修改後：from std_msgs.msg import Float32, Int32  # TODO(改這裡) 換訊息型別 // 已改：Float32（/tick 還用 Int32）
+    node_template.py:33
+    修改前：        super().__init__("processor")
+    修改後：        super().__init__("scaler")
+    node_template.py:36
+    修改前：        self.declare_parameter("in_topic", "/number")
+    修改後：        self.declare_parameter("in_topic", "/imu/temp")
+    node_template.py:37
+    修改前：        self.declare_parameter("out_topic", "/double")
+    修改後：        self.declare_parameter("out_topic", "/imu/temp_scaled")
+    node_template.py:38
+    修改前：        self.declare_parameter("factor", 2)
+    修改後：        self.declare_parameter("gain", 0.5)
+    node_template.py:42
+    修改前：        self.factor = self.get_parameter("factor").value
+    修改後：        self.factor = self.get_parameter("gain").value
+    node_template.py:45
+    修改前：        self.pub = self.create_publisher(Int32, out_topic, QOS)
+    修改後：        self.pub = self.create_publisher(Float32, out_topic, QOS)
+    node_template.py:46
+    修改前：        self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
+    修改後：        self.sub = self.create_subscription(Float32, in_topic, self.on_msg, qos_profile_sensor_data)
+    node_template.py:59
+    修改前：        out = Int32()
+    修改後：        out = Float32()
+    驗證：ros2 topic info -v /imu/temp 看兩端都是 BEST_EFFORT，再 ros2 topic pub --once --qos-reliability best_effort /imu/temp std_msgs/msg/Float32 "{data: 4.0}"，/imu/temp_scaled 應該是 2.0
+
+- id: impl-ros-uint8
+  tags: [impl, ros2, patch, reference]
+  desc: 輸入 UInt8MultiArray、輸出 UInt32（兩個型別不同）→ sub / pub / 訊息各自換；out.data = sum(msg.data)
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 3/8"}
+      assistant: "收到"
+  card: {file: "12-implement.md", title: "實作 9/9"}
+  fills:
+    - match: "規格原文"
+      value: |2
+        節點名稱 byte_summer。
+        訂閱 /bytes_in（std_msgs/msg/UInt8MultiArray），把 data 裡所有 byte 加總，發布到 /byte_sum（std_msgs/msg/UInt32）。
+        兩個 topic 都用預設 QoS（RELIABLE、VOLATILE、depth 10）。沒有參數。
+    - match: "node_template"
+      value: {file: "預製程式碼/ros2/node_template.py", lines: [14, 63], number_lines: true}
+  checks:
+    - {type: regex, pattern: 'create_subscription\s*\(\s*UInt8MultiArray', name: sub_type}
+    - {type: regex, pattern: 'create_publisher\s*\(\s*UInt32\b', name: pub_type}
+    - {type: regex, pattern: 'UInt32\s*\(\s*\)', name: out_msg_type}
+    - {type: regex, pattern: 'sum\s*\(\s*msg\.data\s*\)', name: sum_data}
+    - {type: regex, pattern: 'import[^\n]*UInt8MultiArray', name: import_types}
+    - {type: table_cell, key: 'bytes_in', col: 1, regex: 'sub', name: in_is_sub}
+    - {type: answer_field, field: "node 名稱", regex: 'byte_summer', name: node_name}
+    - {type: patch_format, max_patches: 12}
+  golden: |
+    | topic | 方向 pub/sub | 型別 | QoS |
+    | /bytes_in | sub | std_msgs/msg/UInt8MultiArray | RELIABLE、VOLATILE、depth 10（預設） |
+    | /byte_sum | pub | std_msgs/msg/UInt32 | RELIABLE、VOLATILE、depth 10（預設） |
+    node 名稱：byte_summer
+    參數（名稱 = 預設值）：in_topic = /bytes_in、out_topic = /byte_sum（factor 不用）
+    node_template.py:18
+    修改前：from std_msgs.msg import Int32  # TODO(改這裡) 換訊息型別，例如 Int32MultiArray / String / UInt8MultiArray
+    修改後：from std_msgs.msg import Int32, UInt8MultiArray, UInt32  # TODO(改這裡) 換訊息型別 // 已改
+    node_template.py:33
+    修改前：        super().__init__("processor")
+    修改後：        super().__init__("byte_summer")
+    node_template.py:36
+    修改前：        self.declare_parameter("in_topic", "/number")
+    修改後：        self.declare_parameter("in_topic", "/bytes_in")
+    node_template.py:37
+    修改前：        self.declare_parameter("out_topic", "/double")
+    修改後：        self.declare_parameter("out_topic", "/byte_sum")
+    node_template.py:45
+    修改前：        self.pub = self.create_publisher(Int32, out_topic, QOS)
+    修改後：        self.pub = self.create_publisher(UInt32, out_topic, QOS)
+    node_template.py:46
+    修改前：        self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
+    修改後：        self.sub = self.create_subscription(UInt8MultiArray, in_topic, self.on_msg, QOS)
+    node_template.py:59
+    修改前：        out = Int32()
+    修改後：        out = UInt32()
+    node_template.py:60
+    修改前：        out.data = msg.data * self.factor
+    修改後：        out.data = sum(msg.data) & 0xFFFFFFFF
+    驗證：ros2 topic pub --once /bytes_in std_msgs/msg/UInt8MultiArray "{data: [1, 2, 250]}"，/byte_sum 應該是 253
