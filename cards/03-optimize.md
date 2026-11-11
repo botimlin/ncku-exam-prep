@@ -69,6 +69,7 @@ Task (EN): Implement ONE change as a minimal patch (max 15 changed lines). Keep 
 檔名:行號
 修改前：
 修改後：
+數字和單位（例如 筆數 = bytes ÷ 每筆大小，寫出算式；沒有寫「無」）：
 可能的副作用（1 句）：
 正確性驗證指令（1 行）：
 成功的樣子：
