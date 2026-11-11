@@ -73,7 +73,7 @@ BOOKS = [
     (
         "04-提示詞卡.pdf",
         "提示詞卡（貼上用）",
-        "壓力測試過的提示卡：開場、開考、讀題、建置、除錯、工具、優化、範本、速學",
+        "壓力測試過的提示卡：開場、開考、讀題、建置、除錯、工具、優化、範本、查詢、實作、驗證、提交、速學",
         [
             "cards/00-starter.md",
             "cards/10-exam-day-flow.md",
@@ -83,6 +83,9 @@ BOOKS = [
             "cards/06-tools-debug.md",
             "cards/03-optimize.md",
             "cards/09-template-adapt.md",
+            "cards/11-ask-reference.md",
+            "cards/12-implement.md",
+            "cards/13-verify-submit.md",
             "cards/07-unknown-tech.md",
         ],
     ),
