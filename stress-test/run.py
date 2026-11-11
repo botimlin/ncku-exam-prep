@@ -837,6 +837,8 @@ def run_job(job, args, cards, tok):
             u = st["user"]
             for k, v in outs.items():
                 u = u.replace(f"<<TURN{k}>>", v)
+            if args.user_suffix:  # 例如 "/no_think"、"Reasoning: low"：模擬學生在訊息最後加一行
+                u = u + "\n" + args.user_suffix
             msgs.append({"role": "user", "content": u})
             final = i == len(b.steps) - 1
             if st["assistant"] is not None:
@@ -1173,6 +1175,7 @@ def main():
     ap.add_argument("--top-p", type=float)
     ap.add_argument("--seed", type=int)
     ap.add_argument("--extra-body", default="{}", help='JSON merged into the request, e.g. \'{"chat_template_kwargs":{"enable_thinking":false}}\'')
+    ap.add_argument("--user-suffix", default="", help="append this line to every user message (e.g. /no_think)")
     ap.add_argument("--system-prompt", default="", help="simulate the exam web-chat's hidden system prompt")
     ap.add_argument("--max-context", type=int, default=0, help="simulated context window (tokens); 0 = off")
     ap.add_argument("--context-policy", choices=["truncate", "flag"], default="truncate")
