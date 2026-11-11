@@ -1,5 +1,7 @@
 # 實作卡（cards/12-implement.md）：位元欄位（1）、封包（2）、PIO 解讀（3）、PIO 修改（4）、DMA（5）、雙核（6）、組語（7）、機器碼（8）、ROS 2 node（9）
 # 2026-11-12 r16 檢查放寬（合法寫法：粗體標籤、值在下一行、struct 格式字串含空白、✅/❌、迴圈加總、512 不包 encode…）＋卡片改版（判斷規則寫進列、程式樣板、解碼程式直接印指令名、ROS 改預填行表）
+# 2026-11-12 r21 後第二輪：pkt-bitstream choice 選項文字修正（卡片是「有欄位不是整 byte」）；asm-count 第 6 列/被跳過的行接受參數名；pkt-bigendian temp「有」算有號；
+#   PIO 解讀資料改成「PIO 檢查」python 的輸出（pioasm 2.2.0 .pio.h 實跑）；PIO 修改、雙核資料第一行加檔名、mod-byte 加呼叫端那行；卡 3/4/6/7 改版要重跑
 # 標準答案驗證方式（2026-11-12）：
 #   C 位元 / 封包程式：主機 gcc -Wall -Wextra 編譯執行 PASS（bitops.h、bitstream.c 原檔）
 #   struct：python3 struct.calcsize / unpack_from 實際跑過
@@ -149,7 +151,7 @@
     - {type: choice, option: "struct（欄位都是整 byte", field_in_answer: "解析方式"}
     - {type: table_cell, key: '^\W*length', col: 1, regex: '\b2\W*$', name: off_length}
     - {type: table_cell, key: '^\W*temp', col: 1, regex: '\b4\W*$', name: off_temp}
-    - {type: table_cell, key: '^\W*temp', col: 3, regex: '是|有號', name: temp_signed}
+    - {type: table_cell, key: '^\W*temp', col: 3, regex: '是|有號|^[\s*`「]*有(?!.*無)', name: temp_signed}
     - {type: table_cell, key: '^\W*ts_ms', col: 1, regex: '\b6\W*$', name: off_ts}
     - {type: table_cell, key: '^\W*crc', col: 1, regex: '10\s*\+\s*(len|length)', name: off_crc}
     - {type: regex, pattern: '固定部分總長[^\n:：]*[:：]?[*\s]*(?:[^\n]*=\s*)?10\b(?!\s*\+)', name: fixed_len}
@@ -166,7 +168,7 @@
     | ts_ms | 4 + 2 = 6 | 4 | 否 | I |
     | payload | 6 + 4 = 10 | length | 否 | （不放進格式字串） |
     | crc16 | 10 + length | 2 | 否 | H |
-    固定部分總長：10
+    固定部分總長（payload 前最後一列的 offset + 大小，寫算式）：6 + 4 = 10
     格式字串：>BBHhI
     程式（≤ 10 行）：
     ```python
@@ -210,7 +212,7 @@
     | value | 0 + 1 = 1 | 4 | 否 | I |
     | delta | 1 + 4 = 5 | 2 | 是 | h |
     | flags | 5 + 2 = 7 | 2 | 否 | H |
-    固定部分總長：9
+    固定部分總長（payload 前最後一列的 offset + 大小，寫算式）：7 + 2 = 9
     格式字串：<BIhH
     程式（≤ 10 行）：
     ```python
@@ -235,7 +237,7 @@
         資料在 uint8_t buf[]。範例：B3 AB C8 → type=5, count=19, value=0xABC, flag=1
     - {match: "語言", value: "C"}
   checks:
-    - {type: choice, option: "read_msb（欄位不是整 byte，高位先", field_in_answer: "解析方式"}
+    - {type: choice, option: "read_msb（有欄位不是整 byte，高位先", field_in_answer: "解析方式"}
     - {type: regex, pattern: 'read_msb\s*\(\s*&?\w+\s*,\s*3\s*\)', name: read3}
     - {type: regex, pattern: 'read_msb\s*\(\s*&?\w+\s*,\s*12\s*\)', name: read12}
     - {type: not_regex, pattern: 'unpack|read_lsb\s*\(', name: not_struct_or_lsb}
@@ -270,14 +272,14 @@
       assistant: "收到"
   card: {file: "12-implement.md", title: "實作 3/9"}
   fills:
-    - match: "指令清單"
+    - match: "程式印出"
       value: |-
-        static const uint16_t byte_out_program_instructions[] = {
-                    //     .wrap_target
-            0x6208, //  0: out    pins, 8         side 0 [2]
-            0xb242, //  1: nop                    side 1 [2]
-                    //     .wrap
-        };
+        行 0 out pins, 8 side 0 [2] → cycle 1+2=3
+        行 1 nop side 1 [2] → cycle 1+2=3
+        迴圈：行 0–1（沒有 jmp 迴圈，算 wrap 一圈），每圈 cycle = 3 + 3 = 6
+        autopull：開（有 out 沒 pull），門檻 = CPU 每次 put 的 bit 數（put 整個 word = 32）
+        autopush：關（沒有 in）
+        clkdiv = 1.5e+08 ÷ (1e+06 × 6) = 25.00
     - {match: "C 端 init", value: "無"}
     - {match: "規格要求", value: "CPU 每次 put 一個 32-bit word，裡面 4 個 byte，低位 byte 先送；DATA0..DATA7 = GP8..GP15，CLK = GP16（side-set）；每個 byte 一個 CLK 脈衝，byte 速率 1 MHz；clk_sys 150 MHz"}
   checks:
@@ -288,21 +290,21 @@
     - {type: table_cell, key: 'cycle', col: 1, regex: '(?=.*\b6\b)(?=.*\b25\b)', name: cycles_clkdiv}
     - {type: table_rows, min: 9}
   golden: |
-    | 行 | 指令 | 做什麼 | side / delay | cycle |
-    | 0 | out pins, 8 | 從 OSR 移出 8 bit 到 DATA0..7 | side 0（CLK=0）/ [2] | 3 |
-    | 1 | nop | 不做事，只讓 CLK=1 | side 1（CLK=1）/ [2] | 3 |
-    | 設定（照列裡的規則選） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
+    | 行 | 指令 | 做什麼（根據參考卡） | cycle（抄程式） |
+    | 0 | out pins, 8 side 0 [2] | 從 OSR 移出 8 bit 到 DATA0..7，CLK=0 | 1+2=3 |
+    | 1 | nop side 1 [2] | 不做事，只讓 CLK=1 | 1+2=3 |
+    | 設定（照列裡的方法填） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
     | 1 autopull | 開，門檻 32（CPU 每次 put 一個 32-bit word；行 0 只有 out 沒有 pull） | 沒寫 | NG |
     | 2 out shift | 右移（規格「低位 byte 先送」） | 沒寫 | NG |
     | 3 autopush | 關（沒有 in） | 沒寫 | OK |
     | 4 in shift | 不用（沒有 in） | 沒寫 | OK |
     | 5 腳位 | out base GP8、count 8；sideset base GP16 | 沒寫 | NG |
-    | 6 cycle | (1+2)+(1+2) = 6 cycle/byte；clkdiv = 150 MHz ÷ (1 MHz × 6) = 25 | 沒寫 | NG |
+    | 6 cycle | 每圈 cycle = 3 + 3 = 6（每 byte）；clkdiv = 1.5e+08 ÷ (1e+06 × 6) = 25.00 | 沒寫 | NG |
     C 端要改的地方：沒有給 C 端 init，照上表寫：sm_config_set_out_shift(&c, true, true, 32)、sm_config_set_out_pins(&c, 8, 8)、sm_config_set_sideset_pins(&c, 16)、sm_config_set_clkdiv(&c, 25)
 
 - id: impl-pio-read-rx8
   tags: [impl, pio, reference, trap]
-  desc: 有 push 卻開 autopush（多推 0）；右移只收 8 bit → 資料在 ISR 高位，C 端 & 0xFF 要改 >> 24；8 cycle/bit
+  desc: 有 push 卻開 autopush（多推 0）；右移只收 8 bit → 資料在 ISR 高位，C 端 & 0xFF 要改 >> 24；8 cycle/bit（2026-11-12 r21 後：資料改成 PIO 檢查程式的輸出）
   turns:
     - card: {file: "pio.md", title: "RP2350 PIO 2/8"}
       assistant: "收到"
@@ -310,17 +312,18 @@
       assistant: "收到"
   card: {file: "12-implement.md", title: "實作 3/9"}
   fills:
-    - match: "指令清單"
+    - match: "程式印出"
       value: |-
-        static const uint16_t serial_rx8_program_instructions[] = {
-                    //     .wrap_target
-            0x2020, //  0: wait   0 pin, 0
-            0xea27, //  1: set    x, 7                   [10]
-            0x4001, //  2: in     pins, 1
-            0x0642, //  3: jmp    x--, 2                 [6]
-            0x8020, //  4: push   block
-                    //     .wrap
-        };
+        行 0 wait 0 pin, 0 → cycle 1+0=1（+ 等待）
+        行 1 set x, 7 [10] → cycle 1+10=11
+        行 2 in pins, 1 → cycle 1+0=1
+        行 3 jmp x--, 2 [6] → cycle 1+6=7
+        行 4 push block → cycle 1+0=1
+        迴圈：行 2–3 跑 8 次，每圈 cycle = 1 + 7 = 8
+        autopull：關（沒有 out）
+        autopush：關（有 push）
+        每次 push 收 8 bit → in 右移時讀值 >> 24；左移時讀值 & 0xFF
+        clkdiv = 1.5e+08 ÷ (115200 × 8) = 162.76
     - match: "C 端 init"
       value:
         number_lines: 1
@@ -346,19 +349,19 @@
     - {type: regex, pattern: '(要改的地方|不同的地方)[\s\S]*(autopush|in_shift|true,\s*true)', name: diff_autopush}
     - {type: regex, pattern: '(要改的地方|不同的地方)[\s\S]*>>\s*\(?\s*(24|32\s*[−-]\s*8)', name: diff_shift24}
   golden: |
-    | 行 | 指令 | 做什麼 | side / delay | cycle |
-    | 0 | wait 0 pin, 0 | 等 RX 腳變 0（起始位） | 無 / 0 | 1（+ 等待） |
-    | 1 | set x, 7 [10] | X = 7，再等 10 cycle 到第一個 bit 中間 | 無 / [10] | 11 |
-    | 2 | in pins, 1 | 取樣 RX 1 bit 移進 ISR | 無 / 0 | 1 |
-    | 3 | jmp x--, 2 [6] | X≠0 跳回行 2，X 減 1；共跑 8 次 | 無 / [6] | 7 |
-    | 4 | push block | ISR → RX FIFO，ISR 清 0 | 無 / 0 | 1 |
-    | 設定（照列裡的規則選） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
+    | 行 | 指令 | 做什麼（根據參考卡） | cycle（抄程式） |
+    | 0 | wait 0 pin, 0 | 等 RX 腳變 0（起始位） | 1（+ 等待） |
+    | 1 | set x, 7 [10] | X = 7，再等 10 cycle 到第一個 bit 中間 | 1+10=11 |
+    | 2 | in pins, 1 | 取樣 RX 1 bit 移進 ISR | 1 |
+    | 3 | jmp x--, 2 [6] | X≠0 跳回行 2，X 減 1；共跑 8 次 | 1+6=7 |
+    | 4 | push block | ISR → RX FIFO，ISR 清 0 | 1 |
+    | 設定（照列裡的方法填） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
     | 1 autopull | 關（沒有 out） | 沒寫 | OK |
     | 2 out shift | 不用（沒有 out） | 沒寫 | OK |
     | 3 autopush | 關（行 4 有 push） | sm_config_set_in_shift(&c, true, true, 8)（:4，autopush 開） | NG |
-    | 4 in shift | 右移（LSB 先）；只收 8 bit → 讀值要 >> 24 | 右移；getc 用 & 0xFF（:12） | NG |
+    | 4 in shift | 右移（LSB 先）；每次 push 收 8 bit → 讀值 >> 24 | 右移；getc 用 & 0xFF（:12） | NG |
     | 5 腳位 | in base GP5 | sm_config_set_in_pins(&c, pin)（:3） | OK |
-    | 6 cycle | 每 bit = 1（行 2）+ 7（行 3）= 8；clkdiv = clk_sys ÷ (115200 × 8) ≈ 162.76 | clock_get_hz(clk_sys) / (8 * baud)（:6） | OK |
+    | 6 cycle | 每圈（每 bit）cycle = 1 + 7 = 8；clkdiv = 1.5e+08 ÷ (115200 × 8) = 162.76 | clock_get_hz(clk_sys) / (8 * baud)（:6） | OK |
     C 端要改的地方：第 4 行 sm_config_set_in_shift(&c, true, true, 8) 改成 sm_config_set_in_shift(&c, true, false, 8)（autopush 關，不然和 push 一起會多推 0）；第 12 行 & 0xFF 改成 >> 24（右移只收 8 bit，資料在 ISR 高位）
 
 # ---------------------------------------------------------------- 實作 4：PIO 修改（先貼 pio.md）
@@ -374,9 +377,9 @@
   fills:
     - {match: "要改成什麼", value: "每個 CLK 送 2 bit：DATA 用 2 支相鄰的腳（data_pin、data_pin + 1），每次從 OSR 拿 2 bit；CLK 時序不變"}
     - match: '\.pio 原文'
-      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true}
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true, prefix: "（shift_out.pio）\n"}
     - match: "C 端 init"
-      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true}
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true, prefix: "（shift_out.pio）\n"}
   checks:
     - {type: patch_format, max_patches: 5}
     - {type: regex, pattern: 'out\s+pins\s*,\s*2\b', name: out2}
@@ -387,7 +390,8 @@
     - {type: table_cell, key: '^\W*2\b', col: 1, regex: 'OK', name: threshold_ok}
     - {type: choice, option: "每次送幾 bit", field_in_answer: "類型"}
   golden: |
-    類型（照抄字母和文字）：C 每次送幾 bit / 用幾支腳變了 → .pio 的 `out pins, n`；set_out_pins 的 count；mask 和 pio_gpio_init 加新腳（data_pin + 1）
+    類型（照抄字母和文字）：C 每次送幾 bit / 用幾支腳變了
+    要改的編號：④⑤⑥⑦
     shift_out.pio:11
     修改前：    out pins, 1   side 0 [1]   ; OSR 拿 1 bit 到 DATA，CLK=0，再多等 1 cycle
     修改後：    out pins, 2   side 0 [1]   ; OSR 拿 2 bit 到 DATA、DATA+1，CLK=0，再多等 1 cycle
@@ -417,11 +421,11 @@
       assistant: "收到"
   card: {file: "12-implement.md", title: "實作 4/9"}
   fills:
-    - {match: "要改成什麼", value: "呼叫端改成每次 `pio_sm_put_blocking(pio, sm, b);` 只放 1 個 byte（uint8_t b，在低 8 bit），線上只能送這 8 bit、MSB 先，不能多送 0。呼叫端那行在 app_pio.c:71，也可以改。"}
+    - {match: "要改成什麼", value: "呼叫端改成每次 `pio_sm_put_blocking(pio, sm, b);` 只放 1 個 byte（uint8_t b，在低 8 bit），線上只能送這 8 bit、MSB 先，不能多送 0。呼叫端（app_pio.c:71）也可以改。"}
     - match: '\.pio 原文'
-      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true}
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [8, 13], number_lines: true, prefix: "（shift_out.pio）\n"}
     - match: "C 端 init"
-      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true}
+      value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true, prefix: "（shift_out.pio）\n", suffix: "\n（app_pio.c，呼叫端）\n    71\tpio_sm_put_blocking(pio, sm, b);   // b 是 uint8_t"}
   checks:
     - {type: patch_format, max_patches: 5}
     - {type: regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*false\s*,\s*true\s*,\s*8\s*\)', name: threshold8}
@@ -429,7 +433,8 @@
     - {type: not_regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*true', name: keeps_left_shift}
     - {type: choice, option: "CPU 每次 put 的 bit 數", field_in_answer: "類型"}
   golden: |
-    類型（照抄字母和文字）：B CPU 每次 put 的 bit 數變了 → set_out_shift 門檻改成那個數；左移時呼叫端改 put(v << (32 − 門檻))
+    類型（照抄字母和文字）：B CPU 每次 put 的 bit 數變了
+    要改的編號：②③（③ 數字 = 32 − 8 = 24）
     shift_out.pio:23
     修改前：    sm_config_set_out_shift(&c, false, true, 32);   // 左移 = MSB 先送；autopull 每 32 bits
     修改後：    sm_config_set_out_shift(&c, false, true, 8);    // 左移 = MSB 先送；autopull 每 8 bits
@@ -493,7 +498,8 @@
     - {type: table_cell, key: '^\W*1\b', col: 1, regex: 'OK', name: delay_ok}
     - {type: choice, option: "只改速度", field_in_answer: "類型"}
   golden: |
-    類型（照抄字母和文字）：A 只改速度 → 只改 baud 或 clkdiv 那 1 行，.pio 不動
+    類型（照抄字母和文字）：A 只改速度
+    要改的編號：①
     app_uart.c:1
     修改前：#define UART_BAUD 115200
     修改後：#define UART_BAUD 9600
@@ -668,6 +674,7 @@
     - {match: "規格", value: "data 在 launch core1 前由 core0 填好。core0 算 data[0..N/2)、core1 算 data[N/2..N)，兩核都把結果加進 g_sum；兩核做完後 core0 印 g_sum。現在雙核版比單核還慢。"}
     - match: "程式"
       value:
+        prefix: "（app_multicore.c）\n"
         number_lines: 20
         text: |-
           static uint32_t data[N];
@@ -698,7 +705,7 @@
     | g_sum | core0、core1 | core0 | B 區域變數：在 for 迴圈裡累加的共享變數 → 迴圈內加到 local，迴圈結束後上鎖加一次 g += local |
     | lk | main（launch 前） | core0、core1 | A 不用保護：launch 前寫好，之後兩核只讀 |
     鎖內的行：g_sum += local;
-    app_multicore.c:24
+    app_multicore.c:24-29
     修改前：
         uint32_t save = spin_lock_blocking(lk);
         for (uint32_t i = 0; i < n; i++) {
@@ -764,7 +771,7 @@
 # ---------------------------------------------------------------- 實作 7：RISC-V 組語（先貼 riscv-hazard3.md）
 - id: impl-asm-count
   tags: [impl, riscv, asm, reference]
-  desc: bge a2,t1 → 跳過的是 limit >= arr[i]，所以計數 arr[i] > limit；迴圈 n 次
+  desc: bge a2,t1 → 跳過的是 limit >= arr[i]，所以計數 arr[i] > limit；迴圈 n 次（r21 後：第 6 列、被跳過的行也接受參數名 limit / arr[i]，意思相同）
   turns:
     - card: {file: "riscv-hazard3.md", title: "RISC-V Hazard3 2/8"}
       assistant: "收到"
@@ -788,13 +795,13 @@
               ret
     - {match: "參數意思", value: "a0 = const int32_t *arr，a1 = uint32_t n，a2 = int32_t limit；回傳 a0"}
   checks:
-    - {type: table_cell, key: '^\W*6\b', col: 2, regex: 'a2\)?\s*>=\s*(\(\w+\)\s*)?t1|t1\)?\s*<=\s*(\(\w+\)\s*)?a2', name: bge_operand_order}
+    - {type: table_cell, key: '^\W*6\b', col: 2, regex: '(a2|limit)\)?\s*>=\s*(\(\w+\)\s*)?(t1|arr\s*\[\s*i\s*\]|\*\s*\(?\s*a0)|(t1|arr\s*\[\s*i\s*\])\)?\s*<=\s*(\(\w+\)\s*)?(a2|limit)', name: bge_operand_order}
     - {type: regex, pattern: '等價的 C[\s\S]*(>\s*limit|limit\s*<|>\s*a2\b|a2\s*<\s*)', name: counts_greater}
     - {type: regex, pattern: '迴圈跑幾次[^\n:：]*[:：]?[*\s]*[^\n]*?((?<![A-Za-z_])n(?![A-Za-z_])|a1)', name: loop_n}
     - {type: not_regex, pattern: '迴圈跑幾次[^\n:：]*[:：]\s*無', name: loop_not_none}
     - {type: not_regex, pattern: '等價的 C[\s\S]*(limit\s*>=|>=\s*limit|<=?\s*limit\b|limit\s*>)', name: not_inverted}
     - {type: table_rows, min: 10}
-    - {type: regex, pattern: '被跳過的行[^\n]*\n?[^\n]*(a2\s*<\s*t1|t1\s*>\s*a2|>\s*limit|limit\s*<)', if_card: '被跳過的行', name: skipped_cond}
+    - {type: regex, pattern: '被跳過的行[\s\S]{0,400}?((a2|limit)\)?\s*<\s*(\(\w+\)\s*)?(t1|arr)|(t1|arr\s*\[\s*i\s*\])\)?\s*>\s*(\(\w+\)\s*)?(a2|limit))', if_card: '被跳過的行', name: skipped_cond}
   golden: |
     | 行 | 指令 | 運算（C 寫法） | 結果寫到 |
     | 3 | li t0, 0 | t0 = 0 | t0 |
@@ -807,7 +814,9 @@
     | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
     | 11 | mv a0, t0 | a0 = t0 | a0 |
     | 12 | ret | return | pc = ra |
-    被跳過的行：第 7 行（t0 + 1）只在 bge 不成立時做 → if (a2 < t1)，也就是 arr[i] > limit
+    被跳過的行：
+    第 4 行 beqz a1, 3f 跳過第 5～10 行 → if (a1 != 0)
+    第 6 行 bge a2, t1, 2f 跳過第 7 行 → if (a2 < t1)，也就是 arr[i] > limit
     等價的 C（≤ 6 行）：
     ```c
     uint32_t count_above(const int32_t *arr, uint32_t n, int32_t limit) {
@@ -860,7 +869,9 @@
     | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
     | 11 | mv a0, t0 | a0 = t0 | a0 |
     | 12 | ret | return | pc = ra |
-    被跳過的行：第 7 行只在 bgeu 不成立時做 → if ((uint32_t)a2 < (uint32_t)t1)
+    被跳過的行：
+    第 4 行 beqz a1, 3f 跳過第 5～10 行 → if (a1 != 0)
+    第 6 行 bgeu a2, t1, 2f 跳過第 7 行 → if ((uint32_t)a2 < (uint32_t)t1)
     等價的 C（≤ 6 行）：
     ```c
     uint32_t c = 0;
