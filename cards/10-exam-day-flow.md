@@ -85,7 +85,7 @@ A 電腦用 ROS 2 送資料給 Pico 算再收回、改二進位批次 → ros2/s
 B micro-ROS（agent、MTU、sequence capacity）→ micro-ros/
 C 拆給多片板子平行、依序合併 → ros2/multi_device.py、micro-ros/host_driver.py
 D Pico 上跑 BNN / 排序 / SHA / CRC → algo/
-E ROS 2 node 撰寫、CLI 除錯（topic 名、型別、QoS）→ ros2/node_template.py、ros2/README.md
+E ROS 2 node 收不到 / 看不到、寫 node、CLI 除錯（topic 名、型別、QoS）→ ros2/node_template.py、ros2/README.md
 F 位元欄位、位元流、endian → bits-riscv/bitops.h、packet_fields.c、bitstream.c
 G PIO、RISC-V 編解碼或組語 → pico/pio/、bits-riscv/rv32_encode_decode.c、asm_examples.S
 H 雙核 race、臨界區、一核收一核算 → pico/app_multicore.c、linux-perf/

@@ -118,9 +118,9 @@ B host_driver.py：micro-ROS 多板；data[0]=job_id、CHUNK=300、MERGE="concat
 C app_multicore.c：Pico 雙核；job_t / result_t + queue_t、core1_main（core1 stack 只有 2 KB，大陣列用 static）
 D pico_dualcore_micro_ros.c：core0 跑 micro-ROS、core1 算
 E linux-perf/parallel_template.c：pthread 切塊、各自累加最後合併
-合併可用 algo/sort.c 的 merge_two_sorted / kway_merge。CRC、SHA 是串列運算，不能各算一段再合併。
+合併可用 algo/sort.c 的 merge_two_sorted / kway_merge。
 只輸出 5 行：
-能不能拆（只寫「可以」或「不行」＋理由 1 句）：
+能不能拆（只寫「可以」或「不行」＋理由 1 句；CRC、SHA 這類一段接一段的串列運算一律「不行」）：
 選：A–E
 瓶頸在（只寫「傳輸」或「計算」＋依據 1 句）：
 要改的 TODO(改這裡)：
@@ -162,7 +162,8 @@ Task (EN): Review the diff against the checklist. For each item answer exactly O
 8 新 cmd 在 serial_proto.h、handle()、frame.py、fake_pico.py 都有且編號一致
 9 兩核 / 中斷共用的變數有 volatile 和鎖
 規則：只有 diff 裡 + 或 - 開頭的行能判「有問題」，證據抄那一行；diff 沒有相關的行 → 「看不到」。
-只輸出（9 列）：
+先輸出：diff 裡 + / - 開頭的行（逐行照抄，≤ 10 行）
+再輸出（9 列）：
 | # | 結果 | 證據（diff 那一行） |
 最嚴重的 1 個問題與修法（沒有就寫「無」，≤ 2 行）：
 範例（只示範格式，內容不要照抄）：| 3 | 有問題 | 「dma_channel_configure(ch, &c, dst, src, n, true)」少 write_increment |

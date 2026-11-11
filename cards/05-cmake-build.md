@@ -48,7 +48,8 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 證據：「…」（照抄錯誤那 1 行）
 原因（1 句）：
 類別（照抄選項，例如「D 找不到 header」）：
-要修的檔案與位置：（D、E 寫出函式庫名：hardware/xxx.h → hardware_xxx；B 一律 rm -rf build 重來）
+要加的函式庫（D、E 必填：hardware/xxx.h → hardware_xxx；其他寫「無」）：
+要修的檔案與位置（B 一律 rm -rf build 重來）：
 範例（只示範格式，內容不要照抄）：
 證據：「fatal error: hardware/dma.h: No such file or directory」
 原因：app_dma 沒 link hardware_dma

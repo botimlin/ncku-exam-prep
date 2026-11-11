@@ -347,8 +347,8 @@
     - {match: "docker run", value: "兩邊都 --net=host"}
     - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_DOMAIN_ID=7\nROS_VERSION=2"}
     - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
-    - {match: "A：ros2 node", value: "/publisher\n/number [std_msgs/msg/Int32]"}
-    - {match: "B：ros2 node", value: "（空的）\n/parameter_events [rcl_interfaces/msg/ParameterEvent]\n/rosout [rcl_interfaces/msg/Log]"}
+    - {match: "A：ros2 node", value: "/publisher\n---\n/publisher\n  Subscribers:\n  Publishers:\n    /number: std_msgs/msg/Int32"}
+    - {match: "B：ros2 node", value: "/processor\n---\n/processor\n  Subscribers:\n    /number: std_msgs/msg/Int32\n  Publishers:\n    /double: std_msgs/msg/Int32"}
     - {match: "topic", value: "number"}
     - {match: "topic info", value: "（在 B 執行）Unknown topic '/number'"}
   checks:
@@ -377,12 +377,12 @@
     - {match: "docker run", value: "（同容器）"}
     - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
     - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
-    - {match: "A：ros2 node", value: "/processor\n/publisher\n/double [std_msgs/msg/Int32]\n/number [std_msgs/msg/Int32]\n/numbr [std_msgs/msg/Int32]"}
-    - {match: "B：ros2 node", value: "/processor\n/publisher\n/double [std_msgs/msg/Int32]\n/number [std_msgs/msg/Int32]\n/numbr [std_msgs/msg/Int32]"}
+    - {match: "A：ros2 node", value: "/processor\n/publisher\n---\n/publisher\n  Subscribers:\n  Publishers:\n    /numbr: std_msgs/msg/Int32"}
+    - {match: "B：ros2 node", value: "/processor\n/publisher\n---\n/processor\n  Subscribers:\n    /number: std_msgs/msg/Int32\n  Publishers:\n    /double: std_msgs/msg/Int32"}
     - {match: "topic", value: "number"}
     - {match: "topic info", value: "Type: std_msgs/msg/Int32\nPublisher count: 1\nSubscription count: 0"}
   checks:
-    - {type: regex, pattern: "第一個 NG\\s*[:：][^\\n]*(5|名稱|numbr)", name: first_ng_name}
+    - {type: regex, pattern: "第一個 NG\\s*[:：][^\\n]*(6|名稱|numbr)", name: first_ng_name}
     - {type: contains_any, items: ["/numbr", "numbr"], name: spots_typo}
   golden: |
     | 項目 | 結果 OK/NG/資料中沒有 | 證據 |

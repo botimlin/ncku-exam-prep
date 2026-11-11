@@ -502,6 +502,9 @@ def run_check(chk, resp, ctx):
     if t in ("regex", "not_regex", "answer_field", "field_matches", "choice", "rank_first"):
         # 模型常把答案寫在「標籤：」的下一行（或用 - 條列）→ 接回同一行再比對
         resp = re.sub(r"([:：])[ \t]*\n[ \t]*(?:[-*•][ \t]*)?(?=\S)", r"\1 ", resp)
+        if t in ("regex", "not_regex"):
+            # 模型照抄卡片欄位名後面的（說明）→ 比對前拿掉，例如「符合預期（只寫是或否）：否」
+            resp = re.sub(r"[（(][^）)\n]{0,80}[）)]\s*(?=[:：])", "", resp)
     code_free = FENCE_RE.sub("", resp)
     if t == "not_empty":
         r["passed"] = bool(resp.strip())
@@ -576,11 +579,14 @@ def run_check(chk, resp, ctx):
             q = q.strip().rstrip("。.，,；;、 ")  # 結尾標點差異不算錯
             parts = [p for p in re.split(r"…+|\.{3,}|⋯", q) if len(nq(p)) >= 2]
             if any(nq(p) not in corpus for p in parts):
-                bad.append(q)
+                # 省略中間一段（沒用 …）也算：依標點切段，每段都在原文裡就接受
+                sub = [x for x in re.split(r"[，,；;：:、。（）()\s]+", q) if len(nq(x)) >= 3]
+                if not sub or any(nq(x) not in corpus for x in sub):
+                    bad.append(q)
         if not quotes and not minq:
             r["passed"], r["detail"] = True, "no evidence quotes (none required)"
         else:
-            r["passed"] = not bad and len(quotes) >= minq
+            r["passed"] = len(bad) <= chk.get("max_bad", 0) and len(quotes) >= minq
             r["detail"] = f"{len(quotes)} quotes, {len(bad)} not in data (min {minq})" + (f"; e.g. 「{bad[0][:60]}」" if bad else "")
     elif t in ("absent", "not_absent"):
         phrases = chk.get("phrases", ABSENT_DEFAULT)

@@ -143,8 +143,8 @@ Task (EN): For each row, copy the value from side A and side B, mark NG where th
 [兩邊在哪跑] {{同容器不同 shell / 不同容器 / 主機+容器}}；docker run 參數：{{例如 --net=host}}
 [A：printenv | grep -E 'ROS_|RMW'] {{貼}}
 [B：printenv | grep -E 'ROS_|RMW'] {{貼}}
-[A：ros2 node list; ros2 topic list -t] {{貼}}
-[B：ros2 node list; ros2 topic list -t] {{貼}}
+[A：ros2 node list; ros2 node info /A的node] {{貼}}
+[B：ros2 node list; ros2 node info /B的node] {{貼}}
 [ros2 topic info -v /{{topic}}] {{貼}}
 <<<資料 結束>>>
 只輸出（照這 8 列填，不要增減列；A、B 填資料裡的原值，沒有就寫「沒設」；A ≠ B 就是 NG）：
@@ -154,7 +154,7 @@ Task (EN): For each row, copy the value from side A and side B, mark NG where th
 | 3 ROS_AUTOMATIC_DISCOVERY_RANGE | | | |
 | 4 RMW_IMPLEMENTATION | | | |
 | 5 --net=host（不同容器才需要） | | | |
-| 6 topic 名稱（含 namespace） | | | |
+| 6 topic 名稱（A 發佈的 vs B 訂閱的） | | | |
 | 7 型別 | | | |
 | 8 Publisher / Subscription count | | | |
 第一個 NG：（寫項目編號和名稱）

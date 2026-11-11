@@ -34,7 +34,7 @@
     - {type: regex, pattern: "(評分|分數)[^\\n]*SCORE", name: score_line}
     - {type: contains_all, items: ["cmake -S q21 -B build", "cmake --build build"], name: local_repro}
     - {type: evidence_grounded, min_quotes: 2}
-    - {type: regex, pattern: "(?m)^\\s*7\\s*不能改", name: has_slot7}
+    - {type: regex, pattern: "(?m)^\\s*\\**7[.、]?\\s*\\**\\s*不能改", name: has_slot7}
   golden: |
     1 stages 與 job 名稱：build、judge；build-q21、judge-q21　證據：「stages: [build, judge]」
     2 每個 job 的 image：registry.exam.local/srecruit/pico:2026、registry.exam.local/srecruit/judge:2026　證據：「image: registry.exam.local/srecruit/pico:2026」

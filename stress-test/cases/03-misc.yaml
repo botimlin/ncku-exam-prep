@@ -23,7 +23,7 @@
     - {match: "環境", value: "Pico 2（RP2350）ARM；cmake --build build"}
   checks:
     - {type: rank_first, items: ["count", "sizeof", "bytes", "位元組", "4096"], name: first_cause_count}
-    - {type: evidence_grounded, min_quotes: 1}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
     - {type: table_rows, min: 2, max: 5}
   golden: |
     | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
@@ -51,7 +51,7 @@
     - {match: "環境", value: "Pico 2（RP2350）ARM"}
   checks:
     - {type: rank_first, items: ["write_increment", "寫入位址", "寫遞增", "寫入遞增", "write increment", "dst 沒有遞增", "目的位址"], name: first_cause_write_incr}
-    - {type: evidence_grounded, min_quotes: 1}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
   golden: |
     | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
     | 1 | 預設 write_increment 是 false，每次都寫到 dst[0] | 高 | 「dst[0] = src[1023]」 | 加 channel_config_set_write_increment(&c, true) 再跑 | dst 全對 → 確認 |
@@ -254,7 +254,7 @@
     - {match: "環境", value: "Pico 2（RP2350）ARM"}
   checks:
     - {type: rank_first, items: ["write_increment", "寫入位址", "寫遞增", "寫入遞增", "write increment", "dst 沒有遞增", "目的位址"], name: first_cause_write_incr}
-    - {type: evidence_grounded, min_quotes: 1}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
   golden: |
     | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
     | 1 | 預設 write_increment 是 false，每次都寫到 dst[0] | 高 | 「dst[0] = src[1023]」 | 加 channel_config_set_write_increment(&c, true) | dst 全對 → 確認 |
