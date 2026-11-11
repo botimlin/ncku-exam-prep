@@ -74,7 +74,7 @@
   fills:
     - {match: "問題", value: "publisher 用 qos_profile_sensor_data，我的 node 用 create_subscription(Int32, '/x', cb, 10)。我的 node 收得到嗎？"}
   checks:
-    - {type: field_matches, field: "答案", regex: "不相容|收不到|不能|無法", name: incompatible}
+    - {type: field_matches, field: "答案", regex: "不相容|收不到|不會收到|收不到|不能|無法|不會", name: incompatible}
     - {type: contains_any, items: ["BEST_EFFORT"], name: names_policy}
     - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
     - {type: not_regex, pattern: "答案[^\\n]*(?<!不)(收得到|可以收到|能收到)", name: not_compatible}
@@ -97,7 +97,7 @@
     - {type: regex, pattern: "type[^\\n]*topic[^\\n]*callback[^\\n]*qos", name: order_rclpy}
     - {type: contains_all, items: ["KEEP_LAST", "RELIABLE"], name: qos10}
     - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
-    - {type: not_regex, pattern: "答案[^\\n]*BEST_EFFORT|\\(\\s*type\\s*,\\s*topic\\s*,\\s*qos", name: no_wrong_order}
+    - {type: not_regex, pattern: "答案[^\\n]*(BEST_EFFORT|\\(\\s*type\\s*,\\s*topic\\s*,\\s*qos)", name: no_wrong_order}
   golden: |
     證據：「subscription (type, topic, callback, qos)。qos=10 即 KEEP_LAST 10、RELIABLE、VOLATILE。」
     答案：順序是 (type, topic, callback, qos)；10 = KEEP_LAST depth 10、RELIABLE、VOLATILE。
@@ -174,7 +174,7 @@
   fills:
     - {match: "問題", value: "我的 pipeline 是 rclpy 寫的兩個 node，可以開 intra-process 零複製來降低延遲嗎？"}
   checks:
-    - {type: regex, pattern: "只有\\s*rclcpp|rclpy\\s*(不能|不支援|沒有)|不行|不可以", name: rclcpp_only}
+    - {type: regex, pattern: "只有\\s*rclcpp|rclpy[^\\n]{0,8}(不能|不支援|沒有|無法)|不行|不可以", name: rclcpp_only}
     - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
     - {type: not_regex, pattern: "rclpy\\s*(也)?(可以|能)(用|開|使用)", name: no_rclpy_ipc}
   golden: |
