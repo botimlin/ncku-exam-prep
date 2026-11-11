@@ -36,7 +36,7 @@ pico_add_extra_outputs(app)
 - `pico_stdlib` 不含 dma/pio/multicore，要自己 link
 - 預設 Release（-O3）；Debug 為 -Og
 - `pico_set_binary_type(app copy_to_ram|no_flash)`
-- 輸出 .uf2 .elf .dis .elf.map；燒錄：BOOTSEL 拖 uf2，或 `picotool load -x app.uf2`（`-f` 強制重開）
+- 輸出 .elf；`pico_add_extra_outputs` 才有 .uf2 .dis .elf.map；燒錄：BOOTSEL 拖 uf2，或 `picotool load -x app.uf2`（`-f` 強制重開）
 
 ## API
 - `stdio_init_all()`；USB 開頭輸出易遺失→`sleep_ms(2000)`/`stdio_usb_connected()`

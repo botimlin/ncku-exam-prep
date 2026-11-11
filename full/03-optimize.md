@@ -189,7 +189,7 @@ ros2 topic delay /topic     # 延遲（訊息需有 header 時間戳）
 #### G. 編譯器
 - 最佳化等級：`-O2`（預設安全選擇）、`-O3`（更積極，不一定更快）、`-Os`（程式碼小，對 XIP flash 快取可能更好）。
 - `static inline`、`restrict`、`const` 幫助編譯器最佳化。
-- 看組合語言確認編譯器做了什麼：`objdump -d`、pico-sdk 產生的 `.dis` 檔。
+- 看組合語言確認編譯器做了什麼：`objdump -d`、pico-sdk 產生的 `.dis` 檔（CMakeLists 要有 `pico_add_extra_outputs`）。
 - **注意**：如果評分系統用固定的建置設定，改編譯旗標可能無效或不被允許。先確認。
 
 ---

@@ -543,7 +543,8 @@ subscriber 端：DDS → 反序列化成 C struct → (C) _convert_to_py：建�
 | `list` of int | 15 ms（逐元素轉換） |
 | `array.array('i', ...)`（同型別碼） | 0.09 ms（memcpy） |
 | `bytes` / `bytearray`（長度為 itemsize 倍數） | 0.08 ms（走 `frombytes`，memcpy） |
-| `memoryview` / numpy 陣列 | 35 ms（memoryview 實測：被當一般 iterable 逐元素處理；numpy 推論相同 ⚠️未實測） |
+| `memoryview` | 36 ms（實測：被當一般 iterable 逐元素處理，比 list 還慢） |
+| numpy 陣列 | 71 ms（實測：同樣逐元素，更慢） |
 
 → **最佳實務**：
 ```python
@@ -681,7 +682,7 @@ def on_raw(self, b: bytes):
 | 11 | 遞迴重複子問題 | `functools.cache` | 指數級 → 線性 |
 | 12 | 4 個 thread 跑 CPU 運算 | 4 個 process（`ProcessPoolExecutor`） | ~接近核心數（扣 pickle 開銷） |
 | 13 | Python 迴圈逐元素算 10⁵～10⁶ 個數值 | numpy 向量化 | 10～100× ⚠️推估（numpy 未在本機實測） |
-| 14 | `msg.data = np_arr`（numpy 指定給序列欄位） | `msg.data = np_arr.tobytes()` | ~數百× ⚠️由 memoryview 實測推論 |
+| 14 | `msg.data = np_arr`（numpy 指定給序列欄位） | `msg.data = np_arr.tobytes()` | ~數百×（實測 numpy 直接指定 71 ms vs bytes 0.08 ms） |
 | 15 | `msg.data = list(...)` 大量元素 | 已是 `array.array` 或 `bytes` 直接指定 | ~150×（指定這一步） |
 | 16 | callback 內每則 `get_logger().info` | 計數 + timer 每秒印一次 | ⚠️依頻率；高頻時常是主要成本 |
 | 17 | 高頻小訊息逐則發布 | 打包成陣列訊息批次發布 | ~接近批次大小倍（每則開銷攤提）⚠️推估 |
@@ -715,7 +716,7 @@ class Processor(Node):
 
 1. **量測基準**：`ros2 topic hz /number` 與 `ros2 topic hz /double` 比較（輸出頻率低於輸入 → 跟不上）；在 callback 內用 `perf_counter_ns` 累計耗時，timer 每秒印平均。
 2. **確認規格**：`received: ...` 這行輸出是不是評分的一部分？是 → 保留但考慮拿掉 `flush=True`（看是否需要即時）；不是 → 移除或改為計數摘要。
-3. **確認溢位語義**：`data * 2` 超出 int32 時要回繞、夾限、還是報錯？Jazzy 預設不檢查欄位（§8.3），超範圍值在 C 轉換時被強制轉型 ⚠️（實際行為未實測），所以要自己明確處理。
+3. **確認溢位語義**：`data * 2` 超出 int32 時要回繞、夾限、還是報錯？Jazzy 預設不檢查欄位（§8.3），超範圍值在 C 轉換時取低 32 位（實測 `2**31+5` → `-2147483643`），所以要自己明確處理。
 4. 改寫並驗證輸出完全一致（用 `ros2 topic echo /double` 或自己的測試 publisher 送邊界值 0、1、-1、2³⁰、2³¹-1、-2³¹）。
 5. 若仍跟不上：檢查是否能批次化（§8.6）、換 `EventsExecutor`（§8.7）、或改 rclcpp（§8.9）。
 
@@ -818,7 +819,7 @@ class ArrayProc(Node):
 
 ## 11. 常見陷阱
 
-1. **int 溢位語義**：Python `int` 不會溢位；`array('i')` 超範圍丟 `OverflowError`；numpy int32 陣列運算靜默回繞；rclpy Jazzy 預設不檢查訊息欄位範圍，超範圍值會在 C 轉換時被強制轉型（int32 純量欄位依 `_msg_support.c.em` 是 `(int32_t)PyLong_AsLong(v)`，64-bit Linux 上相當於取低 32 位 ⚠️未實測確切結果）。優化前後語義必須一致，且符合規格。
+1. **int 溢位語義**：Python `int` 不會溢位；`array('i')` 超範圍丟 `OverflowError`；numpy int32 陣列運算靜默回繞；rclpy Jazzy 預設不檢查訊息欄位範圍，超範圍值會在 C 轉換時取低 32 位（實測 Int32 給 `2**31+5` → `-2147483643`）。優化前後語義必須一致，且符合規格。
 2. **浮點結果些微不同**：`sum` 順序改變、numpy 的 pairwise summation、float32 vs float64 → 末幾位不同；比對時看規格允許的誤差。`math.fsum` 最精確。
 3. **profile 下的時間被放大**：cProfile 只對 Python 函式加開銷。
 4. **量到第一次執行**：import、.pyc 編譯、DDS discovery 都在開頭；量穩態。

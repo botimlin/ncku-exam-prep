@@ -59,7 +59,7 @@ dma_channel_cleanup(ch); dma_channel_unclaim(ch);
 6. CPU 同時碰 DMA 服務中的 FIFO、兩通道同 DREQ：禁止
 7. 8/16bit 寫 IO 暫存器會複製到 32bit
 8. E5：abort 前先清 EN+CHAIN_TO（cleanup 已做）
-9. E8：零長度傳輸 CHAIN_TO 可能不觸發
+9. E8：零長度傳輸 CHAIN_TO 可能不觸發（⚠️未查證）
 10. DREQ/IRQ 編號與 RP2040 不同，用巨集
 11. sniff：config 也要 sniff_enable
 12. count≥2^28 會變 MODE

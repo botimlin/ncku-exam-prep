@@ -50,6 +50,7 @@ timer_=create_wall_timer(1s,cb,group);
 0 `printenv|grep -E 'ROS_|RMW'`（有 jazzy？`docker exec` shell 有 source？DOMAIN_ID 一致？）
 1 `node list` → 2 `topic list -t`（拼字/大小寫/`/`/namespace）→ 3 `node info` 兩端同 topic？→ 4 `topic info` 型別、pub/sub 數 → 5 `topic info -v` QoS → 6 `echo --once`、`hz` → 7 `pub -1` 測下游 + `echo` 看輸出 → 8 `doctor --report`、`daemon stop`
 - 常見：沒 spin、callback 例外、node 名重複、沒重 build/source。
+- 型別不同（Int32 vs Int64）→ 連不上、通常無 WARN，`topic list -t` 同 topic 列兩種型別。兩 container 都 `--network host` 卻收不到 → 兩邊加 `--ipc host`（Fast DDS 共享記憶體）。
 
 ## 優化槓桿
 - callback 不阻塞（無 sleep/長迴圈/同步 I/O）；高頻路徑不 print/log。

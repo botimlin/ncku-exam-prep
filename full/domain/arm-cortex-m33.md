@@ -12,7 +12,7 @@
 - 最後更新：2026-11
 
 > 標記說明：`⚠️未驗證` = 查不到一手來源、依版本而異，或是我依規則推算的估計值；使用前用 objdump / DWT 實測確認。
-> 週期數一律以 **RP2350 datasheet §3.7.4.9** 為準（Raspberry Pi 在 RP2350 上量測：單核執行、無 XIP cache miss、無 DMA）。
+> 週期數一律以 **RP2350 datasheet §3.7.4.9** 為準（Raspberry Pi 在 RP2350 上量測：單核執行、無 XIP cache miss、無 DMA）。⚠️本檔週期表未逐條對照 datasheet 原文，FPU / DCP 週期未查證，關鍵數字以 DWT cycle 計數實測為準。
 
 ---
 
@@ -400,7 +400,7 @@ static inline int32_t clamp_s16(int32_t x) { return __ssat(x, 16); }
 
 ### 4.3 FPU 指令（單精度）
 
-| 指令 | 語意 | 週期（datasheet §3.7.4.9.10） |
+| 指令 | 語意 | 週期（datasheet §3.7.4.9.10；⚠️未查證，以實測為準） |
 |---|---|---|
 | `VADD.F32 / VSUB.F32 / VMUL.F32 Sd, Sn, Sm` | + − × | 1 + 1 cycle 結果延遲 |
 | `VNMUL.F32` | −(Sn×Sm) | ⚠️未驗證（推測同 VMUL） |
@@ -428,7 +428,7 @@ static inline int32_t clamp_s16(int32_t x) { return __ssat(x, 16); }
 |---|---|---|
 | `float` + − × | 1 cycle 發射、1 cycle 延遲 | **首選**：不需改寫成定點 |
 | `float` ÷ √ | 14+1 cycle（可與整數運算重疊） | 迴圈內 `x / c` 改 `x * (1.0f / c)`（數值會有最後一位差異，需確認判題容忍） |
-| `double` | DCP：dadd 6、dmul 17、ddiv 51、dsqrt 49 cycle（datasheet Table 118，**內聯**使用協處理器時；經 SDK 函式呼叫還有額外開銷） | 避免；`0.5` → `0.5f`；`-Wdouble-promotion` 抓隱性 double |
+| `double` | DCP：dadd 6、dmul 17、ddiv 51、dsqrt 49 cycle ⚠️未查證（datasheet Table 118，**內聯**使用協處理器時；經 SDK 函式呼叫還有額外開銷） | 避免；`0.5` → `0.5f`；`-Wdouble-promotion` 抓隱性 double |
 | 定點（Q16.16 / Q15） | 整數 1 cycle、`SMULL` 1+1、`SMLAD` 一次兩個 MAC | 需要**位元精確**結果、或資料本來就是整數 / int16 時 |
 
 （與 `pico-sdk.md` §7.7 一致：`pico_float` 預設 `pico_vfp`、`pico_double` 預設 DCP；RISC-V 才需要大量改定點。）
@@ -437,7 +437,7 @@ static inline int32_t clamp_s16(int32_t x) { return __ssat(x, 16); }
 
 ## 5. Cortex-M33 效能特性（RP2350 datasheet §3.7.4.9）
 
-前提：單核、無 XIP cache miss、無 DMA。多核搶匯流排、flash 執行、DMA 都會讓實測變慢。
+前提：單核、無 XIP cache miss、無 DMA。⚠️未逐條對照 datasheet 原文，以 cycle 計數實測為準。多核搶匯流排、flash 執行、DMA 都會讓實測變慢。
 
 ### 5.1 管線概觀
 
@@ -1120,7 +1120,7 @@ static inline uint32_t atomic_add_u32(volatile uint32_t *p, uint32_t v) {
 | 飽和 | 無 | `ssat/usat`、`qadd/qsub`、SIMD |
 | 32 位元常數 | `lui`+`addi`（注意進位） | `movw`+`movt` 或 literal pool |
 | load / store | `lw/lh/lhu/lb/lbu`、`sw/sh/sb` | `ldr/ldrh/ldrsh/ldrb/ldrsb`、`str/strh/strb` |
-| 多暫存器 | `cm.push/cm.pop`（Zcmp） | `push/pop`、`ldm/stm`、`ldrd/strd` |
+| 多暫存器 | `cm.push/cm.pop`（Zcmp，需 zcb_zcmp 工具鏈；預設為逐條 sw/lw） | `push/pop`、`ldm/stm`、`ldrd/strd` |
 | 後索引 | 無（另寫 `addi`） | `ldr r, [p], #4` |
 | 條件分支 | `beq/bne/blt/bge/bltu/bgeu rs1, rs2` | `cmp` + `b<cond>`；`cbz/cbnz` |
 | 呼叫 / 返回 | `jal ra, f` / `ret` | `bl f` / `bx lr` 或 `pop {…, pc}` |
@@ -1150,7 +1150,7 @@ static inline uint32_t atomic_add_u32(volatile uint32_t *p, uint32_t v) {
 | 中斷控制器 | Xh3irq（52 IRQ、16 級） | NVIC（52 IRQ、16 級） |
 | 非對齊存取 | trap | LDR/STR 可、LDRD/LDM fault |
 | 浮點 | 軟體 | FPU（float）+ DCP（double） |
-| 編譯旗標 | `-march=rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp -mabi=ilp32` | `-mcpu=cortex-m33 -mthumb -march=armv8-m.main+fp+dsp -mfloat-abi=softfp` |
+| 編譯旗標 | `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`（SDK 預設；zcb_zcmp 工具鏈才加 `_zca_zcb_zcmp`） | `-mcpu=cortex-m33 -mthumb -march=armv8-m.main+fp+dsp -mfloat-abi=softfp` |
 | 工具鏈前綴 | `riscv32-unknown-elf-`（或 `riscv32-pico-elf-`） | `arm-none-eabi-` |
 | `PICO_PLATFORM` | `rp2350-riscv` | `rp2350-arm-s`（預設） |
 | 架構巨集 | `__riscv` | `__arm__`、`__ARM_ARCH_8M_MAIN__` |

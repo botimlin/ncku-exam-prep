@@ -34,9 +34,9 @@
 
 ## rclpy 內部（jazzy 原始碼）
 - 數值序列 `T[]`→`array.array`（int32 `'i'`、uint8 `'B'`：`Int32MultiArray.data`、`Image.data`）；固定長 `T[N]`→`numpy.ndarray`
-- 欄位檢查預設關（Iron 起）；setter 一律 `array.array(tc, value)`：給 `array`/`bytes`=memcpy（1M 元素 0.09ms）、`list` 15ms、memoryview/numpy 逐元素 35ms → numpy 用 `msg.data = a.tobytes()`
+- 欄位檢查預設關（Iron 起）；setter 一律 `array.array(tc, value)`：給 `array`/`bytes`=memcpy（1M 元素 0.09ms）、`list` 15ms、memoryview 36ms/numpy 71ms（逐元素，比 list 慢）→ numpy 用 `msg.data = a.tobytes()`
 - 讀：`np.frombuffer(msg.data, np.int32)` 零複製可寫 view；`np.frombuffer(bytes)` 唯讀
-- 不檢查範圍：int32 超範圍在 C 端強制轉型 ⚠️→自己處理 `((v+2**31)&0xFFFFFFFF)-2**31`
+- 不檢查範圍：int32 超範圍在 C 端取低 32 位（實測 2**31+5→-2147483643）→自己處理 `((v+2**31)&0xFFFFFFFF)-2**31`
 - 每則訊息有固定 Python 開銷（executor 純 Python + 建物件 + setter）→ 批次成陣列訊息
 - `get_logger().info`：每次都 `inspect` 取呼叫者（throttle 也一樣）+ /rosout → 熱 callback 改計數、timer 每秒印
 - 不要 `while: rclpy.spin_once(node,timeout_sec=0)`（空轉，且每次 add/remove node）；用 `spin`+timer，或 executor 建一次再 `ex.spin_once(timeout_sec=0.01)`

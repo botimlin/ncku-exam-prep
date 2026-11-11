@@ -22,12 +22,12 @@
 4. **週期性迴圈用 `xTaskDelayUntil(&last, period)`**，不要用 `vTaskDelay(period)`（後者會累積漂移）。
 5. **ISR 裡只能呼叫結尾是 `FromISR` 的 API**，並用 `BaseType_t woken = pdFALSE; ...FromISR(..., &woken); portYIELD_FROM_ISR(woken);` 模式。mutex 不能在 ISR 用。
 6. RP2350 Arm port：`configMAX_SYSCALL_INTERRUPT_PRIORITY = 16`（0x10）。**呼叫 FreeRTOS API 的 IRQ 優先權數值必須 ≥ 0x10**；pico-sdk 預設 `PICO_DEFAULT_IRQ_PRIORITY = 0x80`，沒問題；設成 `PICO_HIGHEST_IRQ_PRIORITY`（0x00）的 IRQ 不可呼叫任何 FreeRTOS API。
-7. **SMP（`configNUMBER_OF_CORES = 2`）**：`vTaskStartScheduler()` 必須在 core 0 呼叫，它會自己 `multicore_reset_core1()` + `multicore_launch_core1()`。**不要再自己 launch core1**。
+7. **SMP（`configNUMBER_OF_CORES = 2`）**：`vTaskStartScheduler()` 必須在 core 0 呼叫，它會自己 `multicore_reset_core1()` + `multicore_launch_core1()`。**不要再自己 launch core1**，也不要動 `PICO_SPINLOCK_ID_OS1/OS2` 與 port claim 的 doorbell（RP2350 port 跨核 yield 用 doorbell，不是 FIFO）。
 8. SMP 下「高優先權 task 在跑，低優先權就不會跑」這個單核假設**不成立**（`configRUN_MULTIPLE_PRIORITIES = 1` 時），而且兩核上的 ISR 和 task 可能同時執行。共享資料一定要保護（mutex / critical section / queue）。
-9. `taskENTER_CRITICAL()` 在 SMP 下會**關本核中斷（BASEPRI）＋取得兩把跨核 spinlock**，等於全系統 kernel 鎖。只放幾行讀寫，越短越好。
+9. `taskENTER_CRITICAL()` 在 SMP 下會**遮本核中斷（Arm：BASEPRI 擋數值 ≥ 0x10；RISC-V：全關）＋取得兩把跨核 spinlock（OS1/OS2）**，等於全系統 kernel 鎖。只放幾行讀寫，越短越好。
 10. 最快的 task 間訊號是 **task notification**（官方說解除阻塞比 binary semaphore 快 45%、更省 RAM），但只能有一個接收者。
 11. 必開除錯：`configASSERT`、`configCHECK_FOR_STACK_OVERFLOW = 2`、`configUSE_MALLOC_FAILED_HOOK = 1`；檢查 `xTaskCreate` 回傳值是否 `pdPASS`、`xQueueCreate` 是否回傳 NULL。
-12. 在 task 裡可以用 pico-sdk 的 `sleep_ms()`（`configSUPPORT_PICO_SYNC_INTEROP = 1` 時會變成 FreeRTOS 層級的阻塞），但 `busy_wait_ms()` 會真的佔住 CPU。
+12. 在 task 裡可以用 pico-sdk 的 `sleep_ms()`（靠 `configSUPPORT_PICO_SYNC_INTEROP = 1` 變成 FreeRTOS 層級的阻塞；SYNC / TIME 兩個 INTEROP 都設 1），但 `busy_wait_ms()` 會真的佔住 CPU。
 
 ---
 
@@ -99,8 +99,8 @@ task 是一個永不返回的函式：`void task_fn(void *pvParameters) { for (;
 | `configUSE_CORE_AFFINITY` | 1 才能用 `xTaskCreateAffinitySet`、`vTaskCoreAffinitySet/Get` 把 task 綁到特定核。affinity 是 bitmask：bit 0 = core 0、bit 1 = core 1；`tskNO_AFFINITY` = 任一核 |
 | `configTASK_DEFAULT_CORE_AFFINITY` | 沒指定 affinity 時的預設（預設 `tskNO_AFFINITY`） |
 | `configUSE_TASK_PREEMPTION_DISABLE` | 1 才能用 `vTaskPreemptionDisable/Enable` 讓個別 task 不被搶占 |
-| `configUSE_PASSIVE_IDLE_HOOK` | passive idle task（非 core 0）的 hook |
-| `configTICK_CORE` | 處理 tick 的核（RP2350 port 預設 0） |
+| `configUSE_PASSIVE_IDLE_HOOK` | passive idle task（非 core 0）的 hook；SMP 必須定義（通常 0） |
+| `configTICK_CORE` | 處理 tick 的核（RP2350 port 預設 0）；SMP 必須定義 |
 
 官方（AWS FreeRTOS User Guide）點名的兩個單核假設，在 SMP 下會失效：
 1. 「高優先權 task 正在跑時，低優先權 task 不會跑」：多核時兩者可同時跑。**用優先權當互斥手段的程式會出錯**。
@@ -290,8 +290,7 @@ pico-examples 原版與上面的差別：原版 `configCHECK_FOR_STACK_OVERFLOW 
 | `configNUMBER_OF_CORES` | 2 = SMP 雙核；1 = 單核（可用 `multicore_launch_core1(vLaunch)` 讓 FreeRTOS 跑在 core 1） |
 | `configUSE_CORE_AFFINITY` | 1（才能綁核；`pico_flash` 的 `flash_safe_execute` 在 FreeRTOS SMP 下也要求它，否則 `#error`） |
 | `configRUN_MULTIPLE_PRIORITIES` | pico 用 1；設 0 時兩核只會同時跑同優先權的 task |
-| `configSUPPORT_PICO_SYNC_INTEROP` | 1：SDK 的 `mutex_t`、`semaphore_t`、`queue_t` 等在 FreeRTOS task 裡阻塞時會以 FreeRTOS 方式阻塞（讓出 CPU）；可在 FreeRTOS task 與非 FreeRTOS 核 / IRQ 間共用 |
-| `configSUPPORT_PICO_SYNC_INTEROP` | 1：`sleep_ms/sleep_us/sleep_until` 與 pico_sync（mutex / sem）在 task 中會真正在 FreeRTOS 層阻塞 |
+| `configSUPPORT_PICO_SYNC_INTEROP` | 1：SDK 的 `mutex_t`、`semaphore_t`、`queue_t` 等，以及 `sleep_ms/sleep_us/sleep_until`，在 FreeRTOS task 裡阻塞時會以 FreeRTOS 方式阻塞（讓出 CPU）；可在 FreeRTOS task 與非 FreeRTOS 核 / IRQ 間共用 |
 | `configSUPPORT_PICO_TIME_INTEROP` | 1：pico_time 的 alarm / timer 與 FreeRTOS 整合 |
 | `configTICK_RATE_HZ` | 1000（1 ms 解析度）。調低 → tick 中斷開銷少，但延遲解析度變粗 |
 | `configTOTAL_HEAP_SIZE` | heap_1/2/4 的總大小（bytes）。用 `xPortGetMinimumEverFreeHeapSize()` 校正 |
@@ -318,7 +317,7 @@ pico-examples 原版與上面的差別：原版 `configCHECK_FOR_STACK_OVERFLOW 
 | 裸機習慣 | FreeRTOS SMP（2 核）下 |
 |---|---|
 | `multicore_launch_core1(core1_main)` | **不要用**：core 1 由 scheduler 啟動。要讓工作跑在 core 1 → 建 task 並設 affinity `1u << 1` |
-| `multicore_fifo_push/pop_blocking` 自己傳資料 | 不建議（SDK 的 `multicore.h` 也建議不要自己用 FIFO，因為 RTOS / launch 會用）；改用 FreeRTOS queue / notification |
+| `multicore_fifo_push/pop_blocking` 自己傳資料 | 不建議（SDK 的 `multicore.h` 也建議不要自己用 FIFO：launch 握手會用；RP2040 port 用 FIFO 做跨核 yield，RP2350 port 改用 doorbell）；改用 FreeRTOS queue / notification |
 | `spin_lock_blocking` + 自己的 spinlock | 仍可用於極短的跨核保護，但不能在持鎖時呼叫任何 FreeRTOS API；task 間通常改用 `taskENTER_CRITICAL` 或 mutex |
 | `critical_section_t`、`mutex_t`、`semaphore_t`、`queue_t`（pico_sync / pico_util） | 開 `configSUPPORT_PICO_SYNC_INTEROP` 後在 task 裡可用，阻塞時會讓出 CPU；適合「FreeRTOS task ↔ 非 FreeRTOS 核 / IRQ」的情境 |
 | `sleep_ms(10)` | 開 SYNC_INTEROP 後在 task 中 = FreeRTOS 阻塞，OK；但慣例上仍建議 `vTaskDelay(pdMS_TO_TICKS(10))` |
@@ -331,7 +330,7 @@ pico-examples 原版與上面的差別：原版 `configCHECK_FOR_STACK_OVERFLOW 
 
 - 同樣是 SMP、同樣的 CMake target 名稱與 import 檔，用 doorbell 做跨核通知。
 - README 的 Known Limitations：**Hazard3 的 IRQ 搶占（巢狀中斷）目前不支援**；mtvec 與 IRQ handler 會裝在兩核上。
-- `configMAX_SYSCALL_INTERRUPT_PRIORITY` 這類 Arm NVIC 設定不適用；API 用法相同。
+- `configMAX_SYSCALL_INTERRUPT_PRIORITY` 這類 Arm NVIC 設定不適用：沒有「可呼叫 API 的優先權門檻」，critical section 會擋掉**全部** IRQ（含 0x00）；API 用法相同。
 
 ---
 
@@ -444,7 +443,7 @@ SemaphoreHandle_t xSemaphoreCreateRecursiveMutex(void);         /* 同一 task �
 BaseType_t xSemaphoreTake(SemaphoreHandle_t s, TickType_t xBlockTime);
 BaseType_t xSemaphoreGive(SemaphoreHandle_t s);
 BaseType_t xSemaphoreTakeRecursive(SemaphoreHandle_t m, TickType_t xBlockTime);
-BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t m);       /* Take 幾次就要 Give 幾次 */
+BaseType_t xSemaphoreGiveRecursive(SemaphoreHandle_t m);       /* Take 幾次就要 Give 幾次；recursive mutex 只能用這兩個，不能用一般 Take/Give */
 BaseType_t xSemaphoreGiveFromISR(SemaphoreHandle_t s, BaseType_t *pxHigherPriorityTaskWoken);
 BaseType_t xSemaphoreTakeFromISR(SemaphoreHandle_t s, BaseType_t *pxHigherPriorityTaskWoken);
 void vSemaphoreDelete(SemaphoreHandle_t s);
@@ -585,14 +584,14 @@ xTaskResumeAll();    /* 回傳 pdTRUE 表示恢復時已經做了 context switch
 ```
 
 SMP 版 `vTaskEnterCritical()`（`tasks.c`）的實際行為：
-1. `portDISABLE_INTERRUPTS()`：RP2350 Arm 是把 BASEPRI 設成 `configMAX_SYSCALL_INTERRUPT_PRIORITY`，**只關本核**、只遮罩優先權數值 ≥ 0x10 的 IRQ。
+1. `portDISABLE_INTERRUPTS()`：RP2350 Arm 是把 BASEPRI 設成 `configMAX_SYSCALL_INTERRUPT_PRIORITY`，**只關本核**、只遮罩優先權數值 ≥ 0x10 的 IRQ（RISC-V port 則關掉本核全部 IRQ）。
 2. 若 scheduler 已執行且巢狀計數為 0：取得 **task lock 與 ISR lock**（兩把 RP2350 spinlock：`configSMP_SPINLOCK_1`、`configSMP_SPINLOCK_0`）→ 另一核進入 critical section 或 kernel 內部時會在 spinlock 上自旋等待。
 3. 在 ISR 中呼叫非 FromISR 版本會觸發 assert（若有定義 `configASSERT`）。
 
 結論：
 - `taskENTER_CRITICAL` 在 SMP 下**是跨核互斥**，可以保護兩核 task 共用的小結構；但它是**全系統共用的一把鎖**，所有核的 kernel 操作都會被擋住。只放幾行。
 - 要保護較長的操作（例如 printf、走訪 linked list），用 **mutex**（可阻塞、有 priority inheritance）。
-- **陷阱**：SMP 版在 scheduler **尚未啟動**時，`vTaskEnterCritical` 會關中斷，`vTaskExitCritical` 卻不會重新開中斷（只有 scheduler 執行中才走開中斷的路徑）。所以在 `main()` 中呼叫 `xTaskCreate` / `xQueueCreate` 之後，優先權數值 ≥ 0x10 的 IRQ 會一直被遮罩到 scheduler 啟動為止。⚠️未驗證：此結論讀原始碼推論，未實機驗證。**實務建議**：硬體初始化（`stdio_init_all()`、時脈、GPIO）放在建立 RTOS 物件之前；需要 IRQ 或 `sleep_ms` 的初始化放到 task 裡做；`xTaskCreate` 與 `vTaskStartScheduler` 之間不要等待任何東西。
+- **陷阱**：SMP 版在 scheduler **尚未啟動**時，`vTaskEnterCritical` 會關中斷，`vTaskExitCritical` 卻不會重新開中斷（只有 scheduler 執行中才走開中斷的路徑）。所以在 `main()` 中第一次呼叫 `xTaskCreate` / `xQueueCreate` 之後，優先權數值 ≥ 0x10 的 IRQ 會一直被遮罩到第一個 task 開始跑為止。**實務建議**：硬體初始化（`stdio_init_all()`、時脈、GPIO）放在建立 RTOS 物件之前；需要 IRQ 或 `sleep_ms` 的初始化放到 task 裡做；`xTaskCreate` 與 `vTaskStartScheduler` 之間不要等待任何東西。
 
 ### 4.10 ISR 規則與中斷優先權
 
@@ -968,16 +967,16 @@ L: 取得 mutex ─被 M 搶占────────────────�
 | 兩核計數結果偶爾少 | SMP 下共享變數沒保護（以為「同一時間只有一個 task 在跑」） | `taskENTER_CRITICAL`、mutex、atomic，或改成各自累加再合併 |
 | 程式卡死在兩個 mutex | deadlock：兩 task 以相反順序取鎖 | 固定取鎖順序；Take 用有限逾時並處理失敗 |
 | 呼叫 API 時卡住（scheduler 尚未啟動） | 在 `main()` 中用了有等待時間的阻塞 API、`vTaskDelay`，或依賴 IRQ 的初始化（`sleep_ms`、USB stdio 等待連線）放在 `xTaskCreate` 之後 | scheduler 啟動前只做建立物件；等待類動作放進 task（見 §4.9 陷阱） |
-| core 1 行為異常 / launch 失敗 | SMP 下又自己 `multicore_launch_core1`，或動了 FIFO / `PICO_SPINLOCK_ID_OS1/2` | 交給 scheduler；用 task + affinity |
+| core 1 行為異常 / launch 失敗 | SMP 下又自己 `multicore_launch_core1`，或動了 `PICO_SPINLOCK_ID_OS1/2` / port 用的 doorbell | 交給 scheduler；用 task + affinity |
 | `vTaskStartScheduler` 在 core 1 呼叫就 assert | SMP port 要求在 core 0 啟動 | 改在 core 0 呼叫 |
-| 用了 `assert` 的檢查完全沒作用 | Release build（SDK 預設）帶 `-DNDEBUG`，`assert` 被移除 → `configASSERT` 也消失 | 除錯時用 Debug build，或把 `configASSERT(x)` 定義成 `if (!(x)) panic(...)` 之類不受 NDEBUG 影響的寫法 |
+| 用了 `assert` 的檢查完全沒作用 | Release build（沒給 `CMAKE_BUILD_TYPE` 時 SDK 預設）帶 `-DNDEBUG`，`assert` 被移除 → `configASSERT` 也消失 | 除錯時用 Debug build，或把 `configASSERT(x)` 定義成 `if (!(x)) panic(...)` 之類不受 NDEBUG 影響的寫法 |
 | 浮點運算結果偶爾錯亂 | 沒開 `configENABLE_FPU`，context switch 沒保存 FPU 暫存器 | `configENABLE_FPU 1` |
 | link 錯誤 `pvPortMalloc` undefined | 只 link `FreeRTOS-Kernel`，沒有 heap | link `FreeRTOS-Kernel-Heap4` |
 | `FreeRTOSConfig.h: No such file` | 該目錄沒加進 target 的 include path | `target_include_directories(app PRIVATE <dir>)` |
 | CMake：`does not contain a 'rp2350' port` | kernel 是沒有 RP2350 port 的上游版本，submodule 沒初始化 | `git submodule update --init portable/ThirdParty/Community-Supported-Ports` 或用 raspberrypi fork |
 | 軟體 timer 時間不準、其他 timer 被延誤 | callback 太久或在 callback 裡阻塞 | callback 只送 notification，工作交給 task |
 | `xEventGroupSetBitsFromISR` 沒效果 / 編譯不到 | 沒開 `configUSE_TIMERS` / `INCLUDE_xTimerPendFunctionCall`，或 timer queue 滿 | 開 config；或改用 `xTaskNotifyFromISR(..., eSetBits, ...)` |
-| 多個 task 寫同一個 stream buffer 時資料錯亂 | stream / message buffer 只支援單一寫入者 | 包 critical section，或改用 queue |
+| 多個 task 寫同一個 stream buffer 時資料錯亂 | stream / message buffer 只支援單一寫入者 | 包 critical section 且 send 用 block time 0，或改用 queue |
 
 ---
 

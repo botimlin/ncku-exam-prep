@@ -628,7 +628,7 @@ void update(void) {
 
 ### B4.3 RP2350-E2 erratum 與軟體 spinlock
 
-- 內容（datasheet 附錄 D.9.2，影響 A2、A3、A4 全部版本，用文件 + 軟體解決）：SIO spinlock 暫存器在 SIO offset 0x100–0x17C。RP2350 在 0x180 以上新增了暫存器（doorbell、PERI_NONSEC、RISC-V soft IRQ、RISC-V MTIME、TMDS encoder）。位址解碼只看 bit 8，所以**寫入 0x180–0x1FC 會被誤認成寫入低 0x80 的 spinlock，也就是把那把鎖意外釋放**。只有寫入受影響，讀取正常。
+- 內容（datasheet 附錄 D.9.2；A2 有，A4 公告未列為已修，用文件 + 軟體解決）：SIO spinlock 暫存器在 SIO offset 0x100–0x17C。RP2350 在 0x180 以上新增了暫存器（doorbell、PERI_NONSEC、RISC-V soft IRQ、RISC-V MTIME、TMDS encoder）。位址解碼只看 bit 8，所以**寫入 0x180–0x1FC 會被誤認成寫入低 0x80 的 spinlock，也就是把那把鎖意外釋放**。只有寫入受影響，讀取正常。
 - datasheet 列出不受影響、可正常使用的硬體 spinlock：5、6、7、10、11、18–31（18–24 對應的是唯讀的 TMDS 暫存器，寫入誤解碼不會發生）。
 - SDK 對策：`PICO_USE_SW_SPIN_LOCKS` 在 RP2350 預設開啟（SDK 2.3.x 的預設值是 `!PICO_XIP_RAM`；2.2.0 是 1）。開啟時 `spin_lock_t` 變成 RAM 中的一個 byte 旗標（陣列 `_sw_spin_locks[32]`）：
   - Arm（Cortex-M33）：`ldaexb` / `strexb` 迴圈上鎖、`stlb` 解鎖；SDK 會設定 `ACTLR.EXTEXCLALL`，讓 exclusive 存取都經過全域 exclusive monitor，跨核才正確。
@@ -639,9 +639,9 @@ void update(void) {
 ### B4.4 RP2350 的 C11 atomic 與 exclusive monitor
 
 - RP2350：1/2/4 byte 且對齊的 atomic 由編譯器直接產生處理器的 exclusive / AMO 指令（lock-free，`pico_atomic` 的 `__atomic_is_lock_free` 也回報 true）；其他大小（例如 64-bit）由 `pico_atomic` 用 spinlock（`PICO_SPINLOCK_ID_ATOMIC`）保護。RP2040：**全部**用 spinlock 模擬。
-- Global Exclusive Monitor（datasheet §2.1.6）：只在 SRAM（0x20000000–0x20082000）支援 exclusive；**reservation granule = 16 bytes**、每個 PE 只追蹤一個 reservation；DMA 寫入也會被監看（會讓 CPU 的 exclusive 失敗而重試）。
+- Global Exclusive Monitor（datasheet §2.1.6）：跨核 exclusive 靠它，只涵蓋 SRAM（0x20000000–0x20082000，不含 XIP / PSRAM）；**reservation granule = 16 bytes** ⚠️未查證、每個 PE 只追蹤一個 reservation；DMA 寫入也會被監看（會讓 CPU 的 exclusive 失敗而重試）。
 - 推論（⚠️未驗證於實測）：兩核分別對**同一個 16-byte 區塊內的不同變數**做 atomic RMW，會互相使對方的 exclusive write 失敗而重試，類似 false sharing。高頻 atomic 變數建議各自對齊到 16 bytes（`__attribute__((aligned(16)))`）。軟體 spinlock 陣列 32 bytes 只佔 2 個 granule，不同鎖之間理論上也會互相干擾，但持鎖很短時影響應該很小（⚠️推論）。
-- Exclusive 存取在 SRAM 以外（例如 flash/XIP、外部 PSRAM）一律回報失敗 → **atomic 變數必須放在 SRAM**（一般全域 / static 變數本來就在 SRAM）。
+- Global monitor 不涵蓋 SRAM 以外（例如 flash/XIP、外部 PSRAM）→ 那裡的 exclusive 無法跨核保證 → **atomic 變數必須放在 SRAM**（一般全域 / static 變數本來就在 SRAM）。
 
 ---
 
@@ -751,8 +751,8 @@ bool sem_try_acquire(semaphore_t *sem);
 
 ```c
 #include "pico/util/queue.h"
-bool queue_init(queue_t *q, uint element_size, uint element_count);     // 用 striped spinlock
-bool queue_init_with_spinlock(queue_t *q, uint element_size, uint element_count, uint spinlock_num);
+void queue_init(queue_t *q, uint element_size, uint element_count);     // 用 striped spinlock；回傳 void
+void queue_init_with_spinlock(queue_t *q, uint element_size, uint element_count, uint spinlock_num);
 void queue_free(queue_t *q);
 uint queue_get_level(queue_t *q);           // 目前元素數（有加鎖）
 uint queue_get_level_unsafe(queue_t *q);
@@ -768,7 +768,7 @@ void queue_peek_blocking(queue_t *q, void *data);
 ```
 
 - 元素是**複製**進去的（`memcpy` element_size bytes），整個操作在 spinlock + 關中斷下進行。
-- `queue_init` 內部用 `calloc(element_count + 1, element_size)` 配置 → 用到 heap，失敗回傳 false。
+- `queue_init` 內部用 `calloc(element_count + 1, element_size)` 配置 → 用到 heap；**回傳 void，也不檢查 calloc 失敗** → 無法從回傳值判斷成功；大 queue 先估 heap。
 - ISR 中只用 `queue_try_*`。
 - 效能：每筆都要上鎖 + memcpy。元素很小、數量很大時，改成**傳 buffer 指標 / 索引**或一次傳一批。
 

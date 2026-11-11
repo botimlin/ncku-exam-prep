@@ -49,4 +49,4 @@ rm -rf build                             # 快取問題時完全重建
 ```
 
 ## 看二進位
-`objdump -d`（交叉工具鏈加前綴：`arm-none-eabi-`、`riscv32-unknown-elf-`，實際名稱用 tab 補全確認）｜`nm`｜`size`｜pico-sdk 會產生 `.dis` 反組譯與 `.map`
+`objdump -d`（交叉工具鏈加前綴：`arm-none-eabi-`、`riscv32-unknown-elf-`，實際名稱用 tab 補全確認）｜`nm`｜`size`｜pico-sdk：有 `pico_add_extra_outputs(目標)` 時才產生 `.dis` 反組譯與 `.map`

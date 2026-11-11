@@ -20,7 +20,7 @@
 | SPI | 2（PL022） | `clk_peri` | TX/RX 各 8 個（4–16 bit） | `hardware/spi.h` / `hardware_spi` | master：clk_peri/2；slave：clk_peri/12 |
 | I2C | 2（DW_apb_i2c） | `clk_sys` | TX/RX 各 16 | `hardware/i2c.h` / `hardware_i2c` | 1 Mbit/s（Fast-mode Plus）；無 High-speed |
 | PWM | 12 slice × 2 ch（A 封裝腳位只接到 slice 0–7） | `clk_sys` | — | `hardware/pwm.h` / `hardware_pwm` | 16-bit 計數、8.4 分頻 |
-| ADC | 1（SAR），A：4 外部 + 溫度；B：8 + 溫度 | `clk_adc` 48 MHz | 8 筆 | `hardware/adc.h` / `hardware_adc` | 500 kS/s，12-bit，ENOB 9.2 |
+| ADC | 1（SAR），A：4 外部 + 溫度；B：8 + 溫度 | `clk_adc` 48 MHz | 8 筆 ⚠️未查證 | `hardware/adc.h` / `hardware_adc` | 500 kS/s，12-bit，ENOB 9.2 ⚠️未查證 |
 | Timer | TIMER0、TIMER1，各 64-bit µs 計數 + 4 alarm | 1 µs tick（由 clk_ref/XOSC） | — | `hardware/timer.h`、`pico/time.h` | 1 µs 解析度 |
 | Watchdog | 1 | 1 µs tick | — | `hardware/watchdog.h` / `hardware_watchdog` | 最長約 16.7 s（RP2040：8.3 s） |
 
@@ -104,7 +104,7 @@ Pico 2 板子預設腳位（`boards/pico2.h`）：uart0 TX=GP0 / RX=GP1；i2c0 S
 
 | 項目 | 內容 |
 |---|---|
-| 影響 | **只影響 RP2350 A2 stepping**（A3 起已修正；Appendix C.2） |
+| 影響 | **RP2350 A2 stepping**（A4 已修正；A3 ⚠️未查證；Appendix C.2） |
 | 現象 | Bank 0 GPIO 0–47 在「IE=1、輸出關閉、腳位電壓落在 VIL~VIH 之間」時漏電流異常（3.3 V 下典型約 120 µA），把腳撐在約 2.2 V。內建 **pull-down 太弱拉不下來** → 浮接 + pull-down 的腳可能讀到 1 |
 | 不受影響 | pull-up 正常；QSPI pad、USB pin 不受影響 |
 | 對策 | 1) 改用 pull-up + 按鍵接地（低電位有效）；2) 外接 ≤ 8.2 kΩ pull-down；3) 平時關 IE（`gpio_set_input_enabled(pin,false)`），讀之前開、讀完關 |
@@ -766,9 +766,9 @@ dma_channel_configure(ch, &c, &pwm_hw->slice[slice].cc, wave, 256, true);
 | 溫度感測 | ch4 | ch8 |
 | SDK | `ADC_BASE_PIN` 26、`NUM_ADC_CHANNELS` 5 | `ADC_BASE_PIN` 40、`NUM_ADC_CHANNELS` 9 |
 
-- SAR、12-bit（0–4095），**ENOB 9.2**；每次轉換 96 個 clk_adc 週期，clk_adc = 48 MHz → **2 µs / 樣本 = 500 kS/s**（所有通道共用，round-robin 時要平分）。
+- SAR、12-bit（0–4095），**ENOB 9.2** ⚠️未查證；每次轉換 96 個 clk_adc 週期，clk_adc = 48 MHz → **2 µs / 樣本 = 500 kS/s**（所有通道共用，round-robin 時要平分）。
 - 模式：one-shot（`CS.START_ONCE`）、free-running（`CS.START_MANY`，由 DIV 定速）。
-- FIFO 8 筆，可觸發 IRQ（`ADC_IRQ_FIFO` = 35）或 DMA（`DREQ_ADC` = 48）；滿了會設 `FCS.OVER`，之後的樣本**直接丟失**。
+- FIFO（深度 8 筆 ⚠️未查證），可觸發 IRQ（`ADC_IRQ_FIFO` = 35）或 DMA（`DREQ_ADC` = 48）；滿了會設 `FCS.OVER`，之後的樣本**直接丟失**。
 - `FCS.SHIFT`：右移成 8 bit（方便 DMA 到 byte 陣列）；`FCS.ERR`：在樣本裡帶 conversion error 旗標（有錯誤的樣本要丟掉）。
 - 切換 AINSEL 不需要 settling time；ADC 輸入是電容性（約 1 pF），等效阻抗 > 100 kΩ。
 - 輸入電壓不可超過 IOVDD；使用 ADC 腳時應關掉該腳的數位功能（`adc_gpio_init` 會做）。
@@ -1015,7 +1015,7 @@ while (true) { work(); watchdog_update(); }
 | | Cortex-M33（Arm 模式） | Hazard3（RISC-V 模式） |
 |---|---|---|
 | 中斷控制器 | NVIC（每核一個） | Xh3irq（每核一個，CSR：MEIEA / MEIPA / MEIFA / MEIPRA / MEINEXT / MEICONTEXT） |
-| 外部 IRQ 數 | 52（0–45 有接，46–51 = SPAREIRQ，給軟體自觸發） | 同 |
+| 外部 IRQ 數 | 52（0–45 有接，46–51 = `SPARE_IRQ_0..5`，給軟體自觸發） | 同 |
 | 優先權 | 8-bit 欄位只有**高 4 bit 有效** → 16 級 | 16 級 pre-emption |
 | 分派 | 硬體向量表直接跳 handler | 單一 `mip.meip` 入口 + 軟體分派（SDK `isr_riscv_machine_external_irq`，讀 MEINEXT 找 IRQ 再呼叫 C handler） |
 | SDK API | `hardware_irq` 兩邊相同（RISC-V 也用「數字越小越優先」的 Arm 慣例） | 同 |
@@ -1034,7 +1034,7 @@ while (true) { work(); watchdog_update(); }
 | 8/9 | `PWM_IRQ_WRAP_0/1` | 25 | `SIO_IRQ_FIFO`（core-local） | 36/37 | `I2C0_IRQ` / `I2C1_IRQ` |
 | 10–13 | `DMA_IRQ_0..3` | 26 | `SIO_IRQ_BELL`（core-local） | 39 | `TRNG_IRQ` |
 | 14 | `USBCTRL_IRQ` | 29 | `SIO_IRQ_MTIMECMP`（core-local） | 31/32 | `SPI0_IRQ` / `SPI1_IRQ` |
-| 46–51 | `SPAREIRQ_IRQ_0..5`（軟體用） | 30 | `CLOCKS_IRQ` | 38 | `OTP_IRQ` |
+| 46–51 | `SPARE_IRQ_0..5`（軟體用） | 30 | `CLOCKS_IRQ` | 38 | `OTP_IRQ` |
 
 ### 8.3 API
 
@@ -1052,7 +1052,7 @@ void irq_set_priority(uint num, uint8_t hardware_priority);      // 0x00 最高 
 uint irq_get_priority(uint num);
 void irq_set_pending(uint num);                                   // 軟體觸發
 static inline void irq_clear(uint int_num);
-int  user_irq_claim_unused(bool required);                        // 取得一個 SPAREIRQ
+int  user_irq_claim_unused(bool required);                        // 取得一個 SPARE_IRQ（user IRQ）
 void user_irq_unclaim(uint irq_num);
 // 常數：PICO_HIGHEST_IRQ_PRIORITY 0x00、PICO_DEFAULT_IRQ_PRIORITY 0x80、PICO_LOWEST_IRQ_PRIORITY 0xff
 //       PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY 0x80、..._HIGHEST_ORDER_PRIORITY 0xff、..._LOWEST_ORDER_PRIORITY 0x00
@@ -1063,7 +1063,7 @@ void user_irq_unclaim(uint irq_num);
 | 用途 | 一個 IRQ 只有一個來源 / 要最低延遲 | 多個來源共用一條（GPIO、DMA、PIO 常見） |
 | 開銷 | 最低 | 依序呼叫鏈上每個 handler；每個 handler 要檢查是不是自己的事件 |
 | 排序 | — | `order_priority` **數字大的先被呼叫**（與 `irq_set_priority` 相反！） |
-| 上限 | — | 全部共 `PICO_MAX_SHARED_IRQ_HANDLERS`（預設 4；有 USB stdio 時 6） |
+| 上限 | — | 全部 shared handler 合計 `PICO_MAX_SHARED_IRQ_HANDLERS`（預設 4） |
 
 - SDK 預設兩核**共用同一張向量表**：handler 對兩核都生效；同一 IRQ 號在兩核都 enable 時，handler 內用 `get_core_num()` 分辨。
 - **非 core-local 的 IRQ（UART、SPI、DMA、PWM、TIMER…）只在一顆核 enable**，否則兩核搶同一個事件。
@@ -1079,7 +1079,7 @@ void user_irq_unclaim(uint irq_num);
 5. 共享變數 `volatile`；多欄位或 read-modify-write → 主程式那邊 `save_and_disable_interrupts()` / `restore_interrupts()`；跨核 → `critical_section_t` / atomic / `queue_t`。
 6. 優先權只在真的需要時調：讓「資料會丟」的（UART RX、高速 ADC 非 DMA）比「只是慢一點」的高。
 
-延後處理（bottom half）：SPAREIRQ 讓高優先權 ISR 把較重的工作丟到低優先權中斷執行（datasheet §3.2 的建議用法）：
+延後處理（bottom half）：SPARE_IRQ 讓高優先權 ISR 把較重的工作丟到低優先權中斷執行（datasheet §3.2 的建議用法）：
 
 ```c
 #include "hardware/irq.h"
@@ -1198,7 +1198,7 @@ void setup(void) {
 | ADC 讀到別的腳 | `adc_select_input(26)`（傳了 GPIO 號） | 傳通道號 0–3（A）/ 0–7（B） |
 | ADC DMA 資料錯位 / 缺 | FIFO overflow（`FCS.OVER`）；先開 ADC 才開 DMA；round-robin 起始通道不明 | 先 DMA 後 `adc_run`；`adc_select_input` 設起始；結束 drain |
 | 溫度值離譜 | 沒 `adc_set_temp_sensor_enabled(true)`；選錯通道（B 封裝是 8） | `ADC_TEMPERATURE_CHANNEL_NUM`；需個體校正 |
-| GPIO 浮接 + pull-down 卻讀到 1 | RP2350-E9（A2 stepping） | 改 pull-up 邏輯或外接 ≤ 8.2 kΩ 下拉 |
+| GPIO 浮接 + pull-down 卻讀到 1 | RP2350-E9（A2 stepping；A4 已修） | 改 pull-up 邏輯或外接 ≤ 8.2 kΩ 下拉 |
 | 直接寫暫存器的 GPIO 沒反應 | ISO 未清、IE=0（RP2350 預設） | 用 `gpio_set_function()` 或自己清 ISO、設 IE |
 | 按一次按鍵觸發多次 | 彈跳；用了 level IRQ（持續觸發） | 軟體去彈跳；用 edge |
 | GPIO IRQ 在 core 1 不觸發 | GPIO IRQ 是 per-core；在 core 0 設定的 | 在要處理的那顆核呼叫設定函式 |
@@ -1228,7 +1228,7 @@ void setup(void) {
 - [ ] IRQ：在正確的核設定；清週邊旗標；handler 沒有被重複安裝；優先權合理。
 - [ ] callback / ISR 內沒有 printf / sleep / 阻塞。
 - [ ] 共享變數 `volatile`；多欄位更新有保護。
-- [ ] 板子 stepping（E9 只在 A2）；輸入用 pull-up 優先。
+- [ ] 板子 stepping（E9：A2 有、A4 已修）；輸入用 pull-up 優先。
 - [ ] 用邏輯分析儀 / 示波器 / loopback（UART TX 接 RX、SPI 開 `SPI_SSPCR1_LBM_BITS` 內部 loopback，pico-examples `spi_dma` 用法）隔離硬體與軟體問題。
 
 ## 14. 優化檢查清單

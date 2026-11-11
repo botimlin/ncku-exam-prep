@@ -59,7 +59,7 @@
 
 | | Cortex-M33（`rp2350-arm-s`） | Hazard3（`rp2350-riscv`） |
 |---|---|---|
-| ISA | Armv8-M Mainline（Thumb-2），含 DSP、FPU（單精度）、TrustZone | RV32IMAC + Zicsr、Zifencei、Zba、Zbb、Zbs、Zbkb、Zcb、Zcmp（SDK 的 `-march` 字串） |
+| ISA | Armv8-M Mainline（Thumb-2），含 DSP、FPU（單精度）、TrustZone | RV32IMAC + Zicsr、Zifencei、Zba、Zbb、Zbs、Zbkb（SDK 預設 `-march`）；硬體另有 Zcb、Zcmp（`PICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才用） |
 | 編譯器 | `arm-none-eabi-gcc`（`-mcpu=cortex-m33 -mthumb -march=armv8-m.main+fp+dsp -mcmse`，預設 `-mfloat-abi=softfp`；`PICO_NO_CMSE=1` 可拿掉 `-mcmse`） | `riscv32-*-elf-gcc`（SDK 依序找 `riscv32-pico-elf`、`riscv32-unknown-elf`、`riscv32-corev-elf`、`riscv-none-elf`），`-mabi=ilp32` |
 | float | 硬體 FPU（快） | 軟體模擬（慢很多），SDK 有提供優化過的 add/sub/mul |
 | double | DCP coprocessor 加速（`pico_double` 預設） | 軟體（compiler 內建函式庫） |
@@ -160,7 +160,7 @@ SIO 的 GPIO 輸出請用 SIO 自己提供的 `gpio_set` / `gpio_clr` / `gpio_to
 | 按鈕 | BOOTSEL（按住再插 USB → 進入 USB 大量儲存模式） |
 | 除錯 | 3-pin SWD |
 
-⚠️ RP2350 A2 stepping 有已知 erratum（RP2350-E9）：GPIO 當輸入且使用內部 pull-down 時可能異常。需要讀按鍵時，優先用內部 pull-up + 接地按鈕，或外部電阻；細節見 datasheet errata。
+⚠️ RP2350 A2 stepping 有已知 erratum（RP2350-E9；A4 已修）：GPIO 當輸入且使用內部 pull-down 時可能異常。需要讀按鍵時，優先用內部 pull-up + 接地按鈕，或外部電阻；細節見 datasheet errata。
 
 ---
 
@@ -263,6 +263,8 @@ make -j$(nproc)
 ```
 
 ### 6.2 輸出檔
+
+`.elf` 一定有；其餘（`.uf2`、`.bin`、`.hex`、`.dis`、`.elf.map`）要 CMakeLists 有 `pico_add_extra_outputs(目標)` 才產生。
 
 | 副檔名 | 內容 | 用途 |
 |---|---|---|
@@ -785,7 +787,7 @@ main.c：
 
 - ⚠️ DWT CYCCNT 在實機（SDK 預設 Secure 模式、無除錯器）下的可用性未在板上驗證。
 - （已確認，見 `riscv-hazard3.md`）Hazard3 的 `mcountinhibit` reset 值為 0x5，`mcycle`/`minstret` 預設停止；bootrom 與 pico-sdk 都不會打開，量測前要先 `csrci mcountinhibit, 5`。
-- （已確認，見 `pico-peripherals.md`）RP2350-E9 只影響 A2 stepping（A3 已修正）：浮接輸入因漏電約 120 µA 停在約 2.2 V，內建 pull-down 拉不下來；對策是改用 pull-up、外接 ≤ 8.2 kΩ pull-down，或只在讀取時才開輸入。
+- （已確認，見 `pico-peripherals.md`）RP2350-E9 影響 A2 stepping（A4 已修正；A3 ⚠️未查證）：浮接輸入因漏電約 120 µA 停在約 2.2 V，內建 pull-down 拉不下來；對策是改用 pull-up、外接 ≤ 8.2 kΩ pull-down，或只在讀取時才開輸入。
 - ⚠️ 寫 flash 時的安全做法（`flash_safe_execute` 等）只列名稱，未詳查。
 - ⚠️ BOOTSEL 磁碟機名稱（`RP2350`）未在官方文件原文確認。
 - ⚠️ 考場 judge 的評分方式、是否允許超頻、是否自動燒錄：未知。

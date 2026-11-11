@@ -253,7 +253,7 @@ def generate_launch_description():
 | `ROS_DOMAIN_ID` | 預設 0；不同值 = 互相看不見。官方建議 0–101（Linux 上 215–232 也安全） |
 | `ROS_AUTOMATIC_DISCOVERY_RANGE` | `SUBNET`（預設）/ `LOCALHOST` / `OFF` / `SYSTEM_DEFAULT` |
 | `ROS_STATIC_PEERS` | 以 `;` 分隔的位址清單 |
-| `ROS_LOCALHOST_ONLY` | Iron 起 deprecated，改用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` |
+| `ROS_LOCALHOST_ONLY` | Iron 起 deprecated（設 1 仍生效但印 WARN），改用 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`（預設 SUBNET） |
 | `RMW_IMPLEMENTATION` | 例如 `rmw_fastrtps_cpp`（預設）、`rmw_cyclonedds_cpp`（若已安裝） |
 
 ---
@@ -483,7 +483,7 @@ self.sub = self.create_subscription(Int32, '/number', self.on_msg, 10, event_cal
 
 ### 4.5 rclpy 型別範圍檢查
 
-rclpy 產生的 message 類別**預設不檢查欄位範圍**（Iron 起預設關閉；只有設環境變數 `ROS_PYTHON_CHECK_FIELDS=1`，或建構時傳 `check_fields=True` 才會在設值時 assert，依 rosidl_python jazzy `_msg.py.em`）。預設情況下，像練習的 `received.data * 2` 若超出 int32 範圍，不會丟例外，而是在 C 層轉型時**靜默變成錯誤的值**（`_msg_support.c.em` 對 int32 欄位做 `(int32_t)PyLong_AsLong(v)`，64-bit Linux 上相當於取低 32 位 = 二補數回繞；⚠️未實測），node 照常執行但輸出錯誤。Python 的 `int` 本身不會溢位，需自行決定截斷 / 夾限 / 回繞的語義（依題目規格）；除錯時可設 `ROS_PYTHON_CHECK_FIELDS=1` 讓越界直接報錯。
+rclpy 產生的 message 類別**預設不檢查欄位範圍**（Iron 起預設關閉；只有設環境變數 `ROS_PYTHON_CHECK_FIELDS=1`，或建構時傳 `check_fields=True` 才會在設值時 assert，依 rosidl_python jazzy `_msg.py.em`）。預設情況下，像練習的 `received.data * 2` 若超出 int32 範圍，不會丟例外，而是在 C 層轉型時**靜默變成錯誤的值**（取低 32 位 = 二補數回繞；Jazzy 實測 Int32 給 `2**31+5` → `-2147483643`），node 照常執行但輸出錯誤。Python 的 `int` 本身不會溢位，需自行決定截斷 / 夾限 / 回繞的語義（依題目規格）；除錯時可設 `ROS_PYTHON_CHECK_FIELDS=1` 讓越界直接報錯。
 
 ---
 
@@ -663,7 +663,7 @@ ros2 run my_py_pkg relay
 | 2 | 預期的 node 存在嗎 | `ros2 node list`（懷疑快取就 `--no-daemon` 或 `ros2 daemon stop`） | 程式沒啟動 / 已崩潰（callback 例外）/ 沒呼叫 spin / node 名稱和預期不同 |
 | 3 | 預期的 topic 存在嗎、名稱完全一致嗎 | `ros2 topic list -t` | 拼字、大小寫、少了 `/`、namespace 造成 `/ns/number` vs `/number`、remap 寫錯 |
 | 4 | 兩端真的連在同一個 topic 嗎 | `ros2 node info /pub_node`、`ros2 node info /sub_node` | 一邊 publish `/number`、另一邊 subscribe `/numbers` |
-| 5 | 型別一致嗎、數量合理嗎 | `ros2 topic info /number`（`-t` 出現兩個型別 = 型別衝突） | `Publisher count: 0`（publisher 沒起來或名稱不同）/ `Subscription count: 0` / 型別不同（Int32 vs Int64） |
+| 5 | 型別一致嗎、數量合理嗎 | `ros2 topic info /number`；`ros2 topic list -t` 同一 topic 出現兩個型別 = 型別衝突（通常不會印 WARN） | `Publisher count: 0`（publisher 沒起來或名稱不同）/ `Subscription count: 0` / 型別不同（Int32 vs Int64） |
 | 6 | QoS 相容嗎 | `ros2 topic info -v /number` 比對 Reliability / Durability；看 log 有無 `incompatible QoS` | sub 要 RELIABLE、pub 是 BEST_EFFORT；sub 要 TRANSIENT_LOCAL、pub 是 VOLATILE |
 | 7 | 線上真的有資料嗎、頻率對嗎 | `ros2 topic echo /number --once`、`ros2 topic hz /number` | publisher 只在條件成立時才發 / timer 沒建立 / 頻率太低 |
 | 8 | 單獨測下游 node | `ros2 topic pub --once /number std_msgs/msg/Int32 "{data: 21}"` 同時 `ros2 topic echo /double` | 下游邏輯錯、callback 丟例外（看該 node 的終端機輸出） |
@@ -684,7 +684,7 @@ ros2 run my_py_pkg relay
 | 兩個同名 node | `ros2 node list` 出現重複，參數 / service 會混亂；改 `__node:=` |
 | node 消失 | 程式結束或例外；Python traceback 在啟動它的終端機 |
 | `topic list` 結果與現況不符 | daemon 快取 → `ros2 daemon stop` 後重試 |
-| 跨 container 通訊時 discovery 正常但收不到資料 | Fast DDS 共享記憶體傳輸在不同 container 間不通（⚠️未驗證於考場環境；同一 container 內不會發生） |
+| 兩個 container 都 `--network host`：`topic list` 看得到但收不到資料 | Fast DDS 共享記憶體傳輸在不同 container 間不通（實測）→ 兩邊都加 `--ipc host`；預設 bridge 網路正常、同一 container 內不會發生 |
 
 ---
 

@@ -1,6 +1,6 @@
 # 08 官方文件導航圖（精簡）
 > 版本：RP2350 datasheet Release 8（2026-10-01，80d627281ed5）；pico-sdk 2.3.1；ROS 2 Jazzy。詳見 full/08-docs-map.md｜最後更新 2026-11
-> 頁碼 = 頁面右下角印的頁碼；PDF 檢視器頁框約 +1。用「節號. 節名」Ctrl+F，例 `12.6.4.1. System`。
+> 頁碼 = 頁面右下角印的頁碼；PDF 檢視器頁框約 +1（⚠️頁碼未逐一查證，以節號為準）。用「節號. 節名」Ctrl+F，例 `12.6.4.1. System`。
 
 ## RP2350 datasheet
 https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
@@ -31,14 +31,14 @@ https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
 | Timer / Watchdog | 12.8 / 12.9 | 1094 / 1105 |
 | 勘誤 Appendix D | D | 1351 |
 
-勘誤：E1 interp OVERF §D.9.1｜E2 spinlock 鏡像 +0x80 §D.9.2｜E5 CHAIN_TO+ABORT §D.4.1｜E8 零長度 CHAIN_TO §D.4.2｜E9 GPIO pull-down（A2）§D.5.1｜E27 bus priority §D.3.1｜E30 reboot(0) §D.2.13。Ctrl+F `RP2350-E5`。
+勘誤：E1 interp OVERF §D.9.1｜E2 spinlock 鏡像 +0x80 §D.9.2｜E5 CHAIN_TO+ABORT §D.4.1｜E8 零長度 CHAIN_TO §D.4.2｜E9 GPIO pull-down（A2；A4 已修）§D.5.1｜E27 bus priority §D.3.1｜E30 reboot(0) §D.2.13。Ctrl+F `RP2350-E5`。
 
 ## 其他 PDF（datasheets.raspberrypi.com/pico/…）
 - pico-2-datasheet.pdf（§3.1 pinout）
 - getting-started-with-pico.pdf（Appendix C 命令列建置）
 - raspberry-pi-pico-c-sdk.pdf（2.8 多核、3.3 pioasm、7 CMake 設定、8 CMake 函式）
 
-## pico-sdk API（瀏覽器可開，curl 會被擋）
+## pico-sdk API（瀏覽器開）
 https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_dma
 同頁換錨點：`group_hardware_pio` `group_sm_config` `group_hardware_gpio` `group_hardware_irq` `group_hardware_sync` `group_hardware_interp` `group_hardware_timer`
 high_level.html：`group_pico_multicore` `group_pico_sync` `group_pico_time` `group_queue`
@@ -53,7 +53,7 @@ runtime.html：`group_pico_stdio`
 GitHub：`t` 找檔、`y` 永久連結、Raw 按鈕。不要按 Copilot 與 `.`。
 範例：github.com/raspberrypi/pico-examples（dma/ pio/ multicore/ interp/ timer/ adc/dma_capture）
 
-## ROS 2 Jazzy（https://docs.ros.org/en/jazzy/ 開頭）
+## ROS 2 Jazzy（https://docs.ros.org/en/jazzy/ 開頭；程式抓取會被擋，用瀏覽器開）
 - `Concepts/Intermediate/About-Quality-of-Service-Settings.html`
 - `Concepts/Intermediate/About-Executors.html`
 - `Concepts/Intermediate/About-Domain-ID.html`

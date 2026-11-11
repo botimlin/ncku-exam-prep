@@ -62,7 +62,7 @@ PIO（第 11 章，3 個 PIO）：
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 來源：RP2350 datasheet Release 8，Appendix D Errata。晶片 RP2350，非 RP2040。在 PDF 用 Ctrl+F 搜 RP2350-E5 這種編號。
 - E1（§D.9.1，A2/A3/A4）：Interpolator 的 OVERF 位元失效。對策：自己檢查 ACCUM0/ACCUM1 的 MSB，或事先算邊界。
-- E2（§D.9.2，A2/A3/A4）：SIO SPINLOCK 寫入會鏡像到 +0x80。對策：用處理器原子指令；SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31。
+- E2（§D.9.2，A2 確認有；A3/A4 未見修正公告 ⚠️）：SIO SPINLOCK 寫入會鏡像到 +0x80。對策：用處理器原子指令；SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31。
 - E5（§D.4.1，A2/A3/A4）：CHAIN_TO 與 ABORT 作用中的通道交互有問題。對策：abort 前先清掉被 abort 的通道和它 chain 到的通道的 CH0_CTRL_TRIG.EN。
 - E8（§D.4.2，A2/A3/A4）：零長度傳輸時 CHAIN_TO 可能不觸發。對策：不要把 CHAIN_TO 和零長度傳輸一起用，用 dummy 傳輸取代。
 - E9（§D.5.1，A2；A3 ⚠️未查證；A4 已修）：Bank 0 GPIO 開啟輸入時內建 pull-down 拉不下來。對策：先關 GPIO0.IE，讀之前才暫時打開；或外接 ≤ 8.2 kΩ 下拉。

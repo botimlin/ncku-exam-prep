@@ -195,7 +195,7 @@ SDK struct：`dma_hw->inte0 / ints0 …` 或 `dma_hw->irq_ctrl[i].inte / .ints`�
 
 ### 1.12 Errata RP2350-E8
 
-- 以 transfer count = 0 觸發的通道，CHAIN_TO **可能不觸發**。對策：不要讓 CHAIN_TO 遇到零長度傳輸；control block 清單中間不要放長度 0 的區塊，改用 dummy 傳輸。（清單結尾的「全 0 null trigger」是另一回事：null trigger 根本不會啟動通道。）
+- 以 transfer count = 0 觸發的通道，CHAIN_TO **可能不觸發**（⚠️未查證）。對策：不要讓 CHAIN_TO 遇到零長度傳輸；control block 清單中間不要放長度 0 的區塊，改用 dummy 傳輸。（清單結尾的「全 0 null trigger」是另一回事：null trigger 根本不會啟動通道。）
 
 ### 1.13 匯流排、頻寬與優先權（§2.1、§2.2.3）
 
@@ -448,7 +448,7 @@ dma_hw->fifo_levels                // 內部 FIFO 水位（除錯）
 | `engine_wait(ch)` | `dma_channel_wait_for_finish_blocking(ch)`，或 IRQ | wait 內含 compiler barrier |
 | `engine_release(ch)` | `dma_channel_cleanup(ch); dma_channel_unclaim(ch);` | 引擎在 BUSY 時拒絕；硬體上 unclaim 不會停通道，要先 cleanup/abort |
 | 引擎驗證 size ∈ {1,2,4} | `channel_config_set_transfer_data_size` 內有 `assert` | — |
-| 引擎驗證 count != 0 | 硬體允許 0：立即完成、不搬資料；配 CHAIN_TO 有 errata E8 | — |
+| 引擎驗證 count != 0 | 硬體允許 0：立即完成、不搬資料；配 CHAIN_TO 有 errata E8（⚠️未查證） | — |
 | 引擎驗證位址對齊，不對齊就停 | **硬體不檢查**，結果未定義 | 自己保證 `__attribute__((aligned(4)))` |
 | 複製 vs 填值只差 `src_increment` | 一樣：填值 = `read_increment=false` 指向一個 pattern 變數 | pattern 變數必須在 DMA 期間保持有效（別用即將離開 scope 的區域變數） |
 | 引擎是一條 pthread，仍佔 CPU | 真硬體只吃匯流排頻寬，CPU 完全空出 | 但會與 CPU 搶同一個 SRAM bank / 週邊 |
@@ -803,7 +803,7 @@ uint64_t dma_us = time_us_64() - t0;
 13. **DMA 寫 GPIO（SIO）**：DMA 無法存取 SIO → 匯流排錯誤。改用 PIO。
 14. **`CHAIN_TO` 預設值**：直接寫 CTRL 暫存器（不用 SDK default config）時，CHAIN_TO reset 值為 0，通道 1 以上會 chain 到通道 0。SDK default config 已設成自己。
 15. **Abort chain 的通道會自己重啟**（RP2350-E5）：先清 EN 與 CHAIN_TO 再 abort；或用 `dma_channel_cleanup`。
-16. **零長度 + CHAIN_TO**（RP2350-E8）：chain 可能不發生。
+16. **零長度 + CHAIN_TO**（RP2350-E8 ⚠️未查證）：chain 可能不發生。
 17. **Ring buffer 未對齊**：`channel_config_set_ring` 只保留低 n bit 變化，buffer 沒對齊 `1<<n` 就會繞到錯的區域。注意 ring 只能套用在讀或寫其中一邊。
 18. **RP2350 count ≥ 2^28** 會被解讀成 MODE。用 `dma_encode_transfer_count()`（2.2.0+）。
 19. **把 RP2040 程式直接搬過來**：IRQ 號、DREQ 編號、通道數都不同；用巨集與 `NUM_DMA_*`，不要寫死數字。
@@ -840,7 +840,7 @@ uint64_t dma_us = time_us_64() - t0;
 6. 結果「只有第一格對」→ write increment 忘了開。「整個 buffer 都是同一值」→ read increment 誤關。「多寫了 2/4 倍、蓋掉後面變數」→ count 用了 bytes。
 7. 中斷沒進來：`INTE`（`dma_channel_set_irqN_enabled`）、`irq_set_enabled(DMA_IRQ_N, true)`、handler 有安裝、handler 用的 IRQ 號與 enable 的一致？有沒有 `IRQ_QUIET`？`dma_hw->intr` 有沒有對應 bit？
 8. 中斷進來後卡死：handler 沒 ack。
-9. 第二次傳輸沒發生：觸發時通道仍 BUSY；或 CHAIN_TO 遇到零長度（E8）；或 EN=0。
+9. 第二次傳輸沒發生：觸發時通道仍 BUSY；或 CHAIN_TO 遇到零長度（E8 ⚠️未查證）；或 EN=0。
 10. abort 後通道又自己跑起來：E5 → 先清 EN/CHAIN_TO。
 11. 資料偶爾錯：CPU 同時存取 DMA 正服務的 FIFO？兩通道同一 DREQ？DMA buffer 是區域變數？讀 buffer 前少了 barrier？
 12. Ring 位置怪：buffer 是否對齊 `1 << size_bits`？`write` 參數選對邊了嗎？

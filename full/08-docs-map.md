@@ -49,7 +49,7 @@
 - 網址：https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
 - 版本字串（第 2 頁 Colophon）：`Release 8` / `Build date 01/10/2026` / `Build version 80d627281ed5`。考試當天打開時先看這三行；若不同，節號大致不變，但頁碼會漂移。
 - 大小約 11 MB，1371 頁。考場網路慢時，**先開好放著**。
-- 頁碼說明：下表「本版約 p.」是**印在頁面右下角的頁碼**（也是目錄上的頁碼）。PDF 檢視器頁框顯示的實體頁碼通常是它 **+1**（封面算第 1 頁）。最穩的方法：**用節號 + 節名搜尋**，不要靠頁碼。
+- 頁碼說明：下表「本版約 p.」是**印在頁面右下角的頁碼**（也是目錄上的頁碼）。PDF 檢視器頁框顯示的實體頁碼通常是它 **+1**（封面算第 1 頁）。最穩的方法：**用節號 + 節名搜尋**，不要靠頁碼（⚠️頁碼未逐一查證）。
 - 找節的方法：
   1. 開側邊欄「大綱 / Outline / 書籤」，依章展開（章 → 節 → 小節）。
   2. 或 Ctrl+F 輸入「節號 + 點 + 空格 + 節名開頭」，例如 `12.6.4.1. System`；datasheet 內文的標題格式就是 `12.6.4.1. System DREQ table`。
@@ -338,14 +338,14 @@
 | 勘誤 | 節號 | 模組 | 一句話摘要（依 datasheet Summary） | 影響版本 | datasheet 的 workaround 重點 |
 |---|---|---|---|---|---|
 | RP2350-E1 | §D.9.1 | SIO / interpolator | Interpolator 的 OVERF 位元因新的右旋轉行為而失效 | A2、A3、A4 | 自己檢查 ACCUM0/ACCUM1 MSB，或事先算好邊界 |
-| RP2350-E2 | §D.9.2 | SIO | SPINLOCK 寫入會鏡像到 +0x80 偏移 | A2、A3、A4 | 改用處理器原子指令；SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31 |
+| RP2350-E2 | §D.9.2 | SIO | SPINLOCK 寫入會鏡像到 +0x80 偏移 | A2 確認；A3、A4 未見修正公告 ⚠️ | 改用處理器原子指令；SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31 |
 | RP2350-E3 | §D.1.1 | ACCESSCTRL | QFN-60 封裝下 GPIO_NSMASK 控制到錯的 PADS 暫存器 | A2（僅 QFN-60） | — |
 | RP2350-E4 | §D.6.1 | Hazard3 | 核心 1 在 clock-gated sleep 時 System Bus Access 永久卡住 | A2、A3、A4 | （除錯器相關） |
 | RP2350-E5 | §D.4.1 | DMA | CHAIN_TO 與 ABORT 作用中通道的交互問題 | A2、A3、A4 | abort 前先清掉「被 abort 的通道」與「它 chain 到的通道」的 `CH0_CTRL_TRIG.EN` |
 | RP2350-E6 | §D.6.2 | Hazard3 | PMPCFGx 的 RWX 欄位對調 | A2、A3、A4 | — |
 | RP2350-E7 | §D.6.3 | Hazard3 | U-mode 不會忽略 mstatus.mie | A2、A3、A4 | — |
 | RP2350-E8 | §D.4.2 | DMA | 零長度傳輸時 CHAIN_TO 可能不觸發 | A2、A3、A4 | 不要把 CHAIN_TO 和零長度傳輸一起用；control block 清單中間用 dummy 傳輸取代 |
-| RP2350-E9 | §D.5.1 | GPIO | Bank 0 GPIO 開啟 pad 輸入時漏電增加（內建 pull-down 拉不下來） | A2 | 要 pull-down 時先關 `GPIO0.IE`，讀之前才暫時打開；或外接 ≤ 8.2 kΩ 下拉 |
+| RP2350-E9 | §D.5.1 | GPIO | Bank 0 GPIO 開啟 pad 輸入時漏電增加（內建 pull-down 拉不下來） | A2（A3 ⚠️未查證；A4 已修） | 要 pull-down 時先關 `GPIO0.IE`，讀之前才暫時打開；或外接 ≤ 8.2 kΩ 下拉 |
 | RP2350-E11 | §D.10.1 | XIP | cache clean by set/way 會改到 dirty line 的 tag | A2、A3、A4 | — |
 | RP2350-E12 | §D.11.1 | USB | USB 狀態訊號同步不足 | A2、A3、A4（A3 有緩解） | — |
 | RP2350-E17 | §D.7.2 | OTP | 對單一 ECC OTP row 做 guarded read，若相鄰 row 不是有效 ECC 會 fault | A2、A3、A4 | — |
@@ -602,7 +602,7 @@ PDF 搜尋提示：Ctrl+F `pico_generate_pio_header`、`PICO_PLATFORM`、`multic
 
 ## 8. ROS 2 Jazzy
 
-- docs.ros.org **沒有擋程式抓取**（2026-11-10 直接 curl 測得 200）。網址都由 ros2/ros2_documentation 的 `jazzy` 分支 `source/<路徑>.rst` 對應而來：`source/A/B.rst` → `https://docs.ros.org/en/jazzy/A/B.html`。
+- docs.ros.org：2026-11-10 直接 curl 曾測得 200，但之後稽核時**程式抓取被擋** → 一律用瀏覽器開。網址都由 ros2/ros2_documentation 的 `jazzy` 分支 `source/<路徑>.rst` 對應而來：`source/A/B.rst` → `https://docs.ros.org/en/jazzy/A/B.html`。
 - 站內搜尋：https://docs.ros.org/en/jazzy/search.html （右上角搜尋框；不是 AI）。
 - 文件原始碼（網站掛掉時的備援）：https://github.com/ros2/ros2_documentation/tree/jazzy/source ，例：https://raw.githubusercontent.com/ros2/ros2_documentation/jazzy/source/Concepts/Intermediate/About-Quality-of-Service-Settings.rst
 

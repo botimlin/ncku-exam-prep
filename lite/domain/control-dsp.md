@@ -6,9 +6,9 @@
 > 最後更新 2026-11（詳見 full/domain/control-dsp.md）
 
 ## 平台
-- Hazard3 **無 FPU**→用定點；`mul/mulh` 1 cycle、`div` 18–19；Zbb `min/max/clz`
+- Hazard3 **無 FPU**→用定點；`mul/mulh` 1 cycle、`div` 18–19（⚠️未查證，datasheet 3.8.7）；Zbb `min/max/clz`
 - M33：單精度 FPU（別用 double，常數 `1.0f`）；DSP：`SMLAD`（兩個 16×16 乘加，溢位繞回設 Q flag）、`SSAT`、`SMMUL`；`<arm_acle.h>` `__smlad(a,b,acc)`
-- 兩核都無 64-bit 除法指令（軟體 `__divdi3` 慢）
+- 兩核都無 64-bit 除法指令（軟體：Arm `__aeabi_ldivmod`、RISC-V `__divdi3`，慢）
 - 要和 judge 逐位元一致→定點+固定捨入（float 有 FMA/平台差）
 
 ## 取樣
@@ -69,6 +69,6 @@
 - Arm/RISC-V `char` 無號、x86 有號；`long` 32 vs 64
 - float 2^24+1 失精度；時間用整數 µs
 - 濾波狀態用第一筆初始化
-- 抓隱性浮點：objdump 找 `__mulsf3/__adddf3/__divdi3`；`-Wdouble-promotion`
+- 抓隱性浮點/64 位除法：objdump 找 RV `__mulsf3/__adddf3/__divdi3`、Arm `__aeabi_dadd/__aeabi_ldivmod`；`-Wdouble-promotion`
 - 測試：主機 double 參考比對 max/RMS 誤差（LSB），脈衝/步階/正弦/邊界；`-fsanitize=undefined`
 - ADC+DMA ping-pong（DREQ_ADC, 16-bit, chain）→core1 處理；表放 RAM

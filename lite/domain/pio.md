@@ -12,7 +12,7 @@
 - 每指令 1 cycle（stall 除外）；`[n]` delay 與 side-set 共用 5 bit。
 - clkdiv = INT + FRAC/256，1–65536；小數會 jitter。sysclk 預設 150 MHz（用 `clock_get_hz(clk_sys)`）。
 - `.wrap_target`/`.wrap`：零成本迴圈。
-- RP2350 新增：`mov pindirs`、`mov rxfifo[i], isr` / `mov osr, rxfifo[i]`（`.fifo txput/txget/putget`，CPU 用 `pio->rxf_putget[sm][i]`）、`irq/wait irq prev|next`、`wait jmppin`、IN_COUNT、8 個 IRQ flag 全可送系統中斷。需 `.pio_version 1`。
+- RP2350 新增：`mov pindirs`、`mov rxfifo[i], isr` / `mov osr, rxfifo[i]`（`.fifo txput/txget/putget`，CPU 用 `pio->rxf_putget[sm][i]`）、`irq/wait irq prev|next`、`wait jmppin`、IN_COUNT、8 個 IRQ flag 全可送系統中斷。`pico_generate_pio_header` 對 RP2350 自動 `-v 1`（不必寫 `.pio_version 1`）；手動跑 pioasm 才要加。
 
 ## 指令
 | 指令 | 重點 |
@@ -69,6 +69,7 @@ DMA：dreq=`pio_get_dreq(pio,sm,true)`，write=`&pio->txf[sm]`，count 是筆數
 8. 指令記憶體滿（32 格）
 9. side-set 吃掉 delay bit
 10. `pio_encode_jmp` 沒加 offset
+11. v1 指令組譯失敗：build 成 RP2040（沒設 `PICO_BOARD=pico2`）
 
 ## 除錯
 PC：`pio_sm_get_pc-off`；FIFO level；`pio->fdebug`（TXSTALL/TXOVER/RXUNDER/RXSTALL，寫 1 清）；`pio->dbg_padout/padoe`；停用後 `pio_sm_exec` 注入指令。

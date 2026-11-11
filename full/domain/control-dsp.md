@@ -19,7 +19,7 @@
 
 | 情境 | 首選做法 | 為什麼 |
 |---|---|---|
-| 在 Hazard3（RISC-V）上做任何數學 | **定點數**（int32 + 小數位數 FRAC），乘法用 64-bit 中間值 | Hazard3 **無 FPU**，float 全部軟體模擬；`mul`/`mulh` 各 1 cycle，`div` 18–19 cycle |
+| 在 Hazard3（RISC-V）上做任何數學 | **定點數**（int32 + 小數位數 FRAC），乘法用 64-bit 中間值 | Hazard3 **無 FPU**，float 全部軟體模擬；`mul`/`mulh` 各 1 cycle，`div` 18–19 cycle（⚠️未查證，見 datasheet 3.8.7） |
 | 在 M33 上 | `float`（單精度硬體）可以用；**不要 double**（常數寫 `1.0f`）；16-bit 資料可用 `SMLAD` 一次做兩個 MAC | M33 有 FPv5 單精度 FPU + DSP 擴充 |
 | 需要和 judge 輸出**逐位元相同** | 定點數 + 明確的捨入規則 | float 結果會因 FMA 合併、編譯旗標、平台而差最後幾位 |
 | 去雜訊、平滑 | EMA `acc += x - (acc >> k)`（1 減 1 加 1 移位）或 moving average（running sum，O(1)） | 最便宜 |
@@ -242,7 +242,7 @@ static inline int32_t clamp32(int32_t x, int32_t lo, int32_t hi) { return x < lo
 | 除以 2^k：`x >> k` | 無號數、或可接受往 −∞ 捨入的有號數 | 1 cycle |
 | 除以編譯期常數：直接寫 `x / 10` | 編譯器自動改成「乘以魔術數 + 移位」 | 數個 cycle（Hazard3 用 `mulhu`） |
 | 32-bit 除以變數 | Hazard3 `div` 18–19 cycle；M33 硬體 `SDIV/UDIV` | 中 |
-| **64-bit 除法**（例如 `((int64_t)a << 16) / b`） | 兩種核心都**沒有 64-bit 除法指令** → 呼叫 libgcc `__divdi3` 軟體函式 | 很慢，熱迴圈避免 |
+| **64-bit 除法**（例如 `((int64_t)a << 16) / b`） | 兩種核心都**沒有 64-bit 除法指令** → 呼叫 libgcc 軟體函式（Arm `__aeabi_ldivmod`、RISC-V `__divdi3`） | 很慢，熱迴圈避免 |
 | 預先算倒數：`inv = ceil(2^32 / d)`，`q = (x * inv) >> 32` | 同一個 d 要除很多次（例如除以 N、除以 dt） | 1 次 `mulhu` |
 
 ```c
@@ -923,7 +923,7 @@ void welford_add(welford_t *w, float x) {
 
 ### 6.2 Hazard3（RISC-V）專屬技巧
 
-- **不要讓 float 混進熱迴圈**：檢查方法 —— 反組譯找 `__addsf3`、`__mulsf3`、`__divsf3`、`__aeabi_*`、`__adddf3` 等呼叫；或連結 map 檔看是否拉進 soft-float 函式。加 `-Wdouble-promotion -Wfloat-conversion` 找隱性轉換。
+- **不要讓 float 混進熱迴圈**：檢查方法 —— 反組譯找 `__addsf3`、`__mulsf3`、`__divsf3`、`__aeabi_*`、`__adddf3` 等呼叫（64 位除法：RISC-V `__divdi3`、Arm `__aeabi_ldivmod`）；或連結 map 檔看是否拉進 soft-float 函式。加 `-Wdouble-promotion -Wfloat-conversion` 找隱性轉換。
 - `mul`、`mulh` 都 1 cycle → 定點乘法便宜；`div` 18–19 cycle → 迴圈內用倒數乘法（2.5）。
 - Zbb：`min/max/minu/maxu`（飽和、clamp、median 無分支）、`clz`（正規化、log2）、`sext.h`（int16 符號擴展）、`rev8`（位元組序）。寫普通 C 的三元運算子，`-O2` 通常就會用上；用 `objdump -d` 確認。
 - 分支預測只有單一 BTB entry（`riscv-hazard3.md` 5.3）→ 資料相依的分支（例如 median、飽和判斷）改成 min/max 無分支版本。
@@ -1211,7 +1211,7 @@ int main(void) {
 8. 頻率估計錯？→ 混疊（fs 不夠、沒做抗混疊）、bin 計算（k·fs/N）、窗函數。
 9. 偶發錯誤？→ ISR 與主程式共用變數撕裂；DMA buffer 在處理時被覆蓋（處理太慢）；interpolator 在 ISR 中被改而未 save/restore。
 10. 時間不固定？→ flash cache miss（熱碼 / 表放 RAM）、IRQ 干擾、`printf` 在迴圈中。
-11. Hazard3 特別慢？→ 反組譯找 soft-float / `__divdi3` 呼叫。
+11. Hazard3 特別慢？→ 反組譯找 soft-float / `__divdi3` 呼叫（Arm 版 64 位除法是 `__aeabi_ldivmod`）。
 
 ## 10. 優化檢查清單
 

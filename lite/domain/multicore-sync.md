@@ -35,7 +35,7 @@
 - `multicore_launch_core1(void(*)(void))`、`multicore_reset_core1()`；launch 用 FIFO 握手。
 - core1 stack 預設 2KB（`PICO_CORE1_STACK_SIZE`）在 SCRATCH_X；大陣列改 static。
 - FIFO：`multicore_fifo_push_blocking(u32)`、`_pop_blocking()`、`_rvalid()`、`_wready()`、`_drain()`。SDK 建議資料傳遞用 queue；只傳指標/索引。lockout 會佔用 FIFO。
-- `queue_init(&q,size,count)`、`queue_add_blocking`、`queue_remove_blocking`、`queue_try_add/remove`（ISR 用 try）。元素 memcpy，內部 calloc。
+- `queue_init(&q,size,count)`、`queue_add_blocking`、`queue_remove_blocking`、`queue_try_add/remove`（ISR 用 try）。元素 memcpy；`queue_init` 回傳 void，內部 calloc 不檢查失敗。
 - `critical_section_init/enter_blocking/exit`：關本核 IRQ + spinlock，跨核+ISR 安全，極短，不可重入。
 - `mutex_init/enter_blocking/exit/try_enter(&m,NULL)`：可持久，ISR 不可阻塞。
 - `sem_init(&s,init,max)`、`sem_acquire_blocking`、`sem_release`。
@@ -45,13 +45,13 @@
 - stdout 有 mutex，兩核 printf 不會撕裂但順序不定；熱迴圈勿 printf。
 
 ## RP2350-E2
-寫 SIO 0x180–0x1FC 會誤釋放低 0x80 的 spinlock（A2/A3/A4 皆有）。SDK 預設 `PICO_USE_SW_SPIN_LOCKS`（RAM byte + ldaex/strex 或 amoor），API 不變。不要直接寫 `sio_hw->spinlock[]`；編號用 `PICO_SPINLOCK_ID_*`。
+寫 SIO 0x180–0x1FC 會誤釋放低 0x80 的 spinlock（A2 有；A4 公告未列為已修）。SDK 預設 `PICO_USE_SW_SPIN_LOCKS`（RAM byte + ldaex/strex 或 amoor），API 不變。不要直接寫 `sio_hw->spinlock[]`；編號用 `PICO_SPINLOCK_ID_*`。
 
 ## SRAM
 - 0x20000000 起 256KB 交錯 SRAM0–3、0x20040000 起 256KB 交錯 SRAM4–7（每 4B 換 bank）。
 - SRAM8 0x20080000 = SCRATCH_X（core1 stack）、SRAM9 0x20081000 = SCRATCH_Y（core0 stack），各 4KB。
 - 不同 bank 可同週期並行；兩核/DMA 搶同 bank 才互等。單核熱資料 `__scratch_x("g")`；熱函式 `__not_in_flash_func(f)`。
-- exclusive 只在 SRAM，granule 16B。
+- 跨核 exclusive 靠 global monitor，只涵蓋 SRAM（不含 XIP/PSRAM）→ atomic 放 SRAM；granule 16B ⚠️未查證。
 
 ## DMA（對應 demo engine）
 `dma_claim_unused_channel(true)` → `dma_channel_get_default_config`（預設 write 不遞增！）→ `channel_config_set_transfer_data_size/_read_increment/_write_increment` → `dma_channel_configure(ch,&c,dst,src,dma_encode_transfer_count(n),true)`（n 是筆數不是 bytes）→ 做別的事 → `dma_channel_wait_for_finish_blocking` 後才讀 dst。

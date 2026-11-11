@@ -243,7 +243,7 @@ SET     1  1  1 | delay/sideset | dest(3)      | data(5)
 | Directive | 說明 |
 |---|---|
 | `.program <name>` | 開始一個程式。產生 `<name>_program`（`pio_program_t`）、`<name>_program_instructions[]`、`<name>_wrap_target`、`<name>_wrap`、`<name>_pio_version`、`<name>_program_get_default_config(uint offset)`。 |
-| `.pio_version <0\|1\|RP2040\|RP2350>` | 目標 PIO 版本。放在第一個 `.program` 前為全域預設。用了 v1 功能（`mov pindirs`、`rxfifo[]`、`prev/next`、`jmppin`、`.fifo txput` 等）**請明寫 `.pio_version 1`**。datasheet 說預設是 1；實際上單獨執行 pioasm 預設是 0，而 `pico_generate_pio_header` 會傳 `-v ${PICO_PIO_VERSION}`（RP2350 建置時 `src/rp2350-*.cmake` 設為 1，RP2040 為 0/未設時傳 0）。明寫最保險。 |
+| `.pio_version <0\|1\|RP2040\|RP2350>` | 目標 PIO 版本。放在第一個 `.program` 前為全域預設。用了 v1 功能（`mov pindirs`、`rxfifo[]`、`prev/next`、`jmppin`、`.fifo txput` 等）時：用 SDK 的 `pico_generate_pio_header` 建置 RP2350 **不需要**寫 `.pio_version 1`——它會傳 `-v ${PICO_PIO_VERSION}`（RP2350 建置時 `src/rp2350-*.cmake` 設為 1，RP2040 為 0/未設時傳 0）。只有**手動單獨執行 pioasm**（預設 0）時才要加 `.pio_version 1` 或 `-v 1`。寫了也無害，但組譯失敗時真正原因通常是 build 成了 RP2040。 |
 | `.side_set <n> (opt) (pindirs)` | 見 2.4。 |
 | `.wrap_target` / `.wrap` | 見 2.5，各只能用一次。 |
 | `.origin <offset>` | 程式必須載入在指定位址（例如用 `out pc` 做資料驅動跳轉時）。 |
@@ -511,7 +511,7 @@ pio_sm_set_enabled(pio, sm, true);
 - **必須開 autopull**（`sm_config_set_out_shift(&c, x, true, 32)`），否則 `out` 在 OSR 空時不會自己 pull，也不會 stall，只會移出 OSR 裡殘留的內容（移空後補 0）——echo 會回傳錯誤資料（⚠️依 datasheet 對 OUT/autopull 的描述推論，未實測）。替代做法是在 `out` 前加一條 `pull`。
 - **不要同時開 autopush**：`in x, 32` 會觸發 autopush，接著的 `push`（無 iffull）會再推一個 0 進 RX（依 PUSH 定義推論，未實測）。要開 autopush 就把 `push` 刪掉，變成 datasheet 的 `auto_push_pull`（`out x, 32` / `in x, 32`），**每 word 2 cycle**。
 - 沒有用到 GPIO，所以不需要 `pio_gpio_init`、pindirs、pin 設定。
-- 不能用 `mov isr, osr` 取代：autopull 開啟時 `mov` 讀 OSR 是未定義行為（datasheet 11.5.4.2）。
+- 不能用 `mov isr, osr` 取代：autopull 開啟時 `mov` 讀 OSR 是未定義行為（datasheet 11.5.4.2 ⚠️未查證）。
 
 C 端（自寫範例，未編譯）：
 
@@ -737,7 +737,7 @@ dma_channel_wait_for_finish_blocking(ch);
 | 用 DMA | `pio_get_dreq` + `&pio->txf[sm]` | CPU 完全不參與搬運 |
 | 位元打包 | `in pins, 8` + autopush 32 → 每 word 4 個樣本；`out pins, 8` + autopull 32 反之 | FIFO/DMA 流量降為 1/4 |
 | 對齊 | 右移 + 門檻 <32 時資料在高位：`in null, 32-n` 補齊，或改左移，或 byte 讀 offset+3 | 省 CPU 端移位 |
-| `mov` 運算 | `mov isr, ::osr`（位元反轉）、`mov x, ~y`（反相）、`mov x, ~null`（0xFFFFFFFF） | 1 cycle 完成位元操作（注意 autopull 開時不要 mov 讀 OSR；需手動 `pull`） |
+| `mov` 運算 | `mov isr, ::osr`（位元反轉）、`mov x, ~y`（反相）、`mov x, ~null`（0xFFFFFFFF） | 1 cycle 完成位元操作（注意 autopull 開時不要 mov 讀 OSR ⚠️未查證；需手動 `pull`） |
 | 平行化 | 同一程式載入一次，多個 SM 用不同 pin 跑（同 block 的 SM 共用指令） | 4 SM × 3 block |
 | clkdiv = 1 | 能用 delay 調時序就讓 SM 全速 | 最高吞吐 |
 | 整數 clkdiv | 避免小數 | 無 jitter |
@@ -773,7 +773,7 @@ dma_channel_wait_for_finish_blocking(ch);
 | `jmp` 用 `pio_encode_jmp()` 跳錯 | 位址是絕對的 | 加 `offset` |
 | 跨 SM 腳位衝突 | 高編號 SM 優先 | 分配不重疊的 pin |
 | UART 一開始送出雜訊 | 初始腳位為低 → 被當起始位 | 先 `pio_sm_set_pins_with_mask` 設高再設方向 |
-| 新指令組譯失敗（`mov pindirs`、`rxfifo[]` 等） | pio_version 0 | `.pio_version 1` |
+| 新指令組譯失敗（`mov pindirs`、`rxfifo[]` 等） | build 成 RP2040（沒設 `PICO_BOARD=pico2` / `PICO_PLATFORM`）→ pioasm 收到 `-v 0`；或手動跑 pioasm 沒加 `-v 1` | 設 pico2 重新 configure（刪 build）；手動 pioasm 才加 `.pio_version 1` |
 | `wait 1 irq n` 與 CPU ISR 搶 | datasheet 明確警告 | 改用 `irq wait n` 讓 CPU 清除 |
 | 改 FIFO join 後資料不見 | 改 FJOIN 會清空 FIFO | 先 drain |
 | 窄脈波量不到 | 2-cycle 同步器延遲 + 迴圈 cycle 數 | 縮短迴圈、clkdiv = 1、必要時 bypass（僅同步訊號） |
@@ -865,7 +865,7 @@ pio_sm_get_pc - offset = {{值}}，TX level = {{值}}，RX level = {{值}}，fde
 以下是考題提供的硬體/系統文件片段：
 {{貼文件}}
 請先用條列整理：涉及哪些 PIO 資源（block/SM/腳位/FIFO/IRQ）、資料流向、時序要求。
-再對照 pio.md 判斷哪些需要 RP2350 專屬功能（.pio_version 1）。最後給實作步驟與程式碼骨架。
+再對照 pio.md 判斷哪些需要 RP2350 專屬功能（PIO v1；確認 build 是 pico2）。最後給實作步驟與程式碼骨架。
 ```
 
 範本 5：解釋與驗算

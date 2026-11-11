@@ -9,7 +9,7 @@
 - 腳位查 datasheet Table 677：I2C `gpio%4`=0/1→I2C0 SDA/SCL、2/3→I2C1；PWM slice=`(gpio>>1)&7`、`gpio&1`=B
 - Pico2 預設：uart0 GP0/1；i2c0 GP4/5；spi0 RX16 CS17 SCK18 TX19；ADC GP26–28
 - RP2350 pad 預設 IE=0、ISO=1、**pull-down**；`gpio_set_function` 自動清 ISO/設 IE
-- E9（僅 A2）：浮接+內建 pull-down 讀到 1 → 用 pull-up 或外接 ≤8.2kΩ
+- E9（A2；A4 已修）：浮接+內建 pull-down 讀到 1 → 用 pull-up 或外接 ≤8.2kΩ
 - clk_peri 預設=clk_sys=150MHz（UART/SPI）；`set_sys_clock_*` 後變 48MHz → 先改時脈再 init
 - I2C、PWM 用 clk_sys；ADC 用 48MHz
 
@@ -44,7 +44,7 @@
 - B 腳輸入：`PWM_DIV_B_RISING`（頻率）/`PWM_DIV_B_HIGH`（duty）
 - DMA→`&pwm_hw->slice[s].cc` 用 **32-bit**（16-bit 寫會複製到 A/B）
 
-## ADC（12bit，ENOB 9.2，500kS/s 共用）
+## ADC（12bit，ENOB 9.2⚠️未查證，500kS/s 共用）
 - `adc_init`、`adc_gpio_init(26)`、`adc_select_input(ch)`（通道號非 GPIO）、`adc_read`（~2µs 忙等）
 - 溫度：`adc_set_temp_sensor_enabled(true)`，ch=`ADC_TEMPERATURE_CHANNEL_NUM`（A=4）；T=27−(V−0.706)/0.001721
 - free-run：`adc_set_clkdiv(48e6/fs−1)`、`adc_set_round_robin(mask)`、`adc_fifo_setup(1,1,1,0,0)`、DREQ_ADC；**先開 DMA 再 `adc_run(true)`**，結束 `adc_fifo_drain`

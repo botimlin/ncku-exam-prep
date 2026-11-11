@@ -19,7 +19,7 @@
 - softfp：float 參數在 r0，`.S` 內 `vmov s0,r0`
 - char 無號
 
-## 週期（datasheet）
+## 週期（datasheet；⚠️未逐條對照原文，以實測為準）
 - ALU 1；複雜 Operand2（移位非 LSL#0–3、需移位的立即值）結果延遲 +1，加 S 必 +1
 - UBFX/SBFX/BFI、LSL/LSR/ASR/ROR、MOVW、ADDW 無延遲
 - LDR 1/暫存器，結果下一條用 +1（LDM 只最後一個）；STR 1
@@ -27,8 +27,8 @@
 - SDIV/UDIV：n=最高位差，n<0→2，否則 4+⌊n/4⌋（≤11）
 - 分支 taken=2+L+U−(K&F)，not-taken=1−F；L=load 分支、U=目標未 word 對齊且為 32-bit、F=可 fold（B/Bcc/BX LR 且前一條 16-bit）、K=0 若條件分支前一條設旗標
 - IT 失敗指令 1 cycle；16-bit nop 可 fold → 用 `nop.w`
-- FPU：VADD/VMUL 1+1；VFMA/VMLA 3+1；VDIV/VSQRT 14+1；相依鏈改多累加器
-- DCP double：dadd 6、dmul 17、ddiv 51（內聯）
+- FPU⚠️未查證：VADD/VMUL 1+1；VFMA/VMLA 3+1；VDIV/VSQRT 14+1；相依鏈改多累加器
+- DCP double：dadd 6、dmul 17、ddiv 51（內聯）⚠️未查證
 - SRAM 執行時 literal 在 PC+8(mod16) 可能 +1；熱點放 SRAM
 
 ## 指令
