@@ -1,4 +1,5 @@
 # 實作卡（cards/12-implement.md）：位元欄位（1）、封包（2）、PIO 解讀（3）、PIO 修改（4）、DMA（5）、雙核（6）、組語（7）、機器碼（8）、ROS 2 node（9）
+# 2026-11-12 r16 檢查放寬（合法寫法：粗體標籤、值在下一行、struct 格式字串含空白、✅/❌、迴圈加總、512 不包 encode…）＋卡片改版（判斷規則寫進列、程式樣板、解碼程式直接印指令名、ROS 改預填行表）
 # 標準答案驗證方式（2026-11-12）：
 #   C 位元 / 封包程式：主機 gcc -Wall -Wextra 編譯執行 PASS（bitops.h、bitstream.c 原檔）
 #   struct：python3 struct.calcsize / unpack_from 實際跑過
@@ -26,14 +27,18 @@
     - {type: table_cell, key: '^\W*TEMP', col: 3, regex: '\b10\W*$', name: temp_width}
     - {type: table_cell, key: '^\W*TEMP', col: 4, regex: '0x3FF', name: temp_mask}
     - {type: table_cell, key: '^\W*TEMP', col: 5, regex: '是|有號|yes', name: temp_signed}
-    - {type: table_cell, key: '^\W*HUMID', col: 5, regex: '否|無號|no', name: humid_unsigned}
+    - {type: table_cell, key: '^\W*HUMID', col: 5, regex: '否|無|no', name: humid_unsigned}
     - {type: table_cell, key: '^\W*MODE', col: 3, regex: '\b3\W*$', name: mode_width}
-    - {type: answer_field, field: "有號欄位", regex: '^(?!.*HUMID).*TEMP', name: signed_list}
-    - {type: answer_field, field: "組 ?32-bit", regex: '直接用', name: assemble}
+    - {type: regex, pattern: '有號欄位\W*TEMP', name: signed_list}
+    - {type: not_regex, pattern: '有號欄位[^\n|]*HUMID', name: humid_not_signed}
+    - {type: regex, pattern: '組\s?32.?bit\W*直接用', name: assemble}
     - {type: regex, pattern: '^(?!.*==).*sign_extend\s*\([^;\n]*,\s*10\s*\)', name: sign_extend_10_in_decode}
     - {type: regex, pattern: 'GET_FIELD\s*\(', name: uses_get_field}
-    - {type: regex, pattern: 'SET_FIELD\s*\([^\n]*-\s*\d', name: selfcheck_negative}
-    - {type: card_slots, min_fraction: 0.8}
+    - {type: regex, pattern: 'SET_FIELD\s*\([^\n]*-\s*\d|sign_extend\s*\([^\n]*==\s*-\s*\d', name: selfcheck_negative}
+    - {type: not_regex, pattern: '(^|;)\s*SET_FIELD\s*\([^;\n]*\)\s*;', name: set_field_result_used}
+    - {type: not_regex, pattern: '#define\s+(GET_FIELD|SET_FIELD|sign_extend)\b', name: no_redefine}
+    - {type: not_regex, pattern: 'GET_FIELD\s*\([^()]*\)\s*==\s*-\s*\d', name: no_unsigned_eq_negative}
+    - {type: card_slots, min_fraction: 0.75}
   golden: |
     | 欄位 | hi | lo | 寬度 | mask | 有號 |
     | VALID | 31 | 31 | 31 − 31 + 1 = 1 | (1u << 1) − 1 = 0x1 | 否 |
@@ -81,15 +86,18 @@
     - {match: "資料來源", value: "uint8_t 陣列（大端）"}
     - {match: "範例值", value: "hdr = {0x2A, 0x51, 0x23, 0x45} → VER=2, FLAGS=0xA5, LEN=145, CHAN=325"}
   checks:
-    - {type: answer_field, field: "組 ?32-bit", regex: 'load_be32', name: load_be32}
+    - {type: regex, pattern: 'load_be32\s*\(|\w+\[0\]\s*<<\s*24', name: load_be32}
+    - {type: not_regex, pattern: 'load_le32\s*\(|\(\s*(const\s+)?uint32_t\s*\*\s*\)', name: not_le_or_cast}
     - {type: table_cell, key: '^\W*FLAGS', col: 3, regex: '\b8\W*$', name: flags_width}
     - {type: table_cell, key: '^\W*FLAGS', col: 4, regex: '0xFF\b', name: flags_mask}
     - {type: table_cell, key: '^\W*LEN', col: 3, regex: '\b11\W*$', name: len_width}
     - {type: table_cell, key: '^\W*LEN', col: 4, regex: '0x7FF\b', name: len_mask}
     - {type: table_cell, key: '^\W*CHAN', col: 3, regex: '\b9\W*$', name: chan_width}
     - {type: table_cell, key: '^\W*CHAN', col: 4, regex: '0x1FF\b', name: chan_mask}
-    - {type: answer_field, field: "有號欄位", regex: '^\W*無', name: no_signed}
+    - {type: regex, pattern: '有號欄位\W*無', name: no_signed}
     - {type: not_regex, pattern: 'sign_extend\s*\(', name: no_sign_extend}
+    - {type: not_regex, pattern: '(^|;)\s*SET_FIELD\s*\([^;\n]*\)\s*;', name: set_field_result_used}
+    - {type: not_regex, pattern: '#define\s+(GET_FIELD|SET_FIELD|sign_extend)\b', name: no_redefine}
     - {type: regex, pattern: 'GET_FIELD\s*\(\s*\w+\s*,\s*27\s*,\s*20\s*\)', name: flags_get}
   golden: |
     | 欄位 | hi | lo | 寬度 | mask | 有號 |
@@ -136,15 +144,16 @@
         crc16    2 bytes  無號
     - {match: "語言", value: "Python"}
   checks:
-    - {type: answer_field, field: "大小端", regex: '^(?!.*小端).*(大端|>)', name: big_endian}
+    - {type: regex, pattern: '大小端[^\n:：]*[:：]?[*\s]*(大端|>)', name: big_endian}
+    - {type: not_regex, pattern: '大小端[^\n:：]*[:：]?[*\s]*小端', name: not_little}
     - {type: choice, option: "struct（欄位都是整 byte", field_in_answer: "解析方式"}
     - {type: table_cell, key: '^\W*length', col: 1, regex: '\b2\W*$', name: off_length}
     - {type: table_cell, key: '^\W*temp', col: 1, regex: '\b4\W*$', name: off_temp}
     - {type: table_cell, key: '^\W*temp', col: 3, regex: '是|有號', name: temp_signed}
     - {type: table_cell, key: '^\W*ts_ms', col: 1, regex: '\b6\W*$', name: off_ts}
     - {type: table_cell, key: '^\W*crc', col: 1, regex: '10\s*\+\s*(len|length)', name: off_crc}
-    - {type: answer_field, field: "固定部分總長", regex: '\b10\b', name: fixed_len}
-    - {type: regex, pattern: '格式字串[:：]\s*[`''"]?>BBHhI\b', ignore_case: false, name: fmt}
+    - {type: regex, pattern: '固定部分總長[^\n:：]*[:：]?[*\s]*(?:[^\n]*=\s*)?10\b(?!\s*\+)', name: fixed_len}
+    - {type: regex, pattern: '格式字串[^\n:：]*[:：]?[*\s]*[`''"]?>\s*B\s*B\s*H\s*h\s*I\b', ignore_case: false, name: fmt}
     - {type: contains_any, items: ["unpack"], name: uses_unpack}
   golden: |
     大小端：大端 >
@@ -184,14 +193,15 @@
         uint16_t flags;
     - {match: "語言", value: "Python"}
   checks:
-    - {type: answer_field, field: "大小端", regex: '^(?!.*大端).*(小端|<)', name: little_endian}
+    - {type: regex, pattern: '大小端[^\n:：]*[:：]?[*\s]*(小端|<)', name: little_endian}
+    - {type: not_regex, pattern: '大小端[^\n:：]*[:：]?[*\s]*大端', name: not_big}
     - {type: choice, option: "struct（欄位都是整 byte", field_in_answer: "解析方式"}
-    - {type: table_cell, key: '^\W*value', col: 1, regex: '\b1\W*$', name: off_value}
-    - {type: table_cell, key: '^\W*delta', col: 1, regex: '\b5\W*$', name: off_delta}
-    - {type: table_cell, key: '^\W*delta', col: 3, regex: '是|有號', name: delta_signed}
-    - {type: table_cell, key: '^\W*flags', col: 1, regex: '\b7\W*$', name: off_flags}
-    - {type: answer_field, field: "固定部分總長", regex: '\b9\b', name: total_9}
-    - {type: regex, pattern: '格式字串[:：]\s*[`''"]?<BIhH\b', ignore_case: false, name: fmt}
+    - {type: table_cell, key: '\bvalue', col: 1, regex: '\b1\W*$', name: off_value}
+    - {type: table_cell, key: '\bdelta', col: 1, regex: '\b5\W*$', name: off_delta}
+    - {type: table_cell, key: '\bdelta', col: 3, regex: '是|有', name: delta_signed}
+    - {type: table_cell, key: '\bflags', col: 1, regex: '\b7\W*$', name: off_flags}
+    - {type: regex, pattern: '固定部分總長[^\n:：]*[:：]?[*\s]*(?:[^\n]*=\s*)?9\b', name: total_9}
+    - {type: regex, pattern: '格式字串[^\n:：]*[:：]?[*\s]*[`''"]?<\s*B\s*I\s*h\s*H\b', ignore_case: false, name: fmt}
   golden: |
     大小端：小端 <
     解析方式（照抄選項的字母和文字）：A struct（欄位都是整 byte，Python）
@@ -274,21 +284,21 @@
     - {type: table_cell, key: 'autopull', col: 1, regex: '(?=.*開)(?=.*32)', name: autopull_on_32}
     - {type: table_cell, key: 'out shift', col: 1, regex: '右', name: shift_right}
     - {type: table_cell, key: 'autopush', col: 1, regex: '關|不用|不需|無', name: autopush_off}
-    - {type: table_cell, key: '腳位', col: 1, regex: '(?=.*\b8\b)(?=.*16)', name: pins}
+    - {type: table_cell, key: '腳位', col: 1, regex: '(?=.*(\b|GP)8\b)(?=.*16)', name: pins}
     - {type: table_cell, key: 'cycle', col: 1, regex: '(?=.*\b6\b)(?=.*\b25\b)', name: cycles_clkdiv}
     - {type: table_rows, min: 9}
   golden: |
-    | 行 | 指令 | 做什麼 | 動到（X/Y/ISR/OSR/pins/FIFO） | side / delay |
-    | 0 | out pins, 8 | 從 OSR 移出 8 bit 到 DATA0..7 | OSR、pins | side 0（CLK=0）/ [2] |
-    | 1 | nop | 不做事，只讓 CLK=1 | pins（side-set） | side 1（CLK=1）/ [2] |
-    | 設定 | 要的值 | 依據（哪一行） |
-    | 1 autopull（開/關、門檻） | 開，門檻 32（每個 word 4 個 byte × 8 bit） | 行 0 只有 out 沒有 pull |
-    | 2 out shift（右移 = LSB 先 / 左移） | 右移（低位 byte 先送） | 規格「低位 byte 先送」 |
-    | 3 autopush（開/關、門檻） | 關（沒有 in） | 沒有 in / push |
-    | 4 in shift | 不用 | 沒有 in |
-    | 5 腳位（out / set / in / sideset 的 base、count） | out base GP8、count 8；sideset base GP16 | 行 0 out pins, 8；side 0/1 |
-    | 6 每圈或每 bit 幾 cycle（列算式）、clkdiv | (1+2)+(1+2) = 6 cycle/byte；clkdiv = 150 MHz ÷ (1 MHz × 6) = 25 | 行 0 [2]、行 1 [2] |
-    C 端和上表不同的地方：無（沒有給 C 端 init）
+    | 行 | 指令 | 做什麼 | side / delay | cycle |
+    | 0 | out pins, 8 | 從 OSR 移出 8 bit 到 DATA0..7 | side 0（CLK=0）/ [2] | 3 |
+    | 1 | nop | 不做事，只讓 CLK=1 | side 1（CLK=1）/ [2] | 3 |
+    | 設定（照列裡的規則選） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
+    | 1 autopull | 開，門檻 32（CPU 每次 put 一個 32-bit word；行 0 只有 out 沒有 pull） | 沒寫 | NG |
+    | 2 out shift | 右移（規格「低位 byte 先送」） | 沒寫 | NG |
+    | 3 autopush | 關（沒有 in） | 沒寫 | OK |
+    | 4 in shift | 不用（沒有 in） | 沒寫 | OK |
+    | 5 腳位 | out base GP8、count 8；sideset base GP16 | 沒寫 | NG |
+    | 6 cycle | (1+2)+(1+2) = 6 cycle/byte；clkdiv = 150 MHz ÷ (1 MHz × 6) = 25 | 沒寫 | NG |
+    C 端要改的地方：沒有給 C 端 init，照上表寫：sm_config_set_out_shift(&c, true, true, 32)、sm_config_set_out_pins(&c, 8, 8)、sm_config_set_sideset_pins(&c, 16)、sm_config_set_clkdiv(&c, 25)
 
 - id: impl-pio-read-rx8
   tags: [impl, pio, reference, trap]
@@ -331,25 +341,25 @@
     - {match: "規格要求", value: "UART 接收 8N1，LSB 先，115200 baud；RX 腳 = GP5；getc 回傳收到的那個 byte"}
   checks:
     - {type: table_cell, key: 'autopush', col: 1, regex: '關', name: autopush_off}
-    - {type: table_cell, key: 'in shift', col: 1, regex: '(?=.*右)(?=.*24)', name: right_shift_high_byte}
+    - {type: table_cell, key: 'in shift', col: 1, regex: '(?=.*右)(?=.*(24|32\s*[−-]\s*8))', name: right_shift_high_byte}
     - {type: table_cell, key: 'cycle', col: 1, regex: '\b8\b', name: eight_cycles}
-    - {type: regex, pattern: '不同的地方[\s\S]*(autopush|in_shift|true,\s*true)', name: diff_autopush}
-    - {type: regex, pattern: '不同的地方[\s\S]*>>\s*24', name: diff_shift24}
+    - {type: regex, pattern: '(要改的地方|不同的地方)[\s\S]*(autopush|in_shift|true,\s*true)', name: diff_autopush}
+    - {type: regex, pattern: '(要改的地方|不同的地方)[\s\S]*>>\s*\(?\s*(24|32\s*[−-]\s*8)', name: diff_shift24}
   golden: |
-    | 行 | 指令 | 做什麼 | 動到（X/Y/ISR/OSR/pins/FIFO） | side / delay |
-    | 0 | wait 0 pin, 0 | 等 RX 腳變 0（起始位） | 無（stall） | 無 / 0 |
-    | 1 | set x, 7 [10] | X = 7，再等 10 cycle 到第一個 bit 中間 | X | 無 / 10 |
-    | 2 | in pins, 1 | 取樣 RX 1 bit 移進 ISR | ISR | 無 / 0 |
-    | 3 | jmp x--, 2 [6] | X≠0 跳回行 2，X 減 1；共跑 8 次 | X | 無 / 6 |
-    | 4 | push block | ISR → RX FIFO，ISR 清 0 | ISR、FIFO | 無 / 0 |
-    | 設定 | 要的值 | 依據（哪一行） |
-    | 1 autopull（開/關、門檻） | 關（沒有 out） | 沒有 out / pull |
-    | 2 out shift | 不用 | 沒有 out |
-    | 3 autopush（開/關、門檻） | 關 | 行 4 有 push |
-    | 4 in shift | 右移（LSB 先）；只收 8 bit → 資料在 ISR 高位，C 端要 >> 24 | 行 2 in pins, 1 跑 8 次 |
-    | 5 腳位（out / set / in / sideset 的 base、count） | in base = GP5 | 行 0 wait pin 0、行 2 in pins |
-    | 6 每圈或每 bit 幾 cycle（列算式）、clkdiv | 每 bit = 1（行 2）+ 1 + 6（行 3）= 8 cycle；clkdiv = clk_sys ÷ (8 × 115200) ≈ 162.76 | 行 2、行 3 [6] |
-    C 端和上表不同的地方：第 4 行 sm_config_set_in_shift(&c, true, true, 8) 的 autopush 要改 false（和 push 一起會多推 0）；第 12 行 & 0xFF 要改成 >> 24（資料在 ISR 高位）
+    | 行 | 指令 | 做什麼 | side / delay | cycle |
+    | 0 | wait 0 pin, 0 | 等 RX 腳變 0（起始位） | 無 / 0 | 1（+ 等待） |
+    | 1 | set x, 7 [10] | X = 7，再等 10 cycle 到第一個 bit 中間 | 無 / [10] | 11 |
+    | 2 | in pins, 1 | 取樣 RX 1 bit 移進 ISR | 無 / 0 | 1 |
+    | 3 | jmp x--, 2 [6] | X≠0 跳回行 2，X 減 1；共跑 8 次 | 無 / [6] | 7 |
+    | 4 | push block | ISR → RX FIFO，ISR 清 0 | 無 / 0 | 1 |
+    | 設定（照列裡的規則選） | 要的值 | C 端現在（沒給寫「沒寫」） | OK/NG |
+    | 1 autopull | 關（沒有 out） | 沒寫 | OK |
+    | 2 out shift | 不用（沒有 out） | 沒寫 | OK |
+    | 3 autopush | 關（行 4 有 push） | sm_config_set_in_shift(&c, true, true, 8)（:4，autopush 開） | NG |
+    | 4 in shift | 右移（LSB 先）；只收 8 bit → 讀值要 >> 24 | 右移；getc 用 & 0xFF（:12） | NG |
+    | 5 腳位 | in base GP5 | sm_config_set_in_pins(&c, pin)（:3） | OK |
+    | 6 cycle | 每 bit = 1（行 2）+ 7（行 3）= 8；clkdiv = clk_sys ÷ (115200 × 8) ≈ 162.76 | clock_get_hz(clk_sys) / (8 * baud)（:6） | OK |
+    C 端要改的地方：第 4 行 sm_config_set_in_shift(&c, true, true, 8) 改成 sm_config_set_in_shift(&c, true, false, 8)（autopush 關，不然和 push 一起會多推 0）；第 12 行 & 0xFF 改成 >> 24（右移只收 8 bit，資料在 ISR 高位）
 
 # ---------------------------------------------------------------- 實作 4：PIO 修改（先貼 pio.md）
 - id: impl-pio-mod-2bit
@@ -369,11 +379,15 @@
       value: {file: "預製程式碼/pico/pio/shift_out.pio", lines: [18, 33], number_lines: true}
   checks:
     - {type: patch_format, max_patches: 5}
-    - {type: regex, pattern: '修改後[^\n]*out\s+pins\s*,\s*2', name: out2}
+    - {type: regex, pattern: 'out\s+pins\s*,\s*2\b', name: out2}
     - {type: regex, pattern: 'set_out_pins\s*\(\s*&c\s*,\s*data_pin\s*,\s*2\s*\)', name: out_pins_count2}
-    - {type: regex, pattern: '修改後[^\n]*data_pin\s*\+\s*1', name: second_pin}
-    - {type: table_cell, key: '^\W*4\b', col: 1, regex: 'OK', name: threshold_ok}
+    - {type: regex, pattern: 'pio_gpio_init\s*\(\s*\w+\s*,\s*\(?\s*data_pin\s*\+\s*1', name: second_pin_init}
+    - {type: regex, pattern: '1u?\s*<<\s*\(\s*data_pin\s*\+\s*1\s*\)', name: second_pin_mask}
+    - {type: not_regex, pattern: '\.side_set\s+[2-5]', name: sideset_unchanged}
+    - {type: table_cell, key: '^\W*2\b', col: 1, regex: 'OK', name: threshold_ok}
+    - {type: choice, option: "每次送幾 bit", field_in_answer: "類型"}
   golden: |
+    類型（照抄字母和文字）：C 每次送幾 bit / 用幾支腳變了 → .pio 的 `out pins, n`；set_out_pins 的 count；mask 和 pio_gpio_init 加新腳（data_pin + 1）
     shift_out.pio:11
     修改前：    out pins, 1   side 0 [1]   ; OSR 拿 1 bit 到 DATA，CLK=0，再多等 1 cycle
     修改後：    out pins, 2   side 0 [1]   ; OSR 拿 2 bit 到 DATA、DATA+1，CLK=0，再多等 1 cycle
@@ -386,14 +400,11 @@
     shift_out.pio:29
     修改前：    pio_gpio_init(pio, data_pin);
     修改後：    pio_gpio_init(pio, data_pin);  pio_gpio_init(pio, data_pin + 1);
-    | 檢查 | 結果 OK / 有問題 | 依據 |
-    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | 還是 2 條 |
-    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | .side_set 1 上限 15，用 [1] |
-    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒動 |
-    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 2 bit × 16 次 = 32 |
-    | 5 shift 方向和資料放的位置一致 | OK | 左移、門檻 32，整個 word 都用 |
-    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | out_pins count 2、mask、gpio_init 都加了 data_pin + 1 |
-    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒用 v1 指令 |
+    | 檢查 | OK / 有問題 | 依據 |
+    | 1 非 opt side_set 每行有 side；delay ≤ 上限 | OK | .side_set 1 上限 15，用 [1]，沒改 |
+    | 2 out 每次 bit 數 × 次數 = 門檻 | OK | 2 bit × 16 次 = 32 |
+    | 3 shift 方向和資料放的位置一致 | OK | 左移、門檻 32，整個 word 都用 |
+    | 4 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | out_pins count 2、mask、pio_gpio_init 都加了 data_pin + 1 |
     驗證：建置沒有 pioasm 錯誤，再跑 app 的測試
 
 - id: impl-pio-mod-byte
@@ -416,21 +427,20 @@
     - {type: regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*false\s*,\s*true\s*,\s*8\s*\)', name: threshold8}
     - {type: regex, pattern: 'pio_sm_put(_blocking)?\s*\([^\n]*<<\s*(24|\(\s*32\s*-\s*8\s*\))', name: put_high_byte}
     - {type: not_regex, pattern: 'set_out_shift\s*\(\s*&c\s*,\s*true', name: keeps_left_shift}
+    - {type: choice, option: "CPU 每次 put 的 bit 數", field_in_answer: "類型"}
   golden: |
+    類型（照抄字母和文字）：B CPU 每次 put 的 bit 數變了 → set_out_shift 門檻改成那個數；左移時呼叫端改 put(v << (32 − 門檻))
     shift_out.pio:23
     修改前：    sm_config_set_out_shift(&c, false, true, 32);   // 左移 = MSB 先送；autopull 每 32 bits
     修改後：    sm_config_set_out_shift(&c, false, true, 8);    // 左移 = MSB 先送；autopull 每 8 bits
     app_pio.c:71
     修改前：pio_sm_put_blocking(pio, sm, b);
     修改後：pio_sm_put_blocking(pio, sm, (uint32_t)b << 24);   // 左移從 bit31 送，byte 要放高位
-    | 檢查 | 結果 OK / 有問題 | 依據 |
-    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | .pio 沒改，2 條 |
-    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | 沒改 |
-    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒改 |
-    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 1 bit × 8 次 = 門檻 8 |
-    | 5 shift 方向和資料放的位置一致 | OK | 左移 + 門檻 8 → put(b << 24) |
-    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
-    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒有 |
+    | 檢查 | OK / 有問題 | 依據 |
+    | 1 非 opt side_set 每行有 side；delay ≤ 上限 | OK | .pio 沒改 |
+    | 2 out 每次 bit 數 × 次數 = 門檻 | OK | 1 bit × 8 次 = 門檻 8 |
+    | 3 shift 方向和資料放的位置一致 | OK | 左移 + 門檻 8 → put(b << 24) |
+    | 4 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
     驗證：建置沒有 pioasm 錯誤，再跑 app 的測試（loopback 收到的值要等於送出的 byte）
 
 - id: impl-pio-mod-baud
@@ -476,24 +486,23 @@
               pio_sm_set_enabled(pio, sm, true);
           }
   checks:
-    - {type: patch_format, max_patches: 2}
-    - {type: regex, pattern: '修改後[^\n]*9600', name: baud_9600}
+    - {type: patch_format, max_patches: 3}
+    - {type: regex, pattern: '#define\s+UART_BAUD\s+9600|8\s*\*\s*9600', name: baud_9600}
+    - {type: not_regex, pattern: '^(?!\s*\|)\s*(-\s*)?(修改後[:：]\s*)?`?\.pio_version|(uart_tx8|x)\.pio\s*:\s*\d', name: pio_untouched}
     - {type: not_regex, pattern: '修改後[^\n]*\[(?:[89]|\d\d+)\]', name: no_delay_over_7}
-    - {type: table_cell, key: '^\W*2\b', col: 1, regex: 'OK', name: delay_ok}
+    - {type: table_cell, key: '^\W*1\b', col: 1, regex: 'OK', name: delay_ok}
+    - {type: choice, option: "只改速度", field_in_answer: "類型"}
   golden: |
+    類型（照抄字母和文字）：A 只改速度 → 只改 baud 或 clkdiv 那 1 行，.pio 不動
     app_uart.c:1
     修改前：#define UART_BAUD 115200
     修改後：#define UART_BAUD 9600
-    （.pio 不用改：每 bit 仍是 8 cycle；clkdiv = 150 MHz ÷ (8 × 9600) = 1953.125，≤ 65536 可以）
-    | 檢查 | 結果 OK / 有問題 | 依據 |
-    | 1 指令數 ≤ 32（同一個 PIO 的程式加總） | OK | 4 條，沒改 |
-    | 2 非 opt side_set 每行都有 side；delay ≤ 上限 | OK | .side_set 1 opt 上限 7，現在最大 [7]，沒改 |
-    | 3 .wrap_target / .wrap 還包住迴圈 | OK | 沒改 |
-    | 4 out/in 每次 bit 數 × 次數 = autopull/autopush 門檻 | OK | 有明確 pull，不用 autopull |
-    | 5 shift 方向和資料放的位置一致 | OK | 右移、LSB 先 |
-    | 6 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
-    | 7 用到 v1 指令 → 有 .pio_version 1 | OK | 沒有 |
-    驗證：建置後用邏輯分析儀或另一端 9600 baud 收，字元正確
+    （clkdiv = 150 MHz ÷ (8 × 9600) = 1953.125，≤ 65536 可以；每 bit 仍是 8 cycle）
+    | 檢查 | OK / 有問題 | 依據 |
+    | 1 非 opt side_set 每行有 side；delay ≤ 上限 | OK | .side_set 1 opt 上限 7，現在最大 [7]，沒改 |
+    | 2 out 每次 bit 數 × 次數 = 門檻 | OK | 有明確 pull，不用 autopull |
+    | 3 shift 方向和資料放的位置一致 | OK | 右移、LSB 先，沒改 |
+    | 4 新用到的腳有 set_*_pins、pio_gpio_init、pindirs | OK | 沒有新腳 |
 
 # ---------------------------------------------------------------- 實作 5：DMA（先貼 pico-dma.md）
 - id: impl-dma-gen-copy
@@ -507,35 +516,35 @@
     - {match: "規格", value: "把 static uint8_t in_buf[2048] __attribute__((aligned(4))) 整個複製到 static uint8_t out_buf[2048]（也 aligned(4)），用 32-bit 傳輸；CPU 等它做完才用 out_buf；用完通道要還"}
     - {match: "現在的程式", value: "無"}
   checks:
-    - {type: table_cell, key: '^\W*4\b', col: 1, regex: '512', name: count_512}
+    - {type: table_cell, key: '^\W*4\b', col: 1, regex: '512|count_of\s*\(\s*in_buf\s*\)\s*/\s*4', name: count_512}
     - {type: table_cell, key: '^\W*6\b', col: 1, regex: 'true|開|要', name: winc_true}
-    - {type: regex, pattern: 'dma_encode_transfer_count\s*\(\s*(512|2048\s*/\s*4|sizeof\s*\(?\s*in_buf\s*\)?\s*/\s*4)\s*\)', name: encode_512}
-    - {type: regex, pattern: 'channel_config_set_write_increment\s*\(\s*&\w+\s*,\s*true\s*\)', name: winc_code}
-    - {type: regex, pattern: 'dma_channel_configure\s*\(\s*\w+\s*,\s*&\w+\s*,\s*out_buf\s*,\s*in_buf', name: dst_first}
+    - {type: regex, pattern: 'dma_encode_transfer_count\s*\(\s*(512|2048\s*/\s*4|sizeof\s*\(?\s*in_buf\s*\)?\s*/\s*4|count_of\s*\(\s*in_buf\s*\)\s*/\s*4)\s*\)|,\s*512\s*,\s*(//[^\n]*\s*)?true\s*\)', name: encode_512}
+    - {type: regex, pattern: '(?<!\w)channel_config_set_write_increment\s*\(\s*&\w+\s*,\s*true\s*\)', name: winc_code}
+    - {type: regex, pattern: 'dma_channel_configure\s*\(\s*\w+\s*,\s*&\w+\s*,\s*(//[^\n]*\s*)?&?out_buf(\[0\])?\s*,\s*(//[^\n]*\s*)?&?in_buf(\[0\])?\s*,[^;]*,\s*(//[^\n]*\s*)?(true|false)\s*\)', name: dst_first}
+    - {type: not_regex, pattern: 'dma_channel_config_set_|\b(c|cfg|config)\.\w+\s*=(?!=)|wait_for_finish_and_unclaim', name: no_invented_api}
     - {type: regex, pattern: 'DMA_SIZE_32', name: size32}
     - {type: regex, pattern: 'dma_channel_unclaim\s*\(', name: unclaim}
   golden: |
     | 項目 | 規格要的 | 現在程式 | OK/NG |
-    | 1 read_addr（configure 第 4 參數） | in_buf | 沒寫 | NG |
-    | 2 write_addr（第 3 參數） | out_buf | 沒寫 | NG |
-    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_32 | 沒寫（預設 32） | OK |
-    | 4 筆數（算式） | 2048 ÷ 4 = 512 | 沒寫 | NG |
-    | 5 read_increment（預設 true） | true | 沒寫（預設 true） | OK |
-    | 6 write_increment（預設 false） | true（寫到陣列） | 沒寫（預設 false） | NG |
-    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
-    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
-    | 9 結束：wait_for_finish → unclaim | 要 | 沒寫 | NG |
-    程式（照順序，≤ 10 行）：
-    ```c
+    | 1 read_addr（從哪讀） | in_buf | 沒寫 | NG |
+    | 2 write_addr（寫到哪） | out_buf | 沒寫 | NG |
+    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_32 | 沒寫（預設 DMA_SIZE_32） | OK |
+    | 4 筆數 = 總 bytes ÷ 每筆 bytes（算式） | 2048 ÷ 4 = 512 | 沒寫 | NG |
+    | 5 read_increment：讀陣列 true、讀 FIFO false | true | 沒寫（預設 true） | OK |
+    | 6 write_increment：寫陣列 true、寫 FIFO false | true | 沒寫（預設 false） | NG |
+    | 7 DREQ：記憶體↔記憶體 DREQ_FORCE；送進 PIO 用 pio_get_dreq(pio, sm, true) | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
+    | 8 有 wait_for_finish_blocking | 要 | 沒寫 | NG |
+    | 9 有 dma_channel_unclaim | 要 | 沒寫 | NG |
+    程式（<n> 換成第 n 列「規格要的」，算式只填答案）：
     int ch = dma_claim_unused_channel(true);
     dma_channel_config c = dma_channel_get_default_config(ch);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
     channel_config_set_read_increment(&c, true);
     channel_config_set_write_increment(&c, true);
-    dma_channel_configure(ch, &c, out_buf, in_buf, dma_encode_transfer_count(2048 / 4), true);
+    channel_config_set_dreq(&c, DREQ_FORCE);
+    dma_channel_configure(ch, &c, out_buf, in_buf, dma_encode_transfer_count(512), true);
     dma_channel_wait_for_finish_blocking(ch);
     dma_channel_unclaim(ch);
-    ```
 
 - id: impl-dma-check-mem
   tags: [impl, dma, reference, trap]
@@ -560,37 +569,36 @@
               dma_channel_wait_for_finish_blocking(ch);
           }
   checks:
-    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'NG', name: count_ng}
+    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'NG|❌|✗', name: count_ng}
     - {type: table_cell, key: '^\W*4\b', col: 1, regex: '1000', name: count_1000}
-    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG', name: winc_ng}
-    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'NG', name: unclaim_ng}
-    - {type: table_cell, key: '^\W*2\b', col: 3, regex: 'OK', name: dst_ok}
-    - {type: table_cell, key: '^\W*3\b', col: 3, regex: 'OK', name: size_ok}
+    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG|❌|✗', name: winc_ng}
+    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'NG|❌|✗', name: unclaim_ng}
+    - {type: table_cell, key: '^\W*2\b', col: 3, regex: 'OK|✅|✓', name: dst_ok}
+    - {type: table_cell, key: '^\W*3\b', col: 3, regex: 'OK|✅|✓', name: size_ok}
     - {type: regex, pattern: 'dma_encode_transfer_count\s*\(\s*(1000|count_of\s*\(\s*samples\s*\)|sizeof\s*\(\s*samples\s*\)\s*/\s*(2|sizeof\s*\(\s*samples\s*\[\s*0\s*\]\s*\)))\s*\)', name: encode_1000}
     - {type: regex, pattern: 'write_increment\s*\(\s*&c\s*,\s*true\s*\)', name: winc_fix}
     - {type: regex, pattern: 'dma_channel_unclaim\s*\(', name: unclaim_fix}
   golden: |
     | 項目 | 規格要的 | 現在程式 | OK/NG |
-    | 1 read_addr（configure 第 4 參數） | samples | samples（:45） | OK |
-    | 2 write_addr（第 3 參數） | copy | copy（:45） | OK |
-    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_16 | DMA_SIZE_16（:44） | OK |
-    | 4 筆數（算式） | 2000 bytes ÷ 2 = 1000 | sizeof(samples) = 2000（bytes） | NG |
-    | 5 read_increment（預設 true） | true | 沒寫（預設 true） | OK |
-    | 6 write_increment（預設 false） | true（寫到陣列） | 沒寫（預設 false） | NG |
-    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
-    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
-    | 9 結束：wait_for_finish → unclaim | wait + unclaim | 只有 wait（:47） | NG |
-    程式（照順序，≤ 10 行）：
-    ```c
+    | 1 read_addr（從哪讀） | samples | samples（:45） | OK |
+    | 2 write_addr（寫到哪） | copy | copy（:45） | OK |
+    | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_16 | channel_config_set_transfer_data_size(&c, DMA_SIZE_16);（:44） | OK |
+    | 4 筆數 = 總 bytes ÷ 每筆 bytes（算式） | 2000 ÷ 2 = 1000 | dma_encode_transfer_count(sizeof(samples))（:46）= 2000 | NG |
+    | 5 read_increment：讀陣列 true、讀 FIFO false | true | 沒寫（預設 true） | OK |
+    | 6 write_increment：寫陣列 true、寫 FIFO false | true | 沒寫（預設 false） | NG |
+    | 7 DREQ：記憶體↔記憶體 DREQ_FORCE；送進 PIO 用 pio_get_dreq(pio, sm, true) | DREQ_FORCE | 沒寫（預設 DREQ_FORCE） | OK |
+    | 8 有 wait_for_finish_blocking | 要 | dma_channel_wait_for_finish_blocking(ch);（:47） | OK |
+    | 9 有 dma_channel_unclaim | 要 | 沒寫 | NG |
+    程式（<n> 換成第 n 列「規格要的」，算式只填答案）：
     int ch = dma_claim_unused_channel(true);
     dma_channel_config c = dma_channel_get_default_config(ch);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+    channel_config_set_read_increment(&c, true);
     channel_config_set_write_increment(&c, true);
-    dma_channel_configure(ch, &c, copy, samples,
-                          dma_encode_transfer_count(count_of(samples)), true);
+    channel_config_set_dreq(&c, DREQ_FORCE);
+    dma_channel_configure(ch, &c, copy, samples, dma_encode_transfer_count(1000), true);
     dma_channel_wait_for_finish_blocking(ch);
     dma_channel_unclaim(ch);
-    ```
 
 - id: impl-dma-check-pio
   tags: [impl, dma, pio, reference, trap]
@@ -620,25 +628,24 @@
               dma_channel_unclaim(ch);
           }
   checks:
-    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG', name: winc_ng}
-    - {type: table_cell, key: '^\W*7\b', col: 3, regex: 'NG', name: dreq_ng}
-    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'OK', name: count_ok}
-    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'OK', name: unclaim_ok}
+    - {type: table_cell, key: '^\W*6\b', col: 3, regex: 'NG|❌|✗', name: winc_ng}
+    - {type: table_cell, key: '^\W*7\b', col: 3, regex: 'NG|❌|✗', name: dreq_ng}
+    - {type: table_cell, key: '^\W*4\b', col: 3, regex: 'OK|✅|✓', name: count_ok}
+    - {type: table_cell, key: '^\W*9\b', col: 3, regex: 'OK|✅|✓', name: unclaim_ok}
     - {type: regex, pattern: 'pio_get_dreq\s*\(\s*pio\s*,\s*sm\s*,\s*true\s*\)', name: dreq_fix}
-    - {type: regex, pattern: '程式[:：][\s\S]*write_increment\s*\(\s*&c\s*,\s*false\s*\)', name: winc_false}
+    - {type: regex, pattern: 'write_increment\s*\(\s*&\w+\s*,\s*false\s*\)', name: winc_false}
   golden: |
     | 項目 | 規格要的 | 現在程式 | OK/NG |
-    | 1 read_addr（configure 第 4 參數） | words | words（:67） | OK |
-    | 2 write_addr（第 3 參數） | &pio->txf[sm] | &pio->txf[sm]（:67） | OK |
+    | 1 read_addr（從哪讀） | words | words（:67） | OK |
+    | 2 write_addr（寫到哪） | &pio->txf[sm] | &pio->txf[sm]（:67） | OK |
     | 3 每筆大小 DMA_SIZE_8/16/32 | DMA_SIZE_32 | DMA_SIZE_32（:64） | OK |
-    | 4 筆數（算式） | 1024 bytes ÷ 4 = 256 | 256（:68） | OK |
-    | 5 read_increment（預設 true） | true | true（:65） | OK |
-    | 6 write_increment（預設 false） | false（FIFO 位址固定） | true（:66） | NG |
-    | 7 DREQ（記憶體↔記憶體 DREQ_FORCE；PIO 用 pio_get_dreq） | pio_get_dreq(pio, sm, true) | 沒寫（預設 DREQ_FORCE，會塞爆 FIFO） | NG |
-    | 8 chain_to（不串接就不設） | 不設 | 沒寫 | OK |
-    | 9 結束：wait_for_finish → unclaim | wait + unclaim | 有（:69、:70） | OK |
-    程式（照順序，≤ 10 行）：
-    ```c
+    | 4 筆數 = 總 bytes ÷ 每筆 bytes（算式） | 1024 ÷ 4 = 256 | dma_encode_transfer_count(256)（:68） | OK |
+    | 5 read_increment：讀陣列 true、讀 FIFO false | true | true（:65） | OK |
+    | 6 write_increment：寫陣列 true、寫 FIFO false | false（寫到 FIFO） | true（:66） | NG |
+    | 7 DREQ：記憶體↔記憶體 DREQ_FORCE；送進 PIO 用 pio_get_dreq(pio, sm, true) | pio_get_dreq(pio, sm, true) | 沒寫（預設 DREQ_FORCE，會塞爆 FIFO） | NG |
+    | 8 有 wait_for_finish_blocking | 要 | 有（:69） | OK |
+    | 9 有 dma_channel_unclaim | 要 | 有（:70） | OK |
+    程式（<n> 換成第 n 列「規格要的」，算式只填答案）：
     int ch = dma_claim_unused_channel(true);
     dma_channel_config c = dma_channel_get_default_config(ch);
     channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
@@ -648,7 +655,6 @@
     dma_channel_configure(ch, &c, &pio->txf[sm], words, dma_encode_transfer_count(256), true);
     dma_channel_wait_for_finish_blocking(ch);
     dma_channel_unclaim(ch);
-    ```
 
 # ---------------------------------------------------------------- 實作 6：雙核（先貼 multicore-sync.md）
 - id: impl-mc-lock-loop
@@ -681,16 +687,16 @@
               while (true) __wfi();
           }
   checks:
-    - {type: table_cell, key: 'g_sum', col: 3, regex: '^[\s*「`]*(A|D)\b', name: gsum_A_or_D}
-    - {type: table_cell, key: '^\W*data', col: 3, regex: '^[\s*「`]*F\b', name: data_F}
+    - {type: table_cell, key: 'g_sum', col: 3, regex: '^[\s*「`]*(B|C|F)\b', name: gsum_local_or_lock}
+    - {type: table_cell, key: '^\W*data', col: 3, regex: '^[\s*「`]*A\b', name: data_readonly}
     - {type: answer_field, field: "鎖內的行", regex: '^(?!.*for).*g_sum\s*\+=', name: lock_only_sum}
-    - {type: regex, pattern: '修改後[\s\S]*\+=[\s\S]*spin_lock_blocking\s*\(\s*lk\s*\)[\s\S]*g_sum\s*\+=', name: lock_after_loop}
+    - {type: regex, pattern: '修改後[\s\S]*\w+\s*\+=\s*v\b[\s\S]*(spin_lock_blocking\s*\(\s*lk\s*\)|critical_section_enter_blocking\s*\(|atomic_fetch_add\w*\s*\(\s*&g_sum)[\s\S]*?(g_sum\s*\+=\s*(?!v\b)\w+|&g_sum\s*,\s*(?!v\b)\w+)', name: lock_after_loop}
     - {type: patch_format, max_patches: 3}
   golden: |
-    | 變數 | 誰寫 | 誰讀 | 保護（照抄選項） |
-    | g_sum | core0、core1 | core0 | A 不共享（各核區域變數，最後合併一次） |
-    | data | core0（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
-    | lk | main（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
+    | 變數 | 誰寫 | 誰讀 | 保護（照抄字母和文字） |
+    | data | core0（launch 前） | core0、core1 | A 不用保護：launch 前寫好，之後兩核只讀 |
+    | g_sum | core0、core1 | core0 | B 區域變數：在 for 迴圈裡累加的共享變數 → 迴圈內加到 local，迴圈結束後上鎖加一次 g += local |
+    | lk | main（launch 前） | core0、core1 | A 不用保護：launch 前寫好，之後兩核只讀 |
     鎖內的行：g_sum += local;
     app_multicore.c:24
     修改前：
@@ -730,18 +736,18 @@
           static uint32_t cur_block;        // core0 填好的塊編號，core1 要知道
           static uint32_t cur_crc;          // core1 算好的 crc，core0 要讀
   checks:
-    - {type: table_cell, key: 'crc_table', col: 3, regex: '^[\s*「`]*F\b', name: table_F}
-    - {type: table_cell, key: 'err_count', col: 3, regex: '^[\s*「`]*(E|D)\b', name: err_E_or_D}
-    - {type: table_cell, key: 'cur_block', col: 3, regex: '^[\s*「`]*(B|C)\b', name: block_B_or_C}
-    - {type: table_cell, key: 'cur_crc', col: 3, regex: '^[\s*「`]*B\b', name: crc_B}
-    - {type: contains_any, items: ["queue_t", "queue_init", "q_job", "q_result"], name: uses_queue}
+    - {type: table_cell, key: 'crc_table', col: 3, regex: '^[\s*「`]*A\b', name: table_readonly}
+    - {type: table_cell, key: 'err_count', col: 3, regex: '^[\s*「`]*(C|F)\b', name: err_atomic_or_lock}
+    - {type: table_cell, key: 'cur_block', col: 3, regex: '^[\s*「`]*(D|E)\b', name: block_queue_or_fifo}
+    - {type: table_cell, key: 'cur_crc', col: 3, regex: '^[\s*「`]*(D|E)\b', name: crc_queue_or_fifo}
+    - {type: contains_any, items: ["queue_t", "queue_init", "q_job", "q_result", "multicore_fifo_push"], name: uses_queue}
   golden: |
-    | 變數 | 誰寫 | 誰讀 | 保護（照抄選項） |
-    | crc_table | core0（launch 前） | core0、core1 | F 不用保護（launch 前寫好，之後只讀） |
-    | blocks | core0 | core1 | B queue_t（傳一筆筆資料或工作）：job_t 帶指標，交出後 core0 不碰到拿回結果 |
-    | err_count | core0、core1 | core0 | E atomic（單一 32-bit 計數） |
-    | cur_block | core0 | core1 | B queue_t（傳一筆筆資料或工作）：放進 job_t.id |
-    | cur_crc | core1 | core0 | B queue_t（傳一筆筆資料或工作）：result_t {id, crc} |
+    | 變數 | 誰寫 | 誰讀 | 保護（照抄字母和文字） |
+    | crc_table | core0（launch 前） | core0、core1 | A 不用保護：launch 前寫好，之後兩核只讀 |
+    | blocks | core0 | core1 | D queue_t：一核寫、另一核讀的資料（編號、結果、工作）：job_t 帶指標，交出後 core0 不碰，到拿回結果為止 |
+    | err_count | core0、core1 | core0 | C atomic：兩核都會 +1 的單一 32-bit 計數 |
+    | cur_block | core0 | core1 | D queue_t：一核寫、另一核讀的資料（編號、結果、工作）：放進 job_t.id |
+    | cur_crc | core1 | core0 | D queue_t：一核寫、另一核讀的資料（編號、結果、工作）：result_t {id, crc} |
     鎖內的行：無
     app.c:12
     修改前：
@@ -784,8 +790,11 @@
   checks:
     - {type: table_cell, key: '^\W*6\b', col: 2, regex: 'a2\)?\s*>=\s*(\(\w+\)\s*)?t1|t1\)?\s*<=\s*(\(\w+\)\s*)?a2', name: bge_operand_order}
     - {type: regex, pattern: '等價的 C[\s\S]*(>\s*limit|limit\s*<|>\s*a2\b|a2\s*<\s*)', name: counts_greater}
-    - {type: answer_field, field: "迴圈跑幾次", regex: '\bn\b|a1', name: loop_n}
+    - {type: regex, pattern: '迴圈跑幾次[^\n:：]*[:：]?[*\s]*[^\n]*?((?<![A-Za-z_])n(?![A-Za-z_])|a1)', name: loop_n}
+    - {type: not_regex, pattern: '迴圈跑幾次[^\n:：]*[:：]\s*無', name: loop_not_none}
+    - {type: not_regex, pattern: '等價的 C[\s\S]*(limit\s*>=|>=\s*limit|<=?\s*limit\b|limit\s*>)', name: not_inverted}
     - {type: table_rows, min: 10}
+    - {type: regex, pattern: '被跳過的行[^\n]*\n?[^\n]*(a2\s*<\s*t1|t1\s*>\s*a2|>\s*limit|limit\s*<)', if_card: '被跳過的行', name: skipped_cond}
   golden: |
     | 行 | 指令 | 運算（C 寫法） | 結果寫到 |
     | 3 | li t0, 0 | t0 = 0 | t0 |
@@ -798,6 +807,7 @@
     | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
     | 11 | mv a0, t0 | a0 = t0 | a0 |
     | 12 | ret | return | pc = ra |
+    被跳過的行：第 7 行（t0 + 1）只在 bge 不成立時做 → if (a2 < t1)，也就是 arr[i] > limit
     等價的 C（≤ 6 行）：
     ```c
     uint32_t count_above(const int32_t *arr, uint32_t n, int32_t limit) {
@@ -836,7 +846,7 @@
     - {match: "參數意思", value: "a0 = const int32_t *arr（可能有負數），a1 = uint32_t n，a2 = int32_t limit；規格：回傳 arr 中「大於 limit」的個數，有號比較。測試 arr = {5, -3, 10, 0, 7}、limit = 4 應回 3，實際回 4"}
   checks:
     - {type: answer_field, field: "可疑處", regex: 'bgeu|無號|unsigned', name: flags_bgeu}
-    - {type: regex, pattern: '改[成用為]?\s*[「`]?bge(?!u)', name: fix_bge}
+    - {type: regex, pattern: '(改|換|應|修正|用)[^\n]{0,24}?[「`]?bge(?![u\w])', name: fix_bge}
     - {type: table_cell, key: '^\W*6\b', col: 2, regex: 'uint32_t|unsigned|無號', name: row6_unsigned}
   golden: |
     | 行 | 指令 | 運算（C 寫法） | 結果寫到 |
@@ -850,6 +860,7 @@
     | 10 | bnez a1, 1b | if (a1 != 0) goto 1 | 跳到 label 1 |
     | 11 | mv a0, t0 | a0 = t0 | a0 |
     | 12 | ret | return | pc = ra |
+    被跳過的行：第 7 行只在 bgeu 不成立時做 → if ((uint32_t)a2 < (uint32_t)t1)
     等價的 C（≤ 6 行）：
     ```c
     uint32_t c = 0;
@@ -862,70 +873,67 @@
 # ---------------------------------------------------------------- 實作 8：機器碼（欄位由程式算）
 - id: impl-rv-blt
   tags: [impl, riscv, decode, trap]
-  desc: 0xfeb546e3 = blt x10,x11,-20（陷阱：I/S 格式的值 -21 / -19 不能抄）
+  desc: 0xfeb546e3 = blt x10,x11,-20（解碼程式已印指令名與 imm；考運算元順序 rs1, rs2, imm）
   card: {file: "12-implement.md", title: "實作 8/9"}
   fills:
     - {match: "機器碼", value: "0xfeb546e3"}
     - match: "程式印出"
       value: |2
         op 0x63 rd 13 f3 4 rs1 10 rs2 11 f7 0x7f
-        I -21 S -19 B -20 J -700438 U 0xfeb54
+        格式 B 指令 blt imm -20
   checks:
     - {type: answer_field, field: "格式", regex: '^\W*B\b', name: format_B}
     - {type: answer_field, field: "imm", regex: '^(?!.*-(21|19)\b).*-20\b', name: imm_m20}
-    - {type: answer_field, field: "組語", regex: 'blt\s+x10\s*,\s*x11\s*,\s*-20\b', name: asm}
+    - {type: answer_field, field: "組語", regex: 'blt\s+x10\s*,\s*x11\s*,\s*(-20|0xffffffec)\b', name: asm}
     - {type: card_slots, min_fraction: 0.8}
   golden: |
-    opcode：0x63
     格式：B
-    funct3 / funct7：4（blt）/ 不用
+    指令：blt
     rd / rs1 / rs2：不用 / x10 / x11
     imm：-20
-    組語（暫存器寫 xN）：blt x10, x11, -20
+    組語：blt x10, x11, -20
 
 - id: impl-rv-srai
   tags: [impl, riscv, decode, trap]
-  desc: 0x40335293 = srai x5,x6,3（陷阱：I 的 imm 印 1027，位移量要用 rs2 欄位 3）
+  desc: 0x40335293 = srai x5,x6,3（解碼程式已把位移量 3 放進 imm；不能寫 1027）
   card: {file: "12-implement.md", title: "實作 8/9"}
   fills:
     - {match: "機器碼", value: "0x40335293"}
     - match: "程式印出"
       value: |2
         op 0x13 rd 5 f3 5 rs1 6 rs2 3 f7 0x20
-        I 1027 S 1029 B 3076 J 220162 U 0x40335
+        格式 I 指令 srai imm 3
   checks:
     - {type: answer_field, field: "組語", regex: '^(?!.*1027).*srai\s+x5\s*,\s*x6\s*,\s*(0x)?3\b', name: asm_srai}
     - {type: answer_field, field: "格式", regex: '^\W*I\b', name: format_I}
     - {type: card_slots, min_fraction: 0.8}
   golden: |
-    opcode：0x13
     格式：I
-    funct3 / funct7：5 / 0x20（srai）
-    rd / rs1 / rs2：x5 / x6 / 3（位移量）
-    imm：位移量 3（I 欄 1027 = 0x400 + 3，不直接用）
-    組語（暫存器寫 xN）：srai x5, x6, 3
+    指令：srai
+    rd / rs1 / rs2：x5 / x6 / 不用（位移量 3 已經在 imm）
+    imm：3
+    組語：srai x5, x6, 3
 
 - id: impl-rv-sh
   tags: [impl, riscv, decode, trap]
-  desc: 0xfc741e23 = sh x7,-36(x8)（陷阱：S 型 imm 拆兩段，I 欄 -57 不能抄）
+  desc: 0xfc741e23 = sh x7,-36(x8)（陷阱：S 型運算元順序 rs2, imm(rs1)，不是 rd=28）
   card: {file: "12-implement.md", title: "實作 8/9"}
   fills:
     - {match: "機器碼", value: "0xfc741e23"}
     - match: "程式印出"
       value: |2
         op 0x23 rd 28 f3 1 rs1 8 rs2 7 f7 0x7e
-        I -57 S -36 B -2084 J -778298 U 0xfc741
+        格式 S 指令 sh imm -36
   checks:
     - {type: answer_field, field: "格式", regex: '^\W*S\b', name: format_S}
     - {type: answer_field, field: "組語", regex: 'sh\s+x7\s*,\s*-36\s*\(\s*x8\s*\)', name: asm_sh}
-    - {type: not_regex, pattern: '組語[^\n]*-57', name: not_I_imm}
+    - {type: not_regex, pattern: '組語[^\n]*(-57|x28)', name: not_I_imm_or_rd}
   golden: |
-    opcode：0x23
     格式：S
-    funct3 / funct7：1（sh）/ 不用
+    指令：sh
     rd / rs1 / rs2：不用 / x8 / x7
     imm：-36
-    組語（暫存器寫 xN）：sh x7, -36(x8)
+    組語：sh x7, -36(x8)
 
 # ---------------------------------------------------------------- 實作 9：ROS 2 node（先貼 ros2.md QoS）
 - id: impl-ros-besteffort
@@ -941,53 +949,34 @@
         節點名稱 scaler。
         訂閱 /imu/temp（std_msgs/msg/Float32）；發布端是感測器 driver，QoS = sensor_data（BEST_EFFORT、depth 5）。
         每收到一筆就乘上參數 gain（預設 0.5，float），發布到 /imu/temp_scaled（std_msgs/msg/Float32，RELIABLE、depth 10）。
-    - match: "node_template"
-      value: {file: "預製程式碼/ros2/node_template.py", lines: [14, 63], number_lines: true}
   checks:
     - {type: table_cell, key: '/imu/temp(?!_)', col: 3, regex: 'BEST_EFFORT|best_effort|sensor_data', name: sub_qos_best_effort}
-    - {type: table_cell, key: 'temp_scaled', col: 1, regex: 'pub', name: out_is_pub}
+    - {type: table_cell, key: 'temp_scaled', col: 1, regex: 'pub|發布|发布', name: out_is_pub}
     - {type: regex, pattern: '(ReliabilityPolicy\.BEST_EFFORT|qos_profile_sensor_data)', name: code_best_effort}
     - {type: regex, pattern: 'create_subscription\s*\(\s*Float32', name: sub_float32}
     - {type: regex, pattern: 'create_publisher\s*\(\s*Float32', name: pub_float32}
     - {type: regex, pattern: 'declare_parameter\s*\(\s*[''"]gain[''"]\s*,\s*0\.5\s*\)', name: param_gain}
-    - {type: answer_field, field: "node 名稱", regex: 'scaler', name: node_name}
-    - {type: patch_format, max_patches: 12}
+    - {type: regex, pattern: '__init__\(\s*["'']scaler["'']|名[稱称][^\n]*\n?[^\n]*\bscaler\b', name: node_name}
+    - {type: not_regex, pattern: 'create_publisher\s*\([^\n)]*(qos_profile_sensor_data|BEST_EFFORT)', name: pub_stays_reliable}
+    - {type: regex, pattern: 'import[^\n]*qos_profile_sensor_data|ReliabilityPolicy\.BEST_EFFORT', name: sensor_qos_defined}
+    - {type: table_cell, key: '^\W*59\b', col: 2, regex: 'Float32\s*\(\s*\)', name: out_msg_float32}
   golden: |
     | topic | 方向 pub/sub | 型別 | QoS |
     | /imu/temp | sub | std_msgs/msg/Float32 | BEST_EFFORT、depth 5（配合 sensor_data publisher） |
     | /imu/temp_scaled | pub | std_msgs/msg/Float32 | RELIABLE、depth 10 |
     node 名稱：scaler
-    參數（名稱 = 預設值）：gain = 0.5、in_topic = /imu/temp、out_topic = /imu/temp_scaled
-    node_template.py:17
-    修改前：from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
-    修改後：from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-    node_template.py:18
-    修改前：from std_msgs.msg import Int32  # TODO(改這裡) 換訊息型別，例如 Int32MultiArray / String / UInt8MultiArray
-    修改後：from std_msgs.msg import Float32, Int32  # TODO(改這裡) 換訊息型別 // 已改：Float32（/tick 還用 Int32）
-    node_template.py:33
-    修改前：        super().__init__("processor")
-    修改後：        super().__init__("scaler")
-    node_template.py:36
-    修改前：        self.declare_parameter("in_topic", "/number")
-    修改後：        self.declare_parameter("in_topic", "/imu/temp")
-    node_template.py:37
-    修改前：        self.declare_parameter("out_topic", "/double")
-    修改後：        self.declare_parameter("out_topic", "/imu/temp_scaled")
-    node_template.py:38
-    修改前：        self.declare_parameter("factor", 2)
-    修改後：        self.declare_parameter("gain", 0.5)
-    node_template.py:42
-    修改前：        self.factor = self.get_parameter("factor").value
-    修改後：        self.factor = self.get_parameter("gain").value
-    node_template.py:45
-    修改前：        self.pub = self.create_publisher(Int32, out_topic, QOS)
-    修改後：        self.pub = self.create_publisher(Float32, out_topic, QOS)
-    node_template.py:46
-    修改前：        self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
-    修改後：        self.sub = self.create_subscription(Float32, in_topic, self.on_msg, qos_profile_sensor_data)
-    node_template.py:59
-    修改前：        out = Int32()
-    修改後：        out = Float32()
+    | 行 | 原本 | 改成（不用改寫「不改」） |
+    | 17 | from rclpy.qos import …, ReliabilityPolicy | from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data |
+    | 18 | from std_msgs.msg import Int32 | from std_msgs.msg import Float32, Int32 |
+    | 33 | super().__init__("processor") | super().__init__("scaler") |
+    | 36 | declare_parameter("in_topic", "/number") | self.declare_parameter("in_topic", "/imu/temp") |
+    | 37 | declare_parameter("out_topic", "/double") | self.declare_parameter("out_topic", "/imu/temp_scaled") |
+    | 38 | declare_parameter("factor", 2) | self.declare_parameter("gain", 0.5) |
+    | 42 | get_parameter("factor") | self.factor = self.get_parameter("gain").value |
+    | 45 | create_publisher(Int32, out_topic, QOS) | self.pub = self.create_publisher(Float32, out_topic, QOS) |
+    | 46 | create_subscription(Int32, in_topic, self.on_msg, QOS) | self.sub = self.create_subscription(Float32, in_topic, self.on_msg, qos_profile_sensor_data) |
+    | 59 | out = Int32() | out = Float32() |
+    | 60 | out.data = msg.data * self.factor | 不改 |
     驗證：ros2 topic info -v /imu/temp 看兩端都是 BEST_EFFORT，再 ros2 topic pub --once --qos-reliability best_effort /imu/temp std_msgs/msg/Float32 "{data: 4.0}"，/imu/temp_scaled 應該是 2.0
 
 - id: impl-ros-uint8
@@ -1003,45 +992,30 @@
         節點名稱 byte_summer。
         訂閱 /bytes_in（std_msgs/msg/UInt8MultiArray），把 data 裡所有 byte 加總，發布到 /byte_sum（std_msgs/msg/UInt32）。
         兩個 topic 都用預設 QoS（RELIABLE、VOLATILE、depth 10）。沒有參數。
-    - match: "node_template"
-      value: {file: "預製程式碼/ros2/node_template.py", lines: [14, 63], number_lines: true}
   checks:
     - {type: regex, pattern: 'create_subscription\s*\(\s*UInt8MultiArray', name: sub_type}
     - {type: regex, pattern: 'create_publisher\s*\(\s*UInt32\b', name: pub_type}
     - {type: regex, pattern: 'UInt32\s*\(\s*\)', name: out_msg_type}
-    - {type: regex, pattern: 'sum\s*\(\s*msg\.data\s*\)', name: sum_data}
+    - {type: regex, pattern: 'sum\s*\(\s*msg\.data\s*\)|for\s+\w+\s+in\s+msg\.data', name: sum_data}
     - {type: regex, pattern: 'import[^\n]*UInt8MultiArray', name: import_types}
     - {type: table_cell, key: 'bytes_in', col: 1, regex: 'sub', name: in_is_sub}
-    - {type: answer_field, field: "node 名稱", regex: 'byte_summer', name: node_name}
-    - {type: patch_format, max_patches: 12}
+    - {type: regex, pattern: '__init__\(\s*["'']byte_summer["'']|名[稱称][^\n]*\n?[^\n]*\bbyte_summer\b', name: node_name}
+    - {type: table_cell, key: '^\W*59\b', col: 2, regex: 'UInt32\s*\(\s*\)', name: out_msg_row}
   golden: |
     | topic | 方向 pub/sub | 型別 | QoS |
     | /bytes_in | sub | std_msgs/msg/UInt8MultiArray | RELIABLE、VOLATILE、depth 10（預設） |
     | /byte_sum | pub | std_msgs/msg/UInt32 | RELIABLE、VOLATILE、depth 10（預設） |
     node 名稱：byte_summer
-    參數（名稱 = 預設值）：in_topic = /bytes_in、out_topic = /byte_sum（factor 不用）
-    node_template.py:18
-    修改前：from std_msgs.msg import Int32  # TODO(改這裡) 換訊息型別，例如 Int32MultiArray / String / UInt8MultiArray
-    修改後：from std_msgs.msg import Int32, UInt8MultiArray, UInt32  # TODO(改這裡) 換訊息型別 // 已改
-    node_template.py:33
-    修改前：        super().__init__("processor")
-    修改後：        super().__init__("byte_summer")
-    node_template.py:36
-    修改前：        self.declare_parameter("in_topic", "/number")
-    修改後：        self.declare_parameter("in_topic", "/bytes_in")
-    node_template.py:37
-    修改前：        self.declare_parameter("out_topic", "/double")
-    修改後：        self.declare_parameter("out_topic", "/byte_sum")
-    node_template.py:45
-    修改前：        self.pub = self.create_publisher(Int32, out_topic, QOS)
-    修改後：        self.pub = self.create_publisher(UInt32, out_topic, QOS)
-    node_template.py:46
-    修改前：        self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
-    修改後：        self.sub = self.create_subscription(UInt8MultiArray, in_topic, self.on_msg, QOS)
-    node_template.py:59
-    修改前：        out = Int32()
-    修改後：        out = UInt32()
-    node_template.py:60
-    修改前：        out.data = msg.data * self.factor
-    修改後：        out.data = sum(msg.data) & 0xFFFFFFFF
+    | 行 | 原本 | 改成（不用改寫「不改」） |
+    | 17 | from rclpy.qos import …, ReliabilityPolicy | 不改 |
+    | 18 | from std_msgs.msg import Int32 | from std_msgs.msg import Int32, UInt8MultiArray, UInt32 |
+    | 33 | super().__init__("processor") | super().__init__("byte_summer") |
+    | 36 | declare_parameter("in_topic", "/number") | self.declare_parameter("in_topic", "/bytes_in") |
+    | 37 | declare_parameter("out_topic", "/double") | self.declare_parameter("out_topic", "/byte_sum") |
+    | 38 | declare_parameter("factor", 2) | 不改（規格沒有參數，factor 用不到） |
+    | 42 | get_parameter("factor") | 不改 |
+    | 45 | create_publisher(Int32, out_topic, QOS) | self.pub = self.create_publisher(UInt32, out_topic, QOS) |
+    | 46 | create_subscription(Int32, in_topic, self.on_msg, QOS) | self.sub = self.create_subscription(UInt8MultiArray, in_topic, self.on_msg, QOS) |
+    | 59 | out = Int32() | out = UInt32() |
+    | 60 | out.data = msg.data * self.factor | out.data = sum(msg.data) & 0xFFFFFFFF |
     驗證：ros2 topic pub --once /bytes_in std_msgs/msg/UInt8MultiArray "{data: [1, 2, 250]}"，/byte_sum 應該是 253
