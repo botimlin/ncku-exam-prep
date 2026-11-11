@@ -122,13 +122,13 @@ Task (EN): The table below was made by a script. Pick ONE cause A–H and say wh
 {{貼 frame.py diff 的輸出}}
 [送出端] {{電腦 → Pico / Pico → 電腦}}
 <<<資料 結束>>>
-原因：A 多了 0D（CRLF 轉換沒關）　B 混入文字（printf）　C 大小端顛倒　D len 單位錯（bytes vs 筆數）　E CRC 範圍或初值錯　F 少收（read 沒累積）　G 錯一格（同步字被吃掉、多一個 byte）　H 其他
+原因（→ 修法）：A 多了 0D（CRLF 轉換沒關）→ Pico 端 PICO_STDIO_DEFAULT_CRLF=0　B 混入文字（printf）→ 刪掉二進位串流裡的 printf　C 大小端顛倒 → 送出端改 little-endian（struct "<"）　D len 單位錯（bytes vs 筆數）→ len 填 bytes　E CRC 範圍或初值錯 → 範圍 cmd..payload、zlib crc32　F 少收（read 沒累積）→ 接收端累積到滿一包　G 錯一格（同步字被吃掉、多一個 byte）→ 接收端重新對齊 AA 55　H 其他
 規則：表和「線索」是程式算的，以它為準。
 只輸出 4 行：
 第一個不同：（照抄表下面那行）
 證據：「表裡不同的那一列」
 原因（照抄選項，例如「C 大小端顛倒」）：
-哪一端要改（檔案或設定）：
+哪一端要改（照抄所選原因的修法）：
 範例（只示範格式，內容不要照抄）：
 第一個不同：len（預期 14 bytes，實際 14 bytes）
 證據：「| len | 04 00 | 00 04 | 否 |」

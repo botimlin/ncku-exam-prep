@@ -43,7 +43,7 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 {{貼}}
 [環境] pico-sdk {{2.2.0}}；PICO_BOARD={{pico2}}；PICO_PLATFORM={{rp2350-arm-s}}；最近改了 {{…}}
 <<<資料 結束>>>
-類別：A 找不到 SDK / pico_sdk_import　B cache 殘留（換過 board / platform）　C CMake 語法或順序（例：pico_sdk_import 在 project() 後 → unknown pseudo-op .syntax）　D 找不到 header　E undefined reference　F multiple definition（header 變數改 extern）　G RAM / flash overflowed　H 其他
+類別（比對錯誤裡的關鍵字）：A 找不到 SDK（SDK location、PICO_SDK_PATH）　B cache 殘留（CMakeCache … different、generator、換過 board）　C 語法或順序（Parse error、Unknown CMake command、pseudo-op .syntax = pico_sdk_import 在 project() 後）　D 找不到 header（No such file）　E undefined reference　F multiple definition（header 變數改 extern）　G overflowed（RAM / flash）　H 其他
 只輸出 4 行：
 證據：「…」（照抄錯誤那 1 行）
 原因（1 句）：

@@ -462,7 +462,7 @@ def card_options(card_text):
     separated) or a label line followed by lines 'A …', 'B …'. Returns [(label, {letter: desc})]."""
     groups, lines = [], card_text.split("\n")
     for i, ln in enumerate(lines):
-        m = re.match(r"^\s*([^\s:：|]{1,10})\s*[:：]\s*(.*)$", ln)
+        m = re.match(r"^\s*([^\s:：|（(]{1,10})(?:\s*[（(][^）)\n]*[）)])?\s*[:：]\s*(.*)$", ln)  # 標籤後可帶（說明）
         if not m:
             continue
         opts = {}
