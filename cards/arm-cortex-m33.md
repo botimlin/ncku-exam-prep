@@ -97,20 +97,20 @@ intrinsic：
 ```c
 acc = __smlad((int16x2_t)pa[i], (int16x2_t)pb[i], acc);
 ```
-FPU 週期：
+FPU 週期（⚠️未查證，以實測為準）：
 - VADD/VSUB/VMUL.F32：1 + 1 結果延遲；相依鏈 2 cycle/條，兩個累加器交錯 1 cycle/條
 - VMLA/VFMA：佔 FPU 3 + 1；可交錯時分開 VMUL + VADD 比 VMLA 快
 - VDIV/VSQRT：14 + 1（期間整數核心可繼續）
 選擇：
 - float 首選；`x / c` → `x * (1.0f / c)`（最後一位可能不同）
-- double 走 DCP：dadd 6、dmul 17、ddiv 51 cycle（內聯時；經函式呼叫還有開銷）→ 避免；`0.5` 寫 `0.5f`；`-Wdouble-promotion`
+- double 走 DCP：dadd 6、dmul 17、ddiv 51 cycle ⚠️未查證（內聯時；經函式呼叫還有開銷）→ 避免；`0.5` 寫 `0.5f`；`-Wdouble-promotion`
 - 定點（Q15、Q16.16）用在需要位元精確或資料本來就是整數時
 
 ---
 
 【參考卡｜Cortex-M33 5/8｜指令週期（RP2350 datasheet §3.7.4.9）】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-平台：RP2350（Pico 2）Cortex-M33。前提：單核、無 XIP cache miss、無 DMA。「延遲」= 下一條用到結果就 +1。
+平台：RP2350（Pico 2）Cortex-M33。前提：單核、無 XIP cache miss、無 DMA。⚠️未逐條對照 datasheet 原文，以 cycle 計數實測為準。「延遲」= 下一條用到結果就 +1。
 - 一般 ALU 1，無延遲
 - Operand2 移位非 LSL #0～3（如 LSL #4、LSR、ASR、ROR），或立即值需移位：1 + 延遲；這類加 S 一定 +1
 - UBFX/SBFX/BFI、獨立 LSL/LSR/ASR/ROR、MOVW、ADDW/SUBW：1，無延遲

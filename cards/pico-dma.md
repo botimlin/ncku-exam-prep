@@ -66,7 +66,7 @@ RP2350（Pico 2）：16 DMA channel（RP2040 12）。考前練習 section2-3 的
 - `engine_busy` / `engine_wait` → `dma_channel_is_busy` / `dma_channel_wait_for_finish_blocking`
 - `engine_release` → `dma_channel_cleanup(ch); dma_channel_unclaim(ch);`（unclaim 不會停通道）
 - 引擎檢查對齊 → 硬體不檢查、結果未定義，自己 `__attribute__((aligned(4)))`
-- 引擎拒絕 count=0 → 硬體允許 0（立即完成，不搬資料）；配 CHAIN_TO 有 errata RP2350-E8
+- 引擎拒絕 count=0 → 硬體允許 0（立即完成，不搬資料）；配 CHAIN_TO 有 errata RP2350-E8（⚠️未查證）
 - 複製 vs 填值只差 src_increment → 填值 = read_increment=false 指向 pattern 變數
 
 ---
@@ -153,7 +153,7 @@ RP2350（Pico 2）DMA；以下 CTRL 位元是 RP2350 配置。`dma_hw->ch[ch].ct
 6. 只第一格對 → write_increment 沒開；整個 buffer 同一值 → read_increment 誤關；多寫 2/4 倍 → count 用了 bytes。
 7. IRQ 沒進：INTE、`irq_set_enabled`、IRQ 號一致、IRQ_QUIET、`dma_hw->intr`。
 8. IRQ 進來後卡死：沒 ack。
-9. 第二次傳輸沒發生：仍 BUSY；CHAIN_TO 遇零長度（RP2350-E8）；EN=0。
+9. 第二次傳輸沒發生：仍 BUSY；CHAIN_TO 遇零長度（RP2350-E8 ⚠️未查證）；EN=0。
 10. abort 後又自己跑（RP2350-E5）：先清 EN 與 CHAIN_TO 再 abort，或直接 `dma_channel_cleanup(ch)`。
 11. READ/WRITE_ERROR（例如存取 SIO）：等 BUSY=0 後寫 1 清除才能重啟。
 12. 資料偶爾錯：CPU 同時碰 DMA 的 FIFO、兩通道同 DREQ、buffer 是區域變數、讀前少 barrier。

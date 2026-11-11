@@ -7,7 +7,7 @@
 【參考卡｜RISC-V Hazard3 1/8｜ISA 與暫存器 / 呼叫慣例】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 平台：RP2350（Pico 2）的 Hazard3 RISC-V 核心，非 RP2040。
-- `-march=rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp -mabi=ilp32`（GCC 13 以前：`rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb`）
+- SDK 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`；`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才改用 `…_zca_zcb_zcmp`（硬體也支援 Zcb/Zcmp）
 - 無 F/D（無硬體浮點，float 軟體模擬很慢）、無 Zbc（無 clmul）、無 Zicond、無 V
 - 一律小端序；非自然對齊 load/store 直接例外（不是變慢）
 暫存器（ILP32）：
@@ -51,7 +51,7 @@ pseudo：
 - bgt/ble/bgtu/bleu a,b → blt/bge/bltu/bgeu b,a（交換運算元）
 - zext.b=andi 255；csrr=csrrs rd,csr,x0
 M 擴充：除以 0 不 trap（div/divu 回傳全 1，rem 回傳被除數）；INT_MIN/-1 回傳 INT_MIN、餘 0（C 層級仍 UB）
-fence 在 Hazard3 是 no-op；寫程式碼到 RAM 後要 fence.i
+fence 在 Hazard3 是 no-op ⚠️未查證；寫程式碼到 RAM 後要 fence.i
 
 ---
 
@@ -114,18 +114,18 @@ Xh3bextm（Hazard3 自訂）：
 | jal、jalr | 2 |
 | 跳到未 4-byte 對齊的 32-bit 指令 | +1 |
 | CSR 讀寫 | 1 |
-| ecall/ebreak 3；mret 2；amo*.w 每次 4 | |
+| ecall/ebreak 3；mret 2 ⚠️未查證；amo*.w 每次 4 起 | |
 | cm.push/cm.pop | 1+n |
 load-use 細節：
 - load 資料 → store 資料 不 stall（如 lbu a3 後立刻 sb a3）
 - load 資料 → load 位址 會 stall（指標追逐）
 分支預測：單一 entry，只記最後一個 taken 的向後分支，其他一律預測不跳。典型迴圈第一次與最後一次各錯一次。
-- 陷阱：迴圈本體只有一條 16-bit 指令時預測器失效 → 用 `.option norvc` 強制 32-bit + `.p2align 2`
+- 陷阱：迴圈本體只有一條 16-bit 指令時預測器失效 ⚠️未查證 → 用 `.option norvc` 強制 32-bit + `.p2align 2`
 其他：
-- 非對齊 load/store 直接 trap：mcause 4（load）/ 6（store/AMO）；pico-sdk 預設加 `-mstrict-align`
+- 非對齊 load/store 直接 trap：mcause 4（load）/ 6（store/AMO）；pico-sdk **沒有**加 `-mstrict-align`，packed struct / 指標轉型要自己避免
 - 無 FPU：float/double 呼叫軟體函式（如 __mulsf3），極慢 → 改定點數
 - 表格假設無 bus stall；在 flash（XIP，0x10000000 起）執行或與 DMA/另一核搶同 SRAM bank 時會更慢
-- 反組譯看到 cm.push/cm.popret（Zcmp）屬正常
+- 用 zcb_zcmp 工具鏈時反組譯看到 cm.push/cm.popret（Zcmp）屬正常；SDK 預設不產生
 
 ---
 

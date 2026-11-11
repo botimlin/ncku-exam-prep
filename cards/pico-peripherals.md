@@ -19,7 +19,7 @@ RP2350（Pico 2 = RP2350A，30 GPIO），非 RP2040。pico-sdk 2.x。
 - FUNCSEL 值：HSTX 0、SPI 1、UART 2、I2C 3、PWM 4、SIO 5、PIO0/1/2 6/7/8、NULL 0x1f（RP2040 沒有 PIO2）。
 Pico 2 預設：uart0 GP0/1；i2c0 GP4/5；spi0 RX16 CSn17 SCK18 TX19；LED GP25；ADC0–2 = GP26–28。
 Pad（RP2350 reset 值）：ISO=1（隔離）、IE=0、**pull-down**；`gpio_set_function()` 會清 ISO、設 IE，但不動 pull。RP2040 沒有 ISO、預設 IE=1。直接寫暫存器時要自己清 ISO、設 IE。
-⚠️ RP2350-E9（只影響 A2 stepping）：浮接 + 內建 pull-down 可能讀到 1 → 用 pull-up + 按鍵接地，或外接 ≤ 8.2 kΩ pull-down。
+⚠️ RP2350-E9（A2 stepping；A4 已修）：浮接 + 內建 pull-down 可能讀到 1 → 用 pull-up + 按鍵接地，或外接 ≤ 8.2 kΩ pull-down。
 SIO/PIO 輸入永遠連著；DMA 不能存取 SIO（GPIO）。
 
 ---
@@ -107,7 +107,7 @@ RP2350：12 slice（RP2040 8）× A/B 兩輸出；Pico 2（QFN-60）GPIO 0–29 
 
 【參考卡｜RP2350 週邊 6/8｜ADC 與溫度感測】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-RP2350A（Pico 2）：ADC ch0–3 = GPIO 26–29、溫度 = ch4（RP2350B：ch0–7 = GPIO 40–47、溫度 ch8）。12-bit（0–4095），ENOB 9.2；clk_adc 48 MHz，每次 96 cycle → 2 µs = 500 kS/s（所有通道共用）。FIFO 8 筆，滿了樣本直接丟。
+RP2350A（Pico 2）：ADC ch0–3 = GPIO 26–29、溫度 = ch4（RP2350B：ch0–7 = GPIO 40–47、溫度 ch8）。12-bit（0–4095），ENOB 9.2 ⚠️未查證；clk_adc 48 MHz，每次 96 cycle → 2 µs = 500 kS/s（所有通道共用）。FIFO 滿了樣本直接丟（深度 8 筆 ⚠️未查證）。
 ```c
 adc_init();
 adc_gpio_init(26);                       // ch0
@@ -151,16 +151,16 @@ Watchdog（link `hardware_watchdog`）：
 
 【參考卡｜RP2350 週邊 8/8｜中斷（IRQ）規則與號碼】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-RP2350：52 個外部 IRQ（RP2040 32），優先權 8-bit 只有**高 4 bit 有效**（16 級；RP2040 高 2 bit）。Hazard3 用軟體分派，IRQ 延遲通常較長 ⚠️未量測；SDK API 兩邊相同。
-IRQ 號（用名稱，不寫數字）：TIMER0_IRQ_0..3=0–3、TIMER1=4–7、PWM_IRQ_WRAP_0/1=8/9、DMA_IRQ_0..3=10–13、USBCTRL=14、PIO0/1/2_IRQ_0/1=15–20、IO_IRQ_BANK0=21、SIO_IRQ_FIFO=25、SIO_IRQ_BELL=26、SPI0/1=31/32、UART0/1=33/34、ADC_IRQ_FIFO=35、I2C0/1=36/37、SPAREIRQ 46–51。
+RP2350：52 個外部 IRQ（RP2040 32），優先權 8-bit 只有**高 4 bit 有效**（16 級；RP2040 高 2 bit）。Hazard3 IRQ 延遲較長 ⚠️未量測；SDK API 相同。
+IRQ 號（用名稱，不寫數字）：TIMER0_IRQ_0..3=0–3、TIMER1=4–7、PWM_IRQ_WRAP_0/1=8/9、DMA_IRQ_0..3=10–13、USBCTRL=14、PIO0/1/2_IRQ_0/1=15–20、IO_IRQ_BANK0=21、SIO_IRQ_FIFO=25、SIO_IRQ_BELL=26、SPI0/1=31/32、UART0/1=33/34、ADC_IRQ_FIFO=35、I2C0/1=36/37、SPARE_IRQ_0..5=46–51。
 API：
 - `irq_set_exclusive_handler(num, h)`（已有 handler 會 assert）、`irq_add_shared_handler(num, h, order_priority)`、`irq_set_enabled(num, true)`、`irq_set_priority(num, p)`（0x00 最高、預設 0x80、0xff 最低）、`irq_set_pending(num)`。
-- shared 的 `order_priority`：**數字大的先被呼叫**（與 `irq_set_priority` 相反）；上限預設 4 個（有 USB stdio 時 6）。
-- `irq_set_enabled` 只影響**呼叫的那顆核**，由該核處理。非 core-local IRQ（UART、SPI、DMA、PWM、TIMER）只在一顆核 enable。
+- shared 的 `order_priority`：**數字大的先被呼叫**（與 `irq_set_priority` 相反）；全部 shared handler 合計上限預設 4（`PICO_MAX_SHARED_IRQ_HANDLERS`）。
+- `irq_set_enabled` 只影響**呼叫的那顆核**。UART、SPI、DMA、PWM、TIMER 等只在一顆核 enable。
 - GPIO IRQ 是 per-core，每核一個 callback。
 ISR 規則：
 1. 先清週邊旗標（PWM 寫 INTR、GPIO acknowledge、UART 讀空 FIFO、DMA 寫 INTS），否則一直重進。
-2. 短：搬資料、設旗標、推 ring buffer。
+2. 短：搬資料、設旗標、推 ring。
 3. 不要 printf、sleep、malloc。
 4. 時間關鍵 ISR 用 `__not_in_flash_func(name)` 放 RAM。
 5. 共享變數 volatile；多欄位更新用 `save_and_disable_interrupts()` / `restore_interrupts()`。

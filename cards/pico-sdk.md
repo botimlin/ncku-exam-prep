@@ -65,7 +65,7 @@ RP2350（Raspberry Pi Pico 2 = RP2350A），**不是 RP2040**。RP2040 數值放
 - GPIO：RP2350A 30 支、RP2350B 48 支
 - Pico 2 板：LED = GPIO25（Pico 2 **W** 的 LED 在無線晶片，要 `cyw43_arch`）、4 MB flash、uart0 TX/RX = GPIO0/1、i2c0 SDA/SCL = GPIO4/5、spi0 RX/CSn/SCK/TX = GPIO16/17/18/19
 - RP2350 pad 重置後是隔離（ISO）狀態，要經 `gpio_init` / `gpio_set_function` 才會動；直接寫 IO_BANK0 不呼叫 SDK 時腳可能沒反應
-- ⚠️ RP2350-E9（A2 stepping）：輸入用內部 pull-down 可能異常 → 讀按鍵用 pull-up + 接地按鈕
+- ⚠️ RP2350-E9（A2 stepping；A4 已修）：輸入用內部 pull-down 可能異常 → 讀按鍵用 pull-up + 接地按鈕
 - IRQ 編號與 RP2040 不同，一律用名稱（`DMA_IRQ_0`=10、`PIO0_IRQ_0`=15、`UART0_IRQ`=33）；RP2040 的 `TIMER_IRQ_0` 在 RP2350 叫 `TIMER0_IRQ_0`
 
 ---

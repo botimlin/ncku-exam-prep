@@ -43,13 +43,12 @@ RP2350 PIO = version 1（RP2040 為 v0）。9 條：JMP WAIT IN OUT PUSH PULL MO
 | `push (iffull) (block\|noblock)` | ISR→RX FIFO，ISR 清 0；預設 block |
 | `pull (ifempty) (block\|noblock)` | TX FIFO→OSR；預設 block；noblock 遇空 = `mov osr, x` |
 | `mov dst, (op) src` | op：`!`/`~` 反相、`::` 位元反轉；src 含 status |
-| `irq (set\|wait\|clear) n (rel)` | flag 0–7；wait=設後等被清；rel=加 SM 號 |
+| `irq (set\|wait\|clear) n (rel)` | flag 0–7；wait=設後等清；rel=加 SM 號 |
 | `set dst, v` | dst：pins x y pindirs；v=0–31 |
-- n=1–32。`set` 只能 0–31，大常數用 `pull`+`out y, 32`。
-- 不開 autopull 時 `out` 不會等 TX 資料（移出殘值/0）。
-- autopull 開時 `mov` 讀 OSR 未定義。
+- n=1–32。大常數用 `pull`+`out y, 32`。
+- 不開 autopull 時 `out` 不會等 TX 資料（移出殘值/0）；autopull 開時 `mov` 讀 OSR 未定義 ⚠️未查證。
 - Stall：wait 未成立、pull 遇 TX 空、push 遇 RX 滿、irq wait。
-- v1 新增（需 `.pio_version 1`）：`mov pindirs`、`mov rxfifo[i], isr`/`mov osr, rxfifo[i]`、`irq prev/next`（不可與 rel 並用）、`wait jmppin`。
+- v1 新增（SDK 對 RP2350 自動 `-v 1`；手動 pioasm 加 `.pio_version 1`）：`mov pindirs`、`mov rxfifo[i]`（↔ isr/osr）、`irq prev/next`（不配 rel）、`wait jmppin`。
 - 編碼：`out x, 32`=0x6020、`in x, 32`=0x4020、`push`=0x8020。
 
 ---
@@ -70,7 +69,7 @@ RP2350 PIO（v1）：delay `[n]` 與 side-set 共用指令 bit 12–8，共 5 bi
 - C 端：`<prog>_program_get_default_config(offset)` 已呼叫 `sm_config_set_sideset(&c, bit_count含opt, opt, pindirs)`；你只需 `sm_config_set_sideset_pins(&c, base)`。
 - 每條指令 = 1 + delay 個 SM cycle（不含 stall）。
 Wrap：PC 到 `.wrap` 時跳回 `.wrap_target`，0 cycle、0 指令。`pio_get_default_sm_config()` 的 wrap 是 0..31、OUT/SET count=0 → **一定用 `<prog>_program_get_default_config(offset)`**（內含 `sm_config_set_wrap(&c, offset + wrap_target, offset + wrap)`）。
-Directives：`.program name`、`.pio_version 1`（用 v1 功能要明寫）、`.side_set`、`.wrap_target`/`.wrap`（各一次）、`.origin`、`.define PUBLIC sym v`、`.fifo txrx|tx|rx|txput|txget|putget`、`.clock_div`、`% c-sdk { ... %}`（放 init helper）。
+Directives：`.program name`、`.pio_version 1`（宣告用 v1）、`.side_set`、`.wrap_target`/`.wrap`（各一次）、`.origin`、`.define PUBLIC sym v`、`.fifo txrx|tx|rx|txput|txget|putget`、`.clock_div`、`% c-sdk { ... %}`（放 init helper）。
 每個 PIO 只有 32 格指令記憶體（4 SM 共用）。
 
 ---
@@ -89,7 +88,7 @@ RP2350（Pico 2）PIO，考前 demo `demo_pio.pio`：
 追蹤（autopull 開、門檻 32、autopush 關）：開機 OSR counter=32（空）→ TX 有資料時 autopull 填 OSR → `out x, 32` 整個 word 給 X → `in x, 32` ISR=X → `push` 進 RX FIFO。穩態每 word 3 個 SM cycle。
 - **必須開 autopull**（`sm_config_set_out_shift(&c, true, true, 32)`），否則 `out` 不會自己 pull，回傳錯誤資料（⚠️依 datasheet 推論，未實測）；或在 `out` 前加 `pull`。
 - **不要同時開 autopush**：`in x, 32` 觸發 autopush 後 `push` 會再推一個 0（推論，未實測）。要 autopush 就刪掉 `push` → 每 word 2 cycle。
-- 沒用 GPIO，不需 `pio_gpio_init`/pindirs。不能用 `mov isr, osr` 取代（autopull 時未定義）。
+- 沒用 GPIO，不需 `pio_gpio_init`/pindirs。不能用 `mov isr, osr` 取代（autopull 時未定義 ⚠️未查證）。
 C 端：`echo_program_get_default_config(offset)` → `sm_config_set_out_shift(&c, true, true, 32)` → `sm_config_set_in_shift(&c, true, false, 32)` → `pio_sm_init` → `pio_sm_set_enabled` → 迴圈 `pio_sm_put_blocking` 一筆、`pio_sm_get_blocking` 一筆。
 死結：先 put 一大串再 get → TX(4)+管線+RX(4) 塞滿後 SM 卡 push、CPU 卡 put。交錯 put/get，或用兩個 DMA（先啟動 RX）。
 
@@ -196,11 +195,11 @@ RP2350（Pico 2）PIO（v1，3 個 PIO block）。
 5. `out` 讀到殘值：沒 autopull 也沒 `pull`。
 6. 多推 0：autopush 與 `push` 同時用。
 7. 忘了 `pio_sm_set_enabled(pio, sm, true)`（`pio_sm_init` 後為停用）。
-8. `get_blocking` 永遠卡：SM 沒跑/卡 wait/沒 push；先全部 put 再 get 互卡。
+8. `get_blocking` 永遠卡：SM 沒跑/卡 wait/沒 push；先全 put 再 get。
 9. `pio_add_program` 回負值：32 格滿。
-10. side-set 吃掉 delay bit；非 opt 時某行沒寫 `side`。
+10. side-set 吃掉 delay bit；非 opt 某行沒寫 `side`。
 11. `pio_encode_jmp()` 沒加 offset。
-12. v1 指令組譯失敗：缺 `.pio_version 1`。
+12. v1 指令組譯失敗：build 成 RP2040（沒設 pico2）。
 13. `pio_sm_put` 不檢查滿，TX 滿時資料丟。
 除錯：
 - `pio->ctrl` 低 4 bit=SM enable。

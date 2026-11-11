@@ -100,7 +100,7 @@ memory order：
 RP2350：
 - 1/2/4 byte 對齊的 atomic 是 lock-free（Arm ldrex/strex、RISC-V lr/sc/amo）；64-bit 由 pico_atomic 用 spinlock 保護
 - RP2040 全部用 spinlock 模擬
-- exclusive 只在 SRAM 有效（flash/XIP 一律失敗）→ atomic 變數放 SRAM；reservation granule 16 bytes
+- 跨核 exclusive 靠 global monitor，只涵蓋 SRAM（不含 XIP/PSRAM）→ atomic 變數放 SRAM；reservation granule 16 bytes ⚠️未查證
 - 兩核對同一 16-byte 區塊內不同變數做 atomic 會互相干擾 ⚠️未驗證（推論）
 
 ---
@@ -127,7 +127,7 @@ queue_remove_blocking(&q, &j);
 queue_try_add(&q, &j);      // 滿 → false
 queue_try_remove(&q, &j);   // 空 → false
 ```
-- 元素 memcpy 複製；內部 calloc（失敗回 false）
+- 元素 memcpy 複製；`queue_init` 回傳 void，內部 calloc 不檢查失敗
 - ISR 中只用 `queue_try_*`
 - queue 先初始化，再 launch core1
 - 傳 buffer 指標時，交出後到拿回前生產者不能再碰（所有權轉移）
@@ -151,7 +151,7 @@ spin_unlock(lk, save);
 - `save_and_disable_interrupts()` / `restore_interrupts(s)` 只擋本核
 - `multicore_lockout_*` 不是資料鎖（寫 flash 用）
 RP2350-E2 erratum：
-- 寫 SIO 0x180–0x1FC 會誤釋放低 0x80 的硬體 spinlock（A2/A3/A4 皆有）
+- 寫 SIO 0x180–0x1FC 會誤釋放低 0x80 的硬體 spinlock（A2 有；A4 公告未列為已修）
 - SDK 預設 `PICO_USE_SW_SPIN_LOCKS`（RAM 中軟體 spinlock），API 不變
 - 不要直接寫 `sio_hw->spinlock[]`（RP2040 舊寫法）；編號用 `PICO_SPINLOCK_ID_*`
 選哪個：
