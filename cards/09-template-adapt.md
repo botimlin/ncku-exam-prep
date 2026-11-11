@@ -119,10 +119,12 @@ C app_multicore.c：Pico 雙核；job_t / result_t + queue_t、core1_main（core
 D pico_dualcore_micro_ros.c：core0 跑 micro-ROS、core1 算
 E linux-perf/parallel_template.c：pthread 切塊、各自累加最後合併
 合併可用 algo/sort.c 的 merge_two_sorted / kway_merge。
-只輸出 5 行：
-能不能拆（只寫「可以」或「不行」＋理由 1 句；CRC、SHA 這類一段接一段的串列運算一律「不行」）：
+填法：「能不能拆」只寫「可以」或「不行」再接理由（CRC、SHA 這類一段接一段的串列運算一律「不行」）；「瓶頸在」只寫「傳輸」或「計算」再接依據；「合併用」寫 algo/sort.c 的函式名或「不用合併」。
+只輸出 6 行（欄位名照抄）：
+能不能拆：
 選：A–E
-瓶頸在（只寫「傳輸」或「計算」＋依據 1 句）：
+瓶頸在：
+合併用：
 要改的 TODO(改這裡)：
 怎麼確認平行版 == 單機版：
 
@@ -146,24 +148,22 @@ Task (EN): List every interface difference between the spec and the template in 
 ---
 
 【提示卡｜範本 7/7｜檢查我改完的範本】
-Task (EN): Review the diff against the checklist. For each item answer exactly OK / 有問題 / 看不到, with the line as evidence. Answer in Traditional Chinese.
+Task (EN): First copy every + / - line of the diff. Then fill the 9-row table with OK / 有問題 / 看不到 and the diff line as evidence. Answer in Traditional Chinese.
 任務：用固定清單檢查我的修改。
 <<<資料 開始>>>
 {{貼 git diff -U2 檔名 | head -80}}
 <<<資料 結束>>>
-清單：
-1 大小端：多位元組欄位兩端都 little-endian（Python `<`）
-2 DMA count 是傳輸次數不是 bytes（4096 bytes 用 32-bit = 1024），有用 `dma_encode_transfer_count(n)`
-3 memory→memory DMA 有 `channel_config_set_write_increment(&c, true)`（預設 false）；用完 `dma_channel_unclaim`
-4 spinlock 用 `spin_lock_init(spin_lock_claim_unused(true))`；鎖內沒有計算、printf、sleep
-5 payload ≤ FRAME_MAX_PAYLOAD 8192；CHUNK_BYTES 4096 ≤ 它；大陣列是 static / 全域
-6 二進位 USB 串流（app_serial）裡沒有 printf / puts
-7 micro-ROS 收：`.data=buf; .capacity=N; .size=0` 先配置；發：publish 前設 `.size`
-8 新 cmd 在 serial_proto.h、handle()、frame.py、fake_pico.py 都有且編號一致
-9 兩核 / 中斷共用的變數有 volatile 和鎖
-規則：只有 diff 裡 + 或 - 開頭的行能判「有問題」，證據抄那一行；diff 沒有相關的行 → 「看不到」。
+規則：只有 diff 裡 + 或 - 開頭的行能判「有問題」，證據抄那一行；diff 沒有相關的行 →「看不到」。
 先輸出：diff 裡 + / - 開頭的行（逐行照抄，≤ 10 行）
-再輸出（9 列）：
-| # | 結果 | 證據（diff 那一行） |
+再輸出這張表（9 列照填，不要增減）：
+| 檢查項目 | 結果 | 證據（diff 那一行） |
+| 1 大小端：多位元組欄位兩端都 little-endian（Python `<`） | | |
+| 2 DMA count 是傳輸次數不是 bytes（4096 bytes 用 32-bit = 1024），有包 `dma_encode_transfer_count` | | |
+| 3 memory→memory DMA 有 `channel_config_set_write_increment(&c, true)`（預設 false）；用完 `dma_channel_unclaim` | | |
+| 4 spinlock 用 `spin_lock_init(spin_lock_claim_unused(true))`；鎖內沒有計算、printf、sleep | | |
+| 5 payload ≤ FRAME_MAX_PAYLOAD 8192；大陣列是 static / 全域 | | |
+| 6 二進位 USB 串流（app_serial）裡沒有 printf / puts | | |
+| 7 micro-ROS 收：先配 `.data/.capacity/.size=0`；發：publish 前設 `.size` | | |
+| 8 新 cmd 在 serial_proto.h、handle()、frame.py、fake_pico.py 都有且編號一致 | | |
+| 9 兩核 / 中斷共用的變數有 volatile 和鎖 | | |
 最嚴重的 1 個問題與修法（沒有就寫「無」，≤ 2 行）：
-範例（只示範格式，內容不要照抄）：| 3 | 有問題 | 「dma_channel_configure(ch, &c, dst, src, n, true)」少 write_increment |

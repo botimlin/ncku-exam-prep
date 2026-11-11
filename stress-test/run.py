@@ -543,7 +543,7 @@ def run_check(chk, resp, ctx):
         need_loc = chk.get("require_location", "auto")
         if need_loc == "auto":
             need_loc = bool(ctx["card"] and "行號" in ctx["card"].text)
-        loc_ok = bool(re.search(r"[\w./-]+\.(?:c|h|cpp|hpp|py|txt|cmake|pio|S|s|xml|ya?ml|sh)\s*[:：]\s*\d+|第\s*\d+\s*行|[Ll]ine\s*\d+", resp))
+        loc_ok = bool(re.search(r"[\w./-]+\.(?:c|h|cpp|hpp|py|txt|cmake|pio|S|s|xml|ya?ml|sh)`?\s*[:：]\s*\d+|第\s*\d+\s*行|[Ll]ine\s*\d+|^\s*\d{1,5}\t", resp, re.M))  # 程式碼區塊裡 cat -n 的行號也算
         mxp = chk.get("max_patches", 3)
         ok = before >= 1 and after >= 1 and (loc_ok or not need_loc) and before <= mxp
         r["passed"] = ok

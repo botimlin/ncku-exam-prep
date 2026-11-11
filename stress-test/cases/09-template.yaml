@@ -55,10 +55,10 @@
     - {match: "不能改", value: "封包格式、cmd 編號、函式名稱"}
   checks:
     - {type: patch_format, max_patches: 2}
-    - {type: regex, pattern: "app_serial\\.c\\s*[:：]\\s*37", name: right_line}
-    - {type: regex, pattern: "修改後\\s*[:：][^\\n]*v\\s*\\*\\s*v", name: squares}
-    - {type: regex, pattern: "修改後\\s*[:：][^\\n]*TODO\\(改這裡\\)", name: keeps_todo}
-    - {type: regex, pattern: "另一端要改\\s*[:：][^\\n]*(fake_pico|frame\\.py|serial_bridge)", name: other_side}
+    - {type: regex, pattern: "app_serial\\.c`?\\s*[:：]\\s*37|^\\s*37\\t", name: right_line}
+    - {type: regex, pattern: "修改後[\\s\\S]{0,300}v\\s*\\*\\s*v", name: squares}
+    - {type: regex, pattern: "修改後[\\s\\S]{0,300}v\\s*\\*\\s*v[^\\n]*TODO\\(改這裡\\)", name: keeps_todo}
+    - {type: regex, pattern: "另一端要改[\\s\\S]{0,120}(fake_pico|frame\\.py|serial_bridge)", name: other_side}
     - {type: no_full_dump, max_copied_lines: 4}
   golden: |
     app_serial.c:37
@@ -141,7 +141,7 @@
              dma_channel_wait_for_finish_blocking((uint)ch);
              dma_channel_unclaim((uint)ch);
   checks:
-    - {type: table_cell, key: "^3$", col: 1, regex: "有問題"}
+    - {type: table_cell, key: "^3\\b", col: 1, regex: "有問題"}
     - {type: regex, pattern: "最嚴重[^\\n]*\\n?[^\\n]*write_increment", name: worst_is_write_incr}
     - {type: table_rows, min: 8, max: 12}
   golden: |
@@ -173,7 +173,7 @@
                  memcpy(reply, &sum, 4);                        // ARM / RISC-V 都是 little-endian
                  proto_send(f->cmd, f->seq, reply, 4);
   checks:
-    - {type: table_cell, key: "^6$", col: 1, regex: "有問題"}
+    - {type: table_cell, key: "^6\\b", col: 1, regex: "有問題"}
     - {type: regex, pattern: "最嚴重[^\\n]*\\n?[^\\n]*printf", name: worst_is_printf}
   golden: |
     | # | 結果 | 證據（diff 那一行） |
@@ -208,7 +208,7 @@
         +    dma_channel_unclaim((uint)ch);
         +}
   checks:
-    - {type: table_cell, key: "^2$", col: 1, regex: "有問題"}
+    - {type: table_cell, key: "^2\\b", col: 1, regex: "有問題"}
     - {type: regex, pattern: "1024", name: gives_1024}
   golden: |
     | # | 結果 | 證據（diff 那一行） |
@@ -240,7 +240,7 @@
                  memcpy(reply, &sum, 4);                        // ARM / RISC-V 都是 little-endian
                  proto_send(f->cmd, f->seq, reply, 4);
   checks:
-    - {type: not_regex, pattern: "^\\|\\s*\\d+\\s*\\|\\s*有問題", name: no_false_alarm, category: correctness}
+    - {type: not_regex, pattern: "^\\|\\s*\\d+[^|\\n]*\\|\\s*\\**有問題", name: no_false_alarm, category: correctness}
     - {type: table_rows, min: 8, max: 12}
   golden: |
     | # | 結果 | 證據（diff 那一行） |

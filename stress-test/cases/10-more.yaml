@@ -79,10 +79,11 @@
     - {type: regex, pattern: "能不能拆\\s*[:：]\\s*\\**可以", name: can_split}
     - {type: choice, option: "multi_device", field_in_answer: "選"}
     - {type: regex, pattern: "瓶頸在[^\\n]*計算", name: bottleneck_compute}
-    - {type: contains_any, items: ["merge_two_sorted", "merge", "kway"], name: merge}
+    - {type: regex, pattern: "合併用[^\\n]*(merge|kway)", name: merge}
   golden: |
     能不能拆：可以（各自排序再 merge）
     選：A
+    合併用：merge_two_sorted
     瓶頸在：計算（Pico 排序 1.6 s / 1.9 s）
     要改的 TODO(改這裡)：multi_device.py 的切塊與合併改用 merge_two_sorted
     怎麼確認平行版 == 單機版：和 sorted(data) 逐一比對
@@ -104,6 +105,7 @@
   golden: |
     能不能拆：不行（CRC 是串列運算，不能各算一段再合併）
     選：無（不拆）
+    合併用：不用合併
     瓶頸在：計算（資料中沒有分段量測）
     要改的 TODO(改這裡)：無，改用查表或 DMA sniffer 加速單板
     怎麼確認平行版 == 單機版：和 zlib.crc32 比對
