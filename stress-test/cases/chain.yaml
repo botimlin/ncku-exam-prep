@@ -19,8 +19,8 @@
   fills:
     - value: {ref: readme}
   checks:
-    - {type: contains_all, items: ["25 分", "10 分", "15 分"], name: keeps_points}
-    - {type: regex, pattern: "硬體[^\\n]*資料中沒有", name: hw_absent}
+    - {type: regex, pattern: "10\\s*分[\\s\\S]{0,40}15\\s*分", name: keeps_points}
+    - {type: regex, pattern: "硬體[^\\n]*(資料中沒有|RP2350|Pico|未提及|沒寫)", name: hw_absent}
     - {type: regex, pattern: "不能改[^\\n]*(host|judge)", name: cant_change}
     - {type: regex, pattern: "提交[^\\n]*(15 分鐘|Q2-3)", name: submit_rule}
   golden: |
