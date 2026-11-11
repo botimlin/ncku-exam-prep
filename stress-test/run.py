@@ -832,8 +832,12 @@ def run_job(job, args, cards, tok):
     hdr = {"X-Stress-Case": case["id"]} if args.send_case_header else {}
     row["turns"] = []
     try:
+        outs = {}  # 整題連續對話：<<TURNk>> 換成第 k 步模型自己的回答
         for i, st in enumerate(b.steps):
-            msgs.append({"role": "user", "content": st["user"]})
+            u = st["user"]
+            for k, v in outs.items():
+                u = u.replace(f"<<TURN{k}>>", v)
+            msgs.append({"role": "user", "content": u})
             final = i == len(b.steps) - 1
             if st["assistant"] is not None:
                 msgs.append({"role": "assistant", "content": st["assistant"]}); continue
@@ -847,6 +851,8 @@ def run_job(job, args, cards, tok):
                            messages=send if args.save_prompts else None)
             else:
                 row["turns"].append({"assistant": out["content"][:2000], "context": cinfo})
+                outs[i] = out["content"]
+                b.corpus.append(out["content"])  # 後面的引用可能來自前一步的回答
             msgs.append({"role": "assistant", "content": out["content"]})
     except RuntimeError as e:
         row.update(status="error", error=str(e))
