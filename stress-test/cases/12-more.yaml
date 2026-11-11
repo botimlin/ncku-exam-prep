@@ -1,0 +1,262 @@
+# 第四批：開場 2（快捷指令）、讀題 2/3、除錯 4、速學 1/2/3/5、開考 3/5
+
+- id: starter2-shortcut
+  tags: [starter, format]
+  desc: 開場 2/3 後用 /除錯 → 表格最多 3 列、先不修
+  turns:
+    - card: {file: "00-starter.md", title: "開場｜2/3"}
+      assistant: "了解"
+  card: null
+  user: |
+    /除錯
+    <<<資料 開始>>>
+    症狀：Pico 的 dst 只有 dst[0] 有值，其他都是 0。
+    程式：
+    54	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    55	dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), true);
+    <<<資料 結束>>>
+  checks:
+    - {type: table_rows, min: 2, max: 5}
+    - {type: contains_any, items: ["write_increment", "寫入位址", "寫遞增", "dst 沒有遞增", "遞增"], name: finds_cause}
+    - {type: not_regex, pattern: "修改後", name: no_fix_yet, category: format}
+  golden: |
+    | 原因 | 可能性 | 驗證方法 |
+    | 沒設 channel_config_set_write_increment(&c, true)，預設 false，每次都寫到 dst[0] | 高 | 加那一行再跑，看 dst 是否全對 |
+
+- id: read2-files
+  tags: [read, choice]
+  desc: 檔案盤點：judge/expected → F 或 B；先讀要含 README 與 .gitlab-ci.yml
+  card: {file: "02-read-spec.md", title: "讀題 2/6"}
+  fills:
+    - match: "find 輸出"
+      value: |
+        .
+        ./.gitlab-ci.yml
+        ./README.md
+        ./judge
+        ./judge/expected.txt
+        ./judge/run.sh
+        ./src
+        ./src/CMakeLists.txt
+        ./src/main.c
+        ./src/util.c
+        ./tools
+        ./tools/gen_input.py
+    - {match: "一句話目標", value: "讓 src/main.c 處理 4096 筆資料更快，輸出和 expected.txt 相同"}
+  checks:
+    - {type: table_cell, key: "expected", col: 1, regex: "^\\**(F|B)"}
+    - {type: table_cell, key: "CMakeLists", col: 1, regex: "^\\**C"}
+    - {type: regex, pattern: "先讀[\\s\\S]{0,200}README", name: reads_readme}
+    - {type: regex, pattern: "先讀[\\s\\S]{0,300}(gitlab-ci|run\\.sh)", name: reads_judge}
+  golden: |
+    | 路徑 | 類別 | 理由（≤ 10 字） |
+    | ./.gitlab-ci.yml | B | CI 評分 |
+    | ./README.md | A | 題目說明 |
+    | ./judge/expected.txt | F | 預期輸出 |
+    | ./judge/run.sh | B | 評分腳本 |
+    | ./src/CMakeLists.txt | C | 建置 |
+    | ./src/main.c | D | 主要程式 |
+    | ./src/util.c | D | 主要程式 |
+    | ./tools/gen_input.py | E | 產生測資 |
+    先讀（依序 5 個，每個附一句理由）：README.md（題目）、.gitlab-ci.yml（怎麼評分）、judge/run.sh（評分指令）、src/main.c（要改的程式）、src/CMakeLists.txt（怎麼建置）
+
+- id: read3-arch
+  tags: [read, grounding]
+  desc: 架構圖：只畫資料中出現的元件；USB 封包；core1 不確定 → ?
+  card: {file: "02-read-spec.md", title: "讀題 3/6"}
+  fills:
+    - value: |
+        host/bridge_node.py：訂閱 /samples（std_msgs/UInt8MultiArray），把資料用 frame.encode(CMD_CRC32, …) 經 /dev/ttyACM0 送到 Pico，收到回覆後發佈到 /crc（std_msgs/UInt32）。
+        pico/main.c：core0 用 proto_feed() 收封包，呼叫 crc32_update() 計算後 proto_send() 回傳。
+        README：「core1 目前沒有使用，可以自由運用。」
+  checks:
+    - {type: contains_all, items: ["/samples", "/crc"], name: topics}
+    - {type: regex, pattern: "ttyACM0|USB", name: usb_link}
+    - {type: regex, pattern: "core1[^\\n]*(\\?|沒有使用|未使用|不確定)", name: core1_unknown}
+    - {type: not_regex, pattern: "DMA|spinlock|queue_t", name: no_invented_components, category: grounding}
+  golden: |
+    1. ASCII 圖：[topic /samples] --(UInt8MultiArray)--> [bridge_node.py] --(USB /dev/ttyACM0, CMD_CRC32 封包)--> [Pico core0: proto_feed → crc32_update → proto_send] --> [bridge_node.py] --> [topic /crc UInt32]
+    2. | 元件 | 在哪跑 | 怎麼觸發 | 證據 |
+    | bridge_node.py | 電腦 process | 訂閱事件 | 「訂閱 /samples」 |
+    | main.c core0 | Pico core0 | ? | 「core0 用 proto_feed() 收封包」 |
+    | core1 | Pico core1 | ? | 「core1 目前沒有使用」 |
+    3. 共享資源：/dev/ttyACM0（只有 bridge_node 開）
+    4. 不確定：core0 是輪詢還是中斷；封包大小上限
+
+- id: dbg4-why
+  tags: [debug]
+  desc: 加了 sleep_ms(1) 就好 → 判斷「可能只是掩蓋」
+  card: {file: "04-debug.md", title: "除錯 4/6"}
+  fills:
+    - {match: "原本的症狀", value: "core0 讀到的 result 偶爾是舊值（大約 50 次有 1 次）"}
+    - match: "修改前"
+      value: |
+        multicore_fifo_push_blocking(job_id);
+        result_ready = 0;
+        while (!result_ready) { }
+        use(result);
+    - match: "修改後"
+      value: |
+        multicore_fifo_push_blocking(job_id);
+        result_ready = 0;
+        sleep_ms(1);
+        while (!result_ready) { }
+        use(result);
+  checks:
+    - {type: regex, pattern: "判斷[^\\n]*[:：][^\\n]*掩蓋", name: masks}
+    - {type: regex, pattern: "seq|for i in|50|200|多跑|連跑|重複", name: repeat_check}
+    - {type: regex, pattern: "result_ready = 0|順序|race|競爭|volatile", name: names_race}
+  golden: |
+    為什麼有效（≤ 2 句，附證據：「程式原文」）：sleep_ms(1) 讓 core1 有時間在 core0 清 0 之後才設旗標，證據：「result_ready = 0;」在 push 之後才清
+    判斷：可能只是掩蓋（時序剛好變了）
+    理由（1 句）：真正問題是先 push 再清 result_ready 的順序 race，sleep 只是讓它比較少發生
+    確認指令（1 行）：把 sleep 拿掉、改成先清 result_ready 再 push，連跑 200 次看有沒有舊值
+    成功的樣子：200 次都拿到新值
+
+- id: learn1-pio
+  tags: [learn, grounding, absent]
+  desc: 速學 1：只根據官方段落；沒寫的（使用流程細節）要「資料中沒有」，類比標【推測】
+  card: {file: "07-unknown-tech.md", title: "速學 1/6"}
+  fills:
+    - {match: "技術名稱", value: "PIO"}
+    - {match: "版本", value: "RP2350"}
+    - {match: "熟悉的技術", value: "C、Python、UART"}
+    - value: |
+        PIO 是 CPU 之外的小型狀態機，自己跑一小段程式（最多 32 條指令）。
+        它沒有記憶體，只有：X、Y 兩個暫存器；OSR：CPU 送來的資料放這裡，用 out 取出；ISR：要送回 CPU 的資料放這裡，用 in 放入、用 push 送出。
+        CPU → TX FIFO → OSR → (out) → X → (in) → ISR → (push) → RX FIFO → CPU
+  checks:
+    - {type: contains_any, items: ["32"], name: keeps_32}
+    - {type: contains_all, items: ["OSR", "ISR"], name: concepts}
+    - {type: regex, pattern: "【推測】", name: marks_guess}
+    - {type: absent}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    1. 類別與解決什麼：硬體周邊，CPU 之外跑小程式處理 I/O　證據：「PIO 是 CPU 之外的小型狀態機」
+    2. 輸入、輸出：CPU 經 TX FIFO 送入，結果經 RX FIFO 送回　證據：「CPU → TX FIFO → OSR」
+    3. 像我熟的哪個東西、差在哪：像可程式化的 UART【推測】
+    4. 核心概念：X、Y、OSR、ISR、out / in / push　證據：「只有：X、Y 兩個暫存器」
+    5. 使用流程：資料中沒有
+    6. 限制或陷阱：最多 32 條指令、沒有記憶體　證據：「最多 32 條指令」
+
+- id: learn2-api
+  tags: [learn, grounding]
+  desc: API 地圖：只列 header 出現的函式；不能補 pio_sm_put_blocking 以外記憶中的 API
+  card: {file: "07-unknown-tech.md", title: "速學 2/6"}
+  fills:
+    - {match: "技術名稱", value: "transfer engine"}
+    - {match: "一句話", value: "把 4096 個 u32 從 src 複製到 dst"}
+    - value: {file: "考試相關資訊/section2-3/transfer-engine/engine.h", start_at: "#define ENGINE_CHANNELS", end_at: "void engine_release"}
+  checks:
+    - {type: contains_all, items: ["engine_claim", "engine_configure", "engine_start", "engine_wait", "engine_release"], name: lists_all}
+    - {type: identifiers_subset, pattern: "\\bengine_[a-z_]+\\b", name: no_invented_api}
+    - {type: regex, pattern: "engine_wait[^\\n]*\\|\\s*是", name: wait_blocks}
+  golden: |
+    | ★ | 函式 | 用途 | 阻塞? 是/否/看不出 | 重要參數 | 回傳值 |
+    | ★ | engine_claim | 取得閒置通道 | 否 | 無 | 通道號或 -1 |
+    | ★ | engine_configure | 描述工作 | 否 | job（count = 傳輸次數） | 無 |
+    | ★ | engine_start | 啟動 | 否 | ch | 無 |
+    |  | engine_busy | 是否還在跑 | 否 | ch | bool |
+    | ★ | engine_wait | 等到完成 | 是 | ch | 無 |
+    | ★ | engine_release | 歸還通道 | 否 | ch | 無 |
+    struct / enum：| engine_job_t | 工作描述 |　| xfer_size_t | 每筆 1/2/4 bytes |
+
+- id: learn3-example
+  tags: [learn, grounding]
+  desc: 逐行解讀官方範例：dma_channel_configure 那行影響效能；看不到定義的寫出來
+  card: {file: "07-unknown-tech.md", title: "速學 3/6"}
+  fills:
+    - {match: "技術名稱", value: "transfer engine"}
+    - value: {file: "考試相關資訊/section2-3/transfer-engine/main.c", start_at: "int ch = engine_claim();", end_at: "engine_wait(ch);", number_lines: true}
+  checks:
+    - {type: table_rows, min: 5}
+    - {type: regex, pattern: "count[^\\n]*(筆|傳輸次數|transfers)|(筆數|傳輸次數)[^\\n]*count", name: count_meaning}
+    - {type: regex, pattern: "照抄[^\\n]*(engine\\.h|engine\\.c|engine)", name: prep_line}
+  golden: |
+    | 行號 | 在做什麼 | 必要 / 可選 | 影響效能? |
+    | 108 | engine_claim 取得通道 | 必要 | 否 |
+    | 112–119 | 填 engine_job_t：count = N 筆傳輸、每筆 4 bytes、兩邊都遞增 | 必要 | 是：size 和 count 決定總量 |
+    | 120 | engine_configure | 必要 | 否 |
+    | 121 | engine_start 立刻返回 | 必要 | 是：之後 CPU 可做別的事 |
+    | 124–129 | 等的時候自己跑迴圈 | 可選 | 否 |
+    | 130 | engine_wait | 必要 | 否 |
+    照抄這個範例要先準備：engine.h、engine.c 和 -pthread
+
+- id: learn5-map
+  tags: [learn]
+  desc: 對準題目：CPU 迴圈 → engine 的 copy；第一步要附確認方法
+  card: {file: "07-unknown-tech.md", title: "速學 5/6"}
+  fills:
+    - {match: "技術名稱", value: "transfer engine"}
+    - {match: "題目要求", value: "把 copy_words() 的 CPU 迴圈改用 transfer engine，結果相同且更快"}
+    - match: "相關程式碼"
+      value: |2
+            20	void copy_words(uint32_t *dst, const uint32_t *src, size_t n) {
+            21	    for (size_t i = 0; i < n; i++) dst[i] = src[i];
+            22	}
+    - value: {file: "考試相關資訊/section2-3/transfer-engine/engine.h", start_at: "#define ENGINE_CHANNELS", end_at: "void engine_release"}
+  checks:
+    - {type: contains_any, items: ["engine_configure"], name: uses_configure}
+    - {type: regex, pattern: "L?21|第 ?21", name: cites_line}
+    - {type: regex, pattern: "確認[^\\n]*(memcmp|比對|相同|==)", name: has_check}
+    - {type: identifiers_subset, pattern: "\\bengine_[a-z_]+\\b", name: no_invented_api}
+  golden: |
+    1. 題目要改的地方用到哪些概念 / API（附行號）：L21 的 CPU 迴圈 → engine_claim、engine_configure、engine_start、engine_wait、engine_release
+    2. 可用來優化的選項：XFER_32 每筆 4 bytes；start 之後 CPU 可做別的事
+    3. 建議的第一步：用 engine_configure 描述 count = n、XFER_32、兩邊遞增；確認：memcmp(dst, src, n*4) == 0
+
+- id: exam3-understand
+  tags: [exam, grounding, absent]
+  desc: 理解卡：配分照抄；硬體片數沒寫 → 資料中沒有
+  card: {file: "10-exam-day-flow.md", title: "開考 3/5"}
+  fills:
+    - value: |
+        # 第二大題（60 分）
+        2-1（15 分）：修好 host/bridge_node.py，讓 /crc 對每個 /samples 訊息都有回覆。
+        2-2（20 分）：實作 pico/decode.c 的 decode_status()，規格見 docs/status.md。
+        2-3（25 分）：把 pico/main.c 的 CRC 改用 DMA sniffer。分數 = 正確性 10 分 + 速度排名 15 分。
+        提交：push 到 main，commit message 以題號開頭（例如 Q2-3: ...）。每 15 分鐘最多評分 1 次。
+        judge/ 資料夾與 host/launch/ 不能修改。
+  checks:
+    - {type: contains_all, items: ["15 分", "20 分", "25 分"], name: keeps_points}
+    - {type: regex, pattern: "硬體[^\\n]*資料中沒有", name: hw_absent}
+    - {type: regex, pattern: "提交[^\\n]*(15 分鐘|Q2)", name: submit_rule}
+    - {type: regex, pattern: "不能改[^\\n]*judge", name: cant_change}
+  golden: |
+    - 小題清單與配分：2-1（15 分）、2-2（20 分）、2-3（25 分），共 60 分
+    - 每小題的目標（一句）：2-1 修 bridge_node 讓 /crc 都有回覆；2-2 實作 decode_status()；2-3 CRC 改用 DMA sniffer
+    - 輸入（來源、格式、大小）：/samples 訊息；大小資料中沒有
+    - 輸出（目的地、格式）：/crc
+    - 正確性怎麼判：2-3 正確性 10 分；其他資料中沒有
+    - 效能指標與單位：2-3 速度排名 15 分；單位資料中沒有
+    - 提交方式、次數限制：push 到 main，commit message 以題號開頭；每 15 分鐘最多評分 1 次
+    - 硬體（板子、片數、核心）：資料中沒有
+    - 不能改的檔案 / 介面：judge/ 與 host/launch/
+    - 不能用的方法：資料中沒有
+    - 範例輸入輸出在哪：docs/status.md（2-2 規格）
+    - 最容易誤解的 2 點：commit message 要以題號開頭；評分有 15 分鐘冷卻
+
+- id: exam5-plan
+  tags: [exam]
+  desc: 時間表：每小題先交能動版；最後 30 分鐘只確認 pipeline
+  card: {file: "10-exam-day-flow.md", title: "開考 5/5"}
+  fills:
+    - {match: "現在時間", value: "09:40 / 16:30"}
+    - value: |
+        2-1（15 分）E ros2/node_template.py
+        2-2（20 分）F bits-riscv/bitops.h
+        2-3（25 分）I pico/app_dma.c
+    - {match: "熟悉度", value: "熟：Python、位元運算　不熟：DMA、ROS 2"}
+  checks:
+    - {type: table_rows, min: 4}
+    - {type: regex, pattern: "能動", name: working_first}
+    - {type: regex, pattern: "1[56]:[0-3]\\d[^\\n]*(確認|push|pipeline)|pipeline|確認最終", name: final_check}
+    - {type: regex, pattern: "第一個能動版[\\s\\S]{0,200}(2-2|decode|位元)", name: starts_with_known}
+  golden: |
+    | 時段 | 小題 | 目標（能動版 / 某項優化） | 完成判準 | 超時備案 |
+    | 09:40–10:40 | 2-2 | 能動版：decode_status() | CI 正確性 PASS | 先交部分欄位 |
+    | 10:40–11:40 | 2-1 | 能動版：/crc 每筆都回覆 | CI PASS | 先交目前版本 |
+    | 11:40–14:00 | 2-3 | 能動版：DMA sniffer CRC 正確 | 正確性 10 分 | 先交 CPU 版 |
+    | 14:00–16:00 | 2-3 | 優化速度 | 排名提升 | 保留最佳版 |
+    | 16:00–16:30 | 全部 | 確認最終版已 push、pipeline 通過 | pipeline 綠色 | 不再改程式 |
+    第一個能動版要做的最小改動（≤ 3 條）：2-2 先用 GET_FIELD 取 version 與 temperature
