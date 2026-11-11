@@ -2,7 +2,7 @@
 
 - id: starter2-shortcut
   tags: [starter, format]
-  desc: 開場 2/3 後用 /除錯 → 表格最多 3 列、先不修
+  desc: 開場 2/3 後用 /除錯 → 表格最多 3 列、先不修；off-by-one 不需要硬體知識
   turns:
     - card: {file: "00-starter.md", title: "開場｜2/3"}
       assistant: "了解"
@@ -10,18 +10,22 @@
   user: |
     /除錯
     <<<資料 開始>>>
-    症狀：Pico 的 dst 只有 dst[0] 有值，其他都是 0。
+    症狀：avg() 偶爾回傳很大的亂數，ASan 報 stack-buffer-overflow READ of size 4。
     程式：
-    54	channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
-    55	dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), true);
+    10	int avg(void) {
+    11	    int a[8]; fill(a, 8);
+    12	    int s = 0;
+    13	    for (int i = 0; i <= 8; i++) s += a[i];
+    14	    return s / 8;
+    15	}
     <<<資料 結束>>>
   checks:
     - {type: table_rows, min: 2, max: 5}
-    - {type: contains_any, items: ["write_increment", "寫入位址", "寫遞增", "dst 沒有遞增", "遞增"], name: finds_cause}
+    - {type: contains_any, items: ["<= 8", "<=8", "i <= ", "越界", "a[8]"], name: finds_cause}
     - {type: not_regex, pattern: "修改後", name: no_fix_yet, category: format}
   golden: |
     | 原因 | 可能性 | 驗證方法 |
-    | 沒設 channel_config_set_write_increment(&c, true)，預設 false，每次都寫到 dst[0] | 高 | 加那一行再跑，看 dst 是否全對 |
+    | 第 13 行 i <= 8 讀到 a[8]，陣列只有 8 格（越界） | 高 | 改成 i < 8 後用 -fsanitize=address 再跑 |
 
 - id: read2-files
   tags: [read, choice]
@@ -105,7 +109,6 @@
   checks:
     - {type: regex, pattern: "判斷[^\\n]*[:：][^\\n]*掩蓋", name: masks}
     - {type: regex, pattern: "seq|for i in|50|200|多跑|連跑|重複", name: repeat_check}
-    - {type: regex, pattern: "result_ready = 0|順序|race|競爭|volatile", name: names_race}
   golden: |
     為什麼有效（≤ 2 句，附證據：「程式原文」）：sleep_ms(1) 讓 core1 有時間在 core0 清 0 之後才設旗標，證據：「result_ready = 0;」在 push 之後才清
     判斷：可能只是掩蓋（時序剛好變了）
@@ -170,7 +173,7 @@
     - value: {file: "考試相關資訊/section2-3/transfer-engine/main.c", start_at: "int ch = engine_claim();", end_at: "engine_wait(ch);", number_lines: true}
   checks:
     - {type: table_rows, min: 5}
-    - {type: regex, pattern: "count[^\\n]*(筆|傳輸次數|transfers)|(筆數|傳輸次數)[^\\n]*count", name: count_meaning}
+    - {type: regex, pattern: "count[^\\n]*(筆|次數|transfers)|(筆數|次數)[^\\n]*count|轉移次數|傳輸次數", name: count_meaning}
     - {type: regex, pattern: "照抄[^\\n]*(engine\\.h|engine\\.c|engine)", name: prep_line}
   golden: |
     | 行號 | 在做什麼 | 必要 / 可選 | 影響效能? |

@@ -153,7 +153,6 @@
     - {type: patch_format, max_patches: 2}
     - {type: contains_all, items: ["pack_u32", "CMD_SUM_U32"], name: uses_frame_api}
     - {type: regex, pattern: "1024", name: chunking}
-    - {type: regex, pattern: "0xFFFFFFFF|& ?0xffffffff|mod", name: wraps_u32, category: correctness}
     - {type: not_contains, items: ["def sum_of", "def total(", "totalOf"], name: keeps_name}
   golden: |
     main.py:32

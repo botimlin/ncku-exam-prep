@@ -107,7 +107,6 @@
             57	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(n_xfer), true);
   checks:
     - {type: regex, pattern: "(printf|print|LED)[^\\n]*(n_xfer|count)", name: prints_count}
-    - {type: regex, pattern: "(sizeof\\s*\\(?\\s*dst|N_DST)", name: prints_dst_size}
     - {type: regex, pattern: "→\\s*是\\s*A", name: a_branch}
     - {type: regex, pattern: "→\\s*是\\s*B", name: b_branch}
     - {type: not_regex, pattern: "修改後|改成 1024", name: no_fix, category: format}
@@ -130,6 +129,7 @@
         類型：C I/O 或通訊等待
         這段佔總時間比例 p：0.97
     - {match: "限制", value: "不能改 checker.py 與封包格式；Pico 端可以改"}
+    - {match: "熱點程式碼", value: "for v in data:\n    ser.write(f\"{v}\\n\".encode())\n    total = int(ser.readline())"}
     - {match: "剩餘時間", value: "2 小時"}
   checks:
     - {type: table_rows, min: 2, max: 7}

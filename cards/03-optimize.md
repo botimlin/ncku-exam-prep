@@ -39,6 +39,7 @@ Task (EN): List up to 5 optimization options for this bottleneck in a table, the
 <<<資料 開始>>>
 [瓶頸] {{貼優化 1 的結果}}
 [限制] {{不能改的檔案 / 介面 / 硬體資源 / 編譯旗標}}
+[熱點程式碼]（幾行就好）{{貼}}
 [剩餘時間] {{例如 3 小時}}
 <<<資料 結束>>>
 規則：
