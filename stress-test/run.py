@@ -381,12 +381,13 @@ CATEGORY = {"regex": "format", "not_regex": "format", "max_chars": "format", "mi
             "contains_any": "correctness", "contains_all": "correctness", "not_contains": "correctness",
             "k_of": "correctness", "rank_first": "correctness", "field_matches": "correctness",
             "choice": "correctness", "table_cell": "correctness", "table_rows": "format"}
-FIELD_PAREN = r"(?:\s*[（(][^）)\n]*[）)])?"  # 欄位名後面照抄卡片的（說明）也算
+FIELD_PAREN = r"\**(?:\s*[（(][^）)\n]*[）)])?\**"  # 允許 **粗體** 標籤  # 欄位名後面照抄卡片的（說明）也算
 GLOBAL_CHECKS = [{"type": "not_empty"}, {"type": "no_simplified", "max": 4}]
 
 
 def nq(s):
     s = unicodedata.normalize("NFKC", s)
+    s = re.sub(r"[\u2010-\u2015\u2212]", "-", s)  # 各種連字號 / 破折號（gpt-oss 會輸出 U+2011）都當 -
     return re.sub(r"[\s`*]+", "", s)
 
 
