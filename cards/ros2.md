@@ -45,10 +45,10 @@
 
 【參考卡｜ROS 2 3/8｜QoS 預設值與相容性】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-環境：ROS 2 Jazzy（rclpy / rclcpp）。
+環境：ROS 2 Jazzy。
 預設 profile：
 - default（`create_publisher(T, '/t', 10)` 就是這個）：KEEP_LAST、depth 10、RELIABLE、VOLATILE。
-- sensor_data：KEEP_LAST、depth 5、BEST_EFFORT、VOLATILE。
+- sensor_data（`from rclpy.qos import qos_profile_sensor_data`）：KEEP_LAST、depth 5、BEST_EFFORT、VOLATILE。
 相容規則：publisher 提供的品質 ≥ subscription 要求才相容。
 - Reliability：pub BEST_EFFORT + sub RELIABLE → 不相容；其他相容。
 - Durability：pub VOLATILE + sub TRANSIENT_LOCAL → 不相容；兩端都 TRANSIENT_LOCAL 才收得到舊訊息。
@@ -58,7 +58,7 @@
 不相容 = 靜默失敗：無例外、topic info 的 pub/sub 數都正確，但收不到。log 只有 WARN：
 - pub 端：`New subscription discovered on topic '/x', requesting incompatible QoS. No messages will be sent to it.`
 - sub 端：`New publisher discovered on topic '/x', offering incompatible QoS. No messages will be received from it.`
-確認：`ros2 topic info -v /x` 逐端比對。
+確認：`topic info -v` 逐端比對。
 `ros2 topic echo` 會自動配合現有 publisher 的 QoS（啟動時沒 publisher 就用 sensor_data），所以「echo 看得到、我的 node 收不到」常是自己 subscription 太嚴格。重現：`ros2 topic echo /x --qos-reliability reliable` 接 best-effort publisher。
 RELIABLE + KEEP_LAST 下 subscriber 太慢，舊訊息仍會被覆蓋而掉；一筆不少需 KEEP_ALL 或夠大 depth。
 

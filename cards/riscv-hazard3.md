@@ -49,6 +49,7 @@ pseudo：
 - j=jal x0；jr=jalr x0,0(rs)；ret=jalr x0,0(ra)
 - call=auipc ra+jalr ra；tail=auipc t1+jalr x0
 - bgt/ble/bgtu/bleu a,b → blt/bge/bltu/bgeu b,a（交換運算元）
+- S 型 `sw rs2, imm(rs1)`：rs2 是要存的值、rs1 是位址；B 型 `blt rs1, rs2, L` = if (rs1 < rs2) goto L。分支用來「跳過」下面幾行時，C 的 if 條件和分支條件相反（blt 跳過 ↔ if (rs1 >= rs2)）。
 - zext.b=andi 255；csrr=csrrs rd,csr,x0
 M 擴充：除以 0 不 trap（div/divu 回傳全 1，rem 回傳被除數）；INT_MIN/-1 回傳 INT_MIN、餘 0（C 層級仍 UB）
 fence 在 Hazard3 是 no-op ⚠️未查證；寫程式碼到 RAM 後要 fence.i
