@@ -137,8 +137,8 @@ Task (EN): The table below was made by a script. Pick ONE cause A–H and say wh
 ---
 
 【提示卡｜工具 6/9｜ROS 2 節點看不到彼此】
-Task (EN): Compare side A and side B item by item, mark each OK or NG with evidence, and name the FIRST NG item. Answer in Traditional Chinese.
-任務：逐項比對兩邊，找出第一個不對的項目。ROS 2 Jazzy。
+Task (EN): For each row, copy the value from side A and side B, mark NG where they differ, then name the FIRST NG row. Answer in Traditional Chinese.
+任務：每一列先抄兩邊的值，不同就是 NG，找出第一個 NG。ROS 2 Jazzy。
 <<<資料 開始>>>
 [兩邊在哪跑] {{同容器不同 shell / 不同容器 / 主機+容器}}；docker run 參數：{{例如 --net=host}}
 [A：printenv | grep -E 'ROS_|RMW'] {{貼}}
@@ -147,16 +147,16 @@ Task (EN): Compare side A and side B item by item, mark each OK or NG with evide
 [B：ros2 node list; ros2 topic list -t] {{貼}}
 [ros2 topic info -v /{{topic}}] {{貼}}
 <<<資料 結束>>>
-只輸出（照這 8 列填，不要增減列）：
-| 項目 | 結果 OK/NG/資料中沒有 | 證據 |
-| 1 兩邊 ROS_DISTRO=jazzy | | |
-| 2 ROS_DOMAIN_ID 相同（沒設=0） | | |
-| 3 DISCOVERY_RANGE、RMW 相同 | | |
-| 4 不同容器都 --net=host | | |
-| 5 topic 名稱與 namespace 相同 | | |
-| 6 型別相同 | | |
-| 7 Pub / Sub count 都 ≥ 1 | | |
-| 8 Reliability、Durability 相容 | | |
+只輸出（照這 8 列填，不要增減列；A、B 填資料裡的原值，沒有就寫「沒設」；A ≠ B 就是 NG）：
+| 項目 | A 的值 | B 的值 | OK/NG |
+| 1 ROS_DISTRO | | | |
+| 2 ROS_DOMAIN_ID（沒設=0） | | | |
+| 3 ROS_AUTOMATIC_DISCOVERY_RANGE | | | |
+| 4 RMW_IMPLEMENTATION | | | |
+| 5 --net=host（不同容器才需要） | | | |
+| 6 topic 名稱（含 namespace） | | | |
+| 7 型別 | | | |
+| 8 Publisher / Subscription count | | | |
 第一個 NG：（寫項目編號和名稱）
 下一步（1 個指令）：
 提示：看得到 node 卻收不到資料、又是不同容器 → 可能是 Fast DDS 共享記憶體跨容器，兩邊加 `--ipc=host` 試試（⚠️未實測）。名單顯示怪就先 `ros2 daemon stop`。

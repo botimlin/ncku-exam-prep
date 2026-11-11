@@ -70,6 +70,22 @@ BOOKS = [
             "full/07-unknown-tech.md",
         ],
     ),
+    (
+        "04-提示詞卡.pdf",
+        "提示詞卡（貼上用）",
+        "壓力測試過的提示卡：開場、開考、讀題、建置、除錯、工具、優化、範本、速學",
+        [
+            "cards/00-starter.md",
+            "cards/10-exam-day-flow.md",
+            "cards/02-read-spec.md",
+            "cards/05-cmake-build.md",
+            "cards/04-debug.md",
+            "cards/06-tools-debug.md",
+            "cards/03-optimize.md",
+            "cards/09-template-adapt.md",
+            "cards/07-unknown-tech.md",
+        ],
+    ),
 ]
 
 CSS = r"""
