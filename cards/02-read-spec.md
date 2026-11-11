@@ -47,7 +47,7 @@ Task (EN): Classify every file into one category A–G, then list the 5 files to
 只輸出：
 | 路徑 | 類別 | 理由（≤ 10 字） |
 先讀（依序 5 個，每個附一句理由）：
-範例：| ./judge/run.sh | B | 評分腳本 |
+範例（只示範格式，內容不要照抄）：| ./judge/run.sh | B | 評分腳本 |
 
 ---
 

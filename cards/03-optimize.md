@@ -24,7 +24,7 @@ Task (EN): From the measurements, pick ONE bottleneck type A–F and quote the n
 證據：「量測數字原文」
 這段佔總時間比例 p：（整段拿掉的加速上限 = 1 / (1 − p)）
 還缺的量測點（選 F 時必填）：
-範例：
+範例（只示範格式，內容不要照抄）：
 瓶頸在哪一段：send_all()
 類型：C
 證據：「send 412 ms / total 480 ms」
@@ -48,7 +48,7 @@ Task (EN): List up to 5 optimization options for this bottleneck in a table, the
 只輸出：
 | 方案 | 收益 高/中/低 | 依據（量測 / 推測） | 風險 高/中/低 | 分鐘 | 驗證方式 |
 先做：（方案名稱 + 1 句理由）
-範例：| 改成批次傳送 | 高 | 量測：send 佔 86% | 低 | 15 | diff 輸出相同 + 計時 |
+範例（只示範格式，內容不要照抄）：| 改成批次傳送 | 高 | 量測：send 佔 86% | 低 | 15 | diff 輸出相同 + 計時 |
 
 ---
 
@@ -70,7 +70,7 @@ Task (EN): Implement ONE change as a minimal patch (max 15 changed lines). Keep 
 可能的副作用（1 句）：
 正確性驗證指令（1 行）：
 成功的樣子：
-範例：
+範例（只示範格式，內容不要照抄）：
 main.c:57
 修改前：for (i = 0; i < n; i++) send_one(a[i]);
 修改後：send_batch(a, n);

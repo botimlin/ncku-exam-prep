@@ -1,0 +1,433 @@
+# 工具卡：gdb（1）、sanitizer（2）、卡住（3）、序列埠 bytes（5）、ROS 2 看不到（6）、最小修改（7）
+
+- id: t1-gdb-oob
+  tags: [tools, gdb, choice]
+  desc: 迴圈 i <= n 越界 → 原因 B，位置 sum.c:9
+  card: {file: "06-tools-debug.md", title: "工具 1/9"}
+  fills:
+    - {match: "訊號", value: "SIGSEGV"}
+    - match: "bt 與 info"
+      value: |2
+        Program received signal SIGSEGV, Segmentation fault.
+        0x0000555555555189 in add_all (buf=0x7fffffffd000, n=1024) at sum.c:9
+        9	        s += buf[i];
+        #0  0x0000555555555189 in add_all (buf=0x7fffffffd000, n=1024) at sum.c:9
+        #1  0x00005555555551f2 in main () at sum.c:17
+        s = 523776
+        i = 1088
+    - match: "第一個我的函式"
+      value: |2
+             5	int add_all(int *buf, int n) {
+             6	    int s = 0;
+             7	    int i;
+             8	    for (i = 0; i <= n * 1.0625; i++)
+             9	        s += buf[i];
+            10	    return s;
+            11	}
+  checks:
+    - {type: choice, option: "陣列越界", field_in_answer: "原因"}
+    - {type: regex, pattern: "sum\\.c\\s*[:：]\\s*(9|8)\\b", name: location}
+    - {type: evidence_grounded, min_quotes: 1}
+    - {type: max_lines, max: 8}
+  golden: |
+    位置：sum.c:9 add_all
+    原因：B
+    證據：「i = 1088」「n=1024」
+    說明（1 句）：迴圈上限 n*1.0625 超過陣列長度 n
+    確認用的 gdb 指令（1 個）：print i
+
+- id: t1-gdb-null
+  tags: [tools, gdb, choice]
+  desc: p=0x0 解參考 → 原因 A
+  card: {file: "06-tools-debug.md", title: "工具 1/9"}
+  fills:
+    - {match: "訊號", value: "SIGSEGV"}
+    - match: "bt 與 info"
+      value: |2
+        Program received signal SIGSEGV, Segmentation fault.
+        0x00005555555551a4 in frame_len (f=0x0) at proto.c:31
+        31	    return f->len;
+        #0  0x00005555555551a4 in frame_len (f=0x0) at proto.c:31
+        #1  0x0000555555555233 in handle_rx (st=0x7fffffffe1c0) at proto.c:58
+        #2  0x00005555555552f0 in main () at main.c:40
+        No locals.
+    - match: "第一個我的函式"
+      value: |2
+            29	uint16_t frame_len(const frame_t *f)
+            30	{
+            31	    return f->len;
+            32	}
+  checks:
+    - {type: choice, option: "NULL", field_in_answer: "原因"}
+    - {type: regex, pattern: "proto\\.c\\s*[:：]\\s*(31|58)\\b", name: location}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    位置：proto.c:31 frame_len
+    原因：A
+    證據：「frame_len (f=0x0)」
+    說明（1 句）：handle_rx 傳了 NULL 進來，f->len 解參考 NULL
+    確認用的 gdb 指令（1 個）：frame 1
+
+- id: t1-gdb-skip-libc
+  tags: [tools, gdb, hard]
+  desc: 崩在 libc memcpy → 位置要跳過 libc，指到 parse.c:88
+  card: {file: "06-tools-debug.md", title: "工具 1/9"}
+  fills:
+    - {match: "訊號", value: "SIGSEGV"}
+    - match: "bt 與 info"
+      value: |2
+        Program received signal SIGSEGV, Segmentation fault.
+        __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:345
+        #0  __memmove_avx_unaligned_erms () at ../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:345
+        #1  0x00005555555552d1 in copy_payload (dst=0x5555555592a0 "", src=0x7fffffffd9e0 "\252U\002\001", len=65535) at parse.c:88
+        #2  0x0000555555555401 in main () at parse.c:120
+    - match: "第一個我的函式"
+      value: |2
+            84	static uint8_t payload[8192];
+            85	void copy_payload(uint8_t *dst, const uint8_t *src, uint16_t len)
+            86	{
+            87	    // len 來自封包標頭，沒檢查
+            88	    memcpy(dst, src, len);
+            89	}
+  checks:
+    - {type: regex, pattern: "位置\\s*[:：][^\\n]*parse\\.c\\s*[:：]\\s*88", name: skips_libc}
+    - {type: not_regex, pattern: "位置\\s*[:：][^\\n]*memmove", name: not_libc_frame}
+    - {type: choice, option: "陣列越界", field_in_answer: "原因"}
+    - {type: contains_any, items: ["65535", "8192"], name: cites_sizes}
+  golden: |
+    位置：parse.c:88 copy_payload
+    原因：B
+    證據：「len=65535」「static uint8_t payload[8192];」
+    說明（1 句）：len 沒檢查就 memcpy 65535 bytes 進 8192 bytes 的 buffer
+    確認用的 gdb 指令（1 個）：frame 1 然後 print len
+
+- id: t2-asan-heap
+  tags: [tools, sanitizer, choice]
+  desc: ASan heap-buffer-overflow → 類型 A，位置 main.c:12
+  card: {file: "06-tools-debug.md", title: "工具 2/9"}
+  fills:
+    - match: "報告"
+      value: |2
+        ==4242==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x514000000190 at pc 0x55d0c2a1b2c4 bp 0x7ffd2c1f0e30 sp 0x7ffd2c1f0e20
+        WRITE of size 4 at 0x514000000190 thread T0
+            #0 0x55d0c2a1b2c3 in fill /work/main.c:12
+            #1 0x55d0c2a1b3a9 in main /work/main.c:20
+            #2 0x7f3a1b42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+        0x514000000190 is located 0 bytes after 400-byte region [0x514000000000,0x514000000190)
+        allocated by thread T0 here:
+            #0 0x7f3a1b8fd9c7 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+            #1 0x55d0c2a1b38d in main /work/main.c:19
+        SUMMARY: AddressSanitizer: heap-buffer-overflow /work/main.c:12 in fill
+    - match: "報告指到"
+      value: |2
+             9	void fill(int *a, int n)
+            10	{
+            11	    for (int i = 0; i <= n; i++)
+            12	        a[i] = i * i;
+            13	}
+            ...
+            19	    int *a = malloc(100 * sizeof(int));
+            20	    fill(a, 100);
+  checks:
+    - {type: choice, option: "heap-buffer-overflow", field_in_answer: "類型"}
+    - {type: regex, pattern: "main\\.c\\s*[:：]\\s*12", name: location}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    位置：main.c:12
+    類型：A
+    證據：「0 bytes after 400-byte region」
+    誰出錯：a[100]，陣列只有 100 個 int
+    說明（1 句）：迴圈用了 i <= n
+
+- id: t2-tsan-race
+  tags: [tools, sanitizer, choice]
+  desc: TSan data race → 類型 G
+  card: {file: "06-tools-debug.md", title: "工具 2/9"}
+  fills:
+    - match: "報告"
+      value: |2
+        WARNING: ThreadSanitizer: data race (pid=5120)
+          Write of size 8 at 0x5581f3a6b018 by thread T2:
+            #0 worker /work/par.c:14 (par+0x12c9)
+          Previous write of size 8 at 0x5581f3a6b018 by thread T1:
+            #0 worker /work/par.c:14 (par+0x12c9)
+          Location is global 'total' of size 8 at 0x5581f3a6b018 (par+0x4018)
+        SUMMARY: ThreadSanitizer: data race /work/par.c:14 in worker
+    - match: "報告指到"
+      value: |2
+             8	static long total;
+             9	static void *worker(void *arg)
+            10	{
+            11	    long *v = arg;
+            12	    for (int i = 0; i < N / 2; i++)
+            13	        if (v[i] % 3 == 0)
+            14	            total += v[i];
+            15	    return NULL;
+            16	}
+  checks:
+    - {type: choice, option: "data race", field_in_answer: "類型"}
+    - {type: contains_any, items: ["total"], name: names_variable}
+    - {type: contains_any, items: ["T1", "T2", "兩個執行緒", "兩條執行緒"], name: names_threads}
+  golden: |
+    位置：par.c:14
+    類型：G
+    證據：「Location is global 'total' of size 8」
+    誰出錯（變數、越界幾 bytes，或哪兩個執行緒）：total，T1 和 T2 同時寫
+    說明（1 句）：兩個執行緒對全域 total 讀-加-寫沒有保護
+
+- id: t2-ubsan-shift
+  tags: [tools, sanitizer, choice]
+  desc: UBSan 位移量太大 → 類型 F
+  card: {file: "06-tools-debug.md", title: "工具 2/9"}
+  fills:
+    - match: "報告"
+      value: |2
+        bits.c:21:22: runtime error: shift exponent 32 is too large for 32-bit type 'unsigned int'
+        SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior bits.c:21:22 in
+    - match: "報告指到"
+      value: |2
+            18	uint32_t mask_bits(unsigned width)
+            19	{
+            20	    // width = 1..32
+            21	    return (1u << width) - 1u;
+            22	}
+  checks:
+    - {type: choice, option: "位移量太大", field_in_answer: "類型"}
+    - {type: regex, pattern: "bits\\.c\\s*[:：]\\s*21", name: location}
+    - {type: contains_any, items: ["32"], name: mentions_width}
+  golden: |
+    位置：bits.c:21
+    類型：F
+    證據：「shift exponent 32 is too large for 32-bit type 'unsigned int'」
+    誰出錯：width = 32 時 1u << 32
+    說明（1 句）：位移量等於型別寬度是 UB，width=32 要另外處理
+
+- id: t3-deadlock
+  tags: [tools, hang, choice]
+  desc: 兩把鎖順序相反 → 原因 B
+  card: {file: "06-tools-debug.md", title: "工具 3/9"}
+  fills:
+    - {match: "平台", value: "Linux pthread"}
+    - {match: "每次都卡", value: "偶爾卡"}
+    - match: "最後印出"
+      value: |2
+        t1: got lock_a
+        t2: got lock_b
+    - match: "thread apply"
+      value: |2
+        Thread 3 (Thread 0x7f2c3bfff640 (LWP 812) "app"):
+        #0  futex_wait (private=0, expected=2, futex_word=0x55e6b6a0c060 <lock_a>) at ../sysdeps/nptl/futex-internal.h:146
+        #1  __GI___lll_lock_wait (futex=futex@entry=0x55e6b6a0c060 <lock_a>, private=0) at ./nptl/lowlevellock.c:49
+        #2  0x00007f2c3c6a0002 in lll_mutex_lock_optimized (mutex=0x55e6b6a0c060 <lock_a>) at ./nptl/pthread_mutex_lock.c:48
+        #3  ___pthread_mutex_lock (mutex=0x55e6b6a0c060 <lock_a>) at ./nptl/pthread_mutex_lock.c:93
+        #4  0x000055e6b6a09321 in t2_main (arg=0x0) at app.c:31
+        Thread 2 (Thread 0x7f2c3c7ff640 (LWP 811) "app"):
+        #0  futex_wait (private=0, expected=2, futex_word=0x55e6b6a0c0a0 <lock_b>) at ../sysdeps/nptl/futex-internal.h:146
+        #1  __GI___lll_lock_wait (futex=futex@entry=0x55e6b6a0c0a0 <lock_b>, private=0) at ./nptl/lowlevellock.c:49
+        #3  ___pthread_mutex_lock (mutex=0x55e6b6a0c0a0 <lock_b>) at ./nptl/pthread_mutex_lock.c:93
+        #4  0x000055e6b6a09280 in t1_main (arg=0x0) at app.c:21
+        Thread 1 (Thread 0x7f2c3cb6e740 (LWP 810) "app"):
+        #0  __futex_abstimed_wait_common64 at ./nptl/futex-internal.c:57
+        #3  0x000055e6b6a093d0 in main () at app.c:44
+    - match: "之後的程式碼"
+      value: |2
+            18	void *t1_main(void *arg) {
+            19	    pthread_mutex_lock(&lock_a);
+            20	    puts("t1: got lock_a");
+            21	    pthread_mutex_lock(&lock_b);
+            ...
+            28	void *t2_main(void *arg) {
+            29	    pthread_mutex_lock(&lock_b);
+            30	    puts("t2: got lock_b");
+            31	    pthread_mutex_lock(&lock_a);
+  checks:
+    - {type: choice, option: "死結", field_in_answer: "原因"}
+    - {type: contains_all, items: ["lock_a", "lock_b"], name: names_both_locks}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    卡住的呼叫：app.c:21 t1_main（pthread_mutex_lock(&lock_b)），app.c:31 t2_main 等 lock_a
+    它在等：t1 等 lock_b，t2 等 lock_a
+    原因：B
+    證據：「t1: got lock_a」「t2: got lock_b」
+    確認實驗（1 個，例如在哪加 LED 或改成 timeout 版）：兩邊都改成先拿 lock_a 再拿 lock_b，跑 50 次看會不會再卡
+
+- id: t3-dma-not-started
+  tags: [tools, hang, choice, pico]
+  desc: dma_channel_configure(..., false) 沒 start → 等 DMA 完成永遠卡 → 原因 G
+  card: {file: "06-tools-debug.md", title: "工具 3/9"}
+  fills:
+    - {match: "平台", value: "Pico 單核"}
+    - {match: "每次都卡", value: "每次都卡"}
+    - match: "最後印出"
+      value: |2
+        dma copy start
+    - {match: "thread apply", value: "無"}
+    - match: "之後的程式碼"
+      value: |2
+            40	    printf("dma copy start\n");
+            41	    dma_channel_config c = dma_channel_get_default_config(ch);
+            42	    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            43	    channel_config_set_write_increment(&c, true);
+            44	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), false);
+            45	    dma_channel_wait_for_finish_blocking(ch);
+            46	    printf("dma copy done\n");
+  checks:
+    - {type: choice, option: "DMA 沒啟動", field_in_answer: "原因"}
+    - {type: regex, pattern: "(:|：|行號?)\\s*4[45]\\b|4[45]\\s*行", name: location}
+  golden: |
+    卡住的呼叫：main.c:45 dma_channel_wait_for_finish_blocking
+    它在等：DMA 通道傳完，但通道從來沒開始
+    原因：G
+    證據：「dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), false);」
+    確認實驗（1 個，例如在哪加 LED 或改成 timeout 版）：第 44 行最後一個參數改成 true（或之後加 dma_channel_start(ch)），看是否印出 dma copy done
+
+- id: t5-serial-crlf
+  tags: [tools, serial, choice]
+  desc: frame.py diff 顯示 payload 多 0d → 原因 A，Pico 端關 CRLF
+  card: {file: "06-tools-debug.md", title: "工具 5/9"}
+  fills:
+    - match: "frame.py diff"
+      value: |2
+        | 欄位 | 預期 | 實際 | 相同? |
+        | sync | aa 55 | aa 55 | 是 |
+        | cmd | 01 | 01 | 是 |
+        | seq | 07 | 07 | 是 |
+        | len | 03 00 | 03 00 | 是 |
+        | payload | 41 0a 42 | 41 0d 0a 42 | 否 |
+        | crc32 | 63 b1 db 72 | 63 b1 db 72 | 是 |
+        第一個不同：payload（預期 13 bytes，實際 14 bytes）
+        線索：實際有 0d 0a、預期沒有 → CRLF 轉換沒關；實際封包的 crc32 對不上它自己的內容
+    - {match: "送出端", value: "Pico → 電腦"}
+  checks:
+    - {type: choice, option: "多了 0D", field_in_answer: "原因"}
+    - {type: regex, pattern: "第一個不同\\s*[:：][^\\n]*payload", name: first_diff}
+    - {type: regex, pattern: "哪一端要改[^\\n]*[:：][^\\n]*(Pico|板|pico|CRLF|crlf|stdio)", name: which_side}
+    - {type: evidence_grounded, min_quotes: 1}
+    - {type: max_lines, max: 6}
+  golden: |
+    第一個不同：payload（預期 13 bytes，實際 14 bytes）
+    原因：A
+    證據：「| payload | 41 0a 42 | 41 0d 0a 42 | 否 |」
+    哪一端要改（檔案或設定）：Pico 端，關掉 CRLF 轉換（PICO_STDIO_DEFAULT_CRLF=0）
+
+- id: t5-serial-endian
+  tags: [tools, serial, choice]
+  desc: frame.py diff 顯示 len 對調 → 原因 C
+  card: {file: "06-tools-debug.md", title: "工具 5/9"}
+  fills:
+    - match: "frame.py diff"
+      value: |2
+        | 欄位 | 預期 | 實際 | 相同? |
+        | sync | aa 55 | aa 55 | 是 |
+        | cmd | 02 | 02 | 是 |
+        | seq | 01 | 01 | 是 |
+        | len | 04 00 | 00 04 | 否 |
+        | payload | 0a 00 00 00 | 0a 00 00 00 | 是 |
+        | crc32 | d2 71 5c 75 | d2 71 5c 75 | 是 |
+        第一個不同：len（預期 14 bytes，實際 14 bytes）
+        線索：len 兩個 byte 對調 → 大小端顛倒；實際封包的 crc32 對不上它自己的內容
+    - {match: "送出端", value: "電腦 → Pico"}
+  checks:
+    - {type: choice, option: "大小端顛倒", field_in_answer: "原因"}
+    - {type: regex, pattern: "第一個不同\\s*[:：][^\\n]*len", name: first_diff_len}
+    - {type: regex, pattern: "哪一端要改[^\\n]*[:：][^\\n]*(電腦|送出|host|Python|frame|struct|<H)", name: which_side}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    第一個不同：len（預期 14 bytes，實際 14 bytes）
+    原因：C
+    證據：「| len | 04 00 | 00 04 | 否 |」
+    哪一端要改（檔案或設定）：電腦端送出程式，len 改用 struct "<H"
+
+- id: t6-ros-domain
+  tags: [tools, ros2]
+  desc: 兩邊 ROS_DOMAIN_ID 不同 → 第一個 NG = 項目 2
+  card: {file: "06-tools-debug.md", title: "工具 6/9"}
+  fills:
+    - {match: "兩邊在哪跑", value: "不同容器"}
+    - {match: "docker run", value: "兩邊都 --net=host"}
+    - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_DOMAIN_ID=7\nROS_VERSION=2"}
+    - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+    - {match: "A：ros2 node", value: "/publisher\n/number [std_msgs/msg/Int32]"}
+    - {match: "B：ros2 node", value: "（空的）\n/parameter_events [rcl_interfaces/msg/ParameterEvent]\n/rosout [rcl_interfaces/msg/Log]"}
+    - {match: "topic", value: "number"}
+    - {match: "topic info", value: "（在 B 執行）Unknown topic '/number'"}
+  checks:
+    - {type: regex, pattern: "第一個 NG\\s*[:：][^\\n]*(2|ROS_DOMAIN_ID|DOMAIN)", name: first_ng_domain}
+    - {type: contains_any, items: ["ROS_DOMAIN_ID"], name: mentions_var}
+    - {type: table_rows, min: 6}
+  golden: |
+    | 項目 | 結果 OK/NG/資料中沒有 | 證據 |
+    | 1 | OK | 「ROS_DISTRO=jazzy」 |
+    | 2 | NG | 「ROS_DOMAIN_ID=7」（B 沒設 = 0） |
+    | 3 | OK | 兩邊都沒設 |
+    | 4 | OK | 「兩邊都 --net=host」 |
+    | 5 | 資料中沒有 | B 看不到 /number |
+    | 6 | 資料中沒有 | |
+    | 7 | NG | 「Unknown topic '/number'」 |
+    | 8 | 資料中沒有 | |
+    第一個 NG：2 ROS_DOMAIN_ID 不同
+    下一步（1 個指令）：在 B 執行 export ROS_DOMAIN_ID=7 && ros2 daemon stop && ros2 topic list
+
+- id: t6-ros-typo
+  tags: [tools, ros2]
+  desc: topic 名稱差一個字 → 第一個 NG = 項目 5
+  card: {file: "06-tools-debug.md", title: "工具 6/9"}
+  fills:
+    - {match: "兩邊在哪跑", value: "同容器不同 shell"}
+    - {match: "docker run", value: "（同容器）"}
+    - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+    - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+    - {match: "A：ros2 node", value: "/processor\n/publisher\n/double [std_msgs/msg/Int32]\n/number [std_msgs/msg/Int32]\n/numbr [std_msgs/msg/Int32]"}
+    - {match: "B：ros2 node", value: "/processor\n/publisher\n/double [std_msgs/msg/Int32]\n/number [std_msgs/msg/Int32]\n/numbr [std_msgs/msg/Int32]"}
+    - {match: "topic", value: "number"}
+    - {match: "topic info", value: "Type: std_msgs/msg/Int32\nPublisher count: 1\nSubscription count: 0"}
+  checks:
+    - {type: regex, pattern: "第一個 NG\\s*[:：][^\\n]*(5|名稱|numbr)", name: first_ng_name}
+    - {type: contains_any, items: ["/numbr", "numbr"], name: spots_typo}
+  golden: |
+    | 項目 | 結果 OK/NG/資料中沒有 | 證據 |
+    | 1 | OK | 「ROS_DISTRO=jazzy」 |
+    | 2 | OK | 兩邊都沒設 |
+    | 3 | OK | 兩邊都沒設 |
+    | 4 | OK | 「（同容器）」 |
+    | 5 | NG | 「/numbr [std_msgs/msg/Int32]」和 /number 不同 |
+    | 6 | OK | 都是 Int32 |
+    | 7 | NG | 「Subscription count: 0」 |
+    | 8 | 資料中沒有 | |
+    第一個 NG：5 topic 名稱不同（/numbr vs /number）
+    下一步（1 個指令）：ros2 node info /processor
+
+- id: t7-patch-oob
+  tags: [tools, patch]
+  desc: 依工具 1 定位結果做最小修改；名稱不變
+  card: {file: "06-tools-debug.md", title: "工具 7/9"}
+  fills:
+    - match: "定位結果"
+      value: |2
+        位置：sum.c:9 add_all
+        原因：B
+        證據：「i = 1088」「n=1024」
+        說明：迴圈上限 n*1.0625 超過陣列長度 n
+    - match: "要改的程式碼"
+      value: |2
+             5	int add_all(int *buf, int n) {
+             6	    int s = 0;
+             7	    int i;
+             8	    for (i = 0; i <= n * 1.0625; i++)
+             9	        s += buf[i];
+            10	    return s;
+            11	}
+    - {match: "不能改", value: "函式名稱 add_all 與參數"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "修改後\\s*[:：][^\\n]*i\\s*<\\s*n\\b", name: fixes_bound}
+    - {type: regex, pattern: "sum\\.c\\s*[:：]\\s*[89]\\b", name: right_line}
+    - {type: not_contains, items: ["sum_all", "addAll", "add_all2"], name: keeps_names}
+    - {type: no_full_dump, max_copied_lines: 3}
+  golden: |
+    sum.c:8
+    修改前：for (i = 0; i <= n * 1.0625; i++)
+    修改後：for (i = 0; i < n; i++)
+    為什麼（1 句）：buf 只有 n 格
+    驗證指令（1 行）：gcc -g -fsanitize=address sum.c -o s && ./s
+    成功的樣子：沒有 ERROR，結果等於 0..n-1 的總和

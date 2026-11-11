@@ -1,0 +1,235 @@
+# 建置卡：CMake / 連結錯誤分類（建置 2/7）、最小修改建置檔（建置 4/7）
+# 錯誤訊息全部取自 預製程式碼/tools/cmake.md §6（實際製造出來的錯誤）
+
+- id: b2-header-dma
+  tags: [build, cmake, choice]
+  desc: 少 link hardware_dma → fatal error hardware/dma.h → 類別 D
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake -B build -DPICO_BOARD=pico2 && cmake --build build -j"}
+    - match: "error 前後"
+      value: |
+        [ 25%] Building C object CMakeFiles/app_dma.dir/app_dma.c.o
+        /src/app_dma.c:20:10: fatal error: hardware/dma.h: No such file or directory
+           20 | #include "hardware/dma.h"
+              |          ^~~~~~~~~~~~~~~~
+        compilation terminated.
+        gmake[2]: *** [CMakeFiles/app_dma.dir/build.make:76: CMakeFiles/app_dma.dir/app_dma.c.o] Error 1
+    - match: "CMakeLists"
+      value: |
+        add_executable(app_dma app_dma.c)
+        target_link_libraries(app_dma pico_stdlib)
+        pico_enable_stdio_usb(app_dma 1)
+  checks:
+    - {type: choice, option: "找不到 header", field_in_answer: "類別"}
+    - {type: evidence_grounded, min_quotes: 1}
+    - {type: contains_any, items: ["hardware_dma"], name: names_library}
+    - {type: max_lines, max: 8}
+  golden: |
+    類別：D
+    證據：「fatal error: hardware/dma.h: No such file or directory」
+    原因（1 句）：app_dma 沒有 link hardware_dma
+    要修的檔案與位置：CMakeLists.txt 的 target_link_libraries(app_dma pico_stdlib) 加 hardware_dma
+
+- id: b2-undef-multicore
+  tags: [build, cmake, choice]
+  desc: 有 include 但沒 link pico_multicore → undefined reference → 類別 E
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake --build build -j"}
+    - match: "error 前後"
+      value: |
+        [100%] Linking CXX executable app_multicore.elf
+        /usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/bin/ld: CMakeFiles/app_multicore.dir/app_multicore.c.o: in function `main':
+        app_multicore.c:(.text.startup.main+0x2a): undefined reference to `multicore_launch_core1'
+        collect2: error: ld returned 1 exit status
+        gmake[2]: *** [CMakeFiles/app_multicore.dir/build.make:1203: app_multicore.elf] Error 1
+    - match: "CMakeLists"
+      value: |
+        add_executable(app_multicore app_multicore.c)
+        target_include_directories(app_multicore PRIVATE ${PICO_SDK_PATH}/src/rp2_common/pico_multicore/include)
+        target_link_libraries(app_multicore pico_stdlib)
+  checks:
+    - {type: choice, option: "undefined reference", field_in_answer: "類別"}
+    - {type: evidence_grounded, min_quotes: 1}
+    - {type: contains_any, items: ["pico_multicore"], name: names_library}
+  golden: |
+    類別：E
+    證據：「undefined reference to `multicore_launch_core1'」
+    原因（1 句）：有 include 但沒 link pico_multicore
+    要修的檔案與位置：CMakeLists.txt 的 target_link_libraries(app_multicore …) 加 pico_multicore
+
+- id: b2-import-after-project
+  tags: [build, cmake, choice, hard]
+  desc: pico_sdk_import 寫在 project() 後 → '.syntax' 組譯錯誤 → 類別 C（順序），且原因要指出順序
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake -B build -DPICO_BOARD=pico2 && cmake --build build"}
+    - match: "error 前後"
+      value: |
+        [  1%] Building ASM object pico-sdk/src/rp2350/boot_stage2/CMakeFiles/bs2_default.dir/compile_time_choice.S.o
+        /opt/pico-sdk/src/rp2350/boot_stage2/boot2_w25q080.S: Assembler messages:
+        /opt/pico-sdk/src/rp2350/boot_stage2/boot2_w25q080.S:22: Error: unknown pseudo-op: `.syntax'
+        /opt/pico-sdk/src/rp2350/boot_stage2/boot2_w25q080.S:23: Error: unknown pseudo-op: `.cpu'
+        gmake[2]: *** [pico-sdk/src/rp2350/boot_stage2/CMakeFiles/bs2_default.dir/build.make:76] Error 1
+    - match: "CMakeLists"
+      value: |
+        cmake_minimum_required(VERSION 3.13)
+        project(exam C CXX ASM)
+        include(pico_sdk_import.cmake)
+        pico_sdk_init()
+        add_executable(app main.c)
+  checks:
+    - {type: choice, option: "語法或順序", field_in_answer: "類別"}
+    - {type: regex, pattern: "pico_sdk_import[^\\n]{0,40}(前|before)|project\\(\\)?[^\\n]{0,20}(後|之後|after)|順序", name: mentions_order}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    類別：C
+    證據：「include(pico_sdk_import.cmake)」寫在「project(exam C CXX ASM)」之後
+    原因（1 句）：pico_sdk_import 要在 project() 前面，順序錯了所以用到電腦的 gcc
+    要修的檔案與位置：CMakeLists.txt 第 2、3 行對調，然後 rm -rf build
+
+- id: b2-no-sdk-path
+  tags: [build, cmake, choice]
+  desc: PICO_SDK_PATH 沒設 → 類別 A
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake -B build -DPICO_BOARD=pico2"}
+    - match: "error 前後"
+      value: |
+        CMake Error at pico_sdk_import.cmake:68 (message):
+          SDK location was not specified.  Please set PICO_SDK_PATH or set
+          PICO_SDK_FETCH_FROM_GIT to on to fetch from git.
+        Call Stack (most recent call first):
+          CMakeLists.txt:2 (include)
+        -- Configuring incomplete, errors occurred!
+    - match: "CMakeLists"
+      value: |
+        cmake_minimum_required(VERSION 3.13)
+        include(pico_sdk_import.cmake)
+        project(exam C CXX ASM)
+  checks:
+    - {type: choice, option: "找不到 SDK", field_in_answer: "類別"}
+    - {type: contains_any, items: ["PICO_SDK_PATH"]}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    類別：A
+    證據：「SDK location was not specified.  Please set PICO_SDK_PATH」
+    原因（1 句）：環境變數 PICO_SDK_PATH 沒設
+    要修的檔案與位置：shell 執行 export PICO_SDK_PATH=/opt/pico-sdk，再 rm -rf build 重新 configure
+
+- id: b2-cache-moved
+  tags: [build, cmake, choice]
+  desc: 搬資料夾 → CMakeCache 目錄不同 → 類別 B
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake -B build -DPICO_BOARD=pico2"}
+    - match: "error 前後"
+      value: |
+        CMake Error: The current CMakeCache.txt directory /work/exam/build/CMakeCache.txt is different than the directory /home/user/exam/build where CMakeCache.txt was created. This may result in binaries being created in the wrong place. If you are not sure, reedit the CMakeCache.txt
+        CMake Error: The source "/work/exam/CMakeLists.txt" does not match the source "/home/user/exam/CMakeLists.txt" used to generate cache.  Re-run cmake with a different source directory.
+    - {match: "CMakeLists", value: "（沒有改過）"}
+    - {match: "最近改了", value: "把整個 exam 資料夾從家目錄複製到 /work"}
+  checks:
+    - {type: choice, option: "cache 殘留", field_in_answer: "類別"}
+    - {type: contains_any, items: ["rm -rf build", "刪掉 build", "刪除 build"], name: fix_rm_build}
+  golden: |
+    類別：B
+    證據：「The current CMakeCache.txt directory /work/exam/build/CMakeCache.txt is different than the directory /home/user/exam/build」
+    原因（1 句）：build/ 跟著搬過來，快取記的是舊路徑
+    要修的檔案與位置：rm -rf build 後重新 cmake -B build
+
+- id: b2-ram-overflow
+  tags: [build, cmake, choice]
+  desc: 大陣列 → region RAM overflowed → 類別 G
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake --build build -j"}
+    - match: "error 前後"
+      value: |
+        [100%] Linking CXX executable app_serial.elf
+        /usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/bin/ld: app_serial.elf section `.bss' will not fit in region `RAM'
+        /usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/bin/ld: region `RAM' overflowed by 1572864 bytes
+        collect2: error: ld returned 1 exit status
+    - {match: "CMakeLists", value: "add_executable(app_serial app_serial.c serial_proto.c)"}
+    - {match: "最近改了", value: "serial_proto.h 的 FRAME_MAX_PAYLOAD 從 8192 改成 2097152"}
+  checks:
+    - {type: choice, option: "overflowed", field_in_answer: "類別"}
+    - {type: contains_any, items: ["FRAME_MAX_PAYLOAD"], name: points_to_cause}
+  golden: |
+    類別：G
+    證據：「region `RAM' overflowed by 1572864 bytes」
+    原因（1 句）：FRAME_MAX_PAYLOAD 改成 2097152，buffer 超過 RAM
+    要修的檔案與位置：serial_proto.h 的 FRAME_MAX_PAYLOAD 改回 8192 或更小
+
+- id: b2-multiple-def
+  tags: [build, cmake, choice]
+  desc: header 裡定義變數 → multiple definition → 類別 F
+  card: {file: "05-cmake-build.md", title: "建置 2/7"}
+  fills:
+    - {match: "指令", value: "cmake --build build"}
+    - match: "error 前後"
+      value: |
+        /usr/bin/ld: CMakeFiles/app.dir/worker.c.o:/work/exam/shared.h:5: multiple definition of `g_counter'; CMakeFiles/app.dir/main.c.o:/work/exam/shared.h:5: first defined here
+        collect2: error: ld returned 1 exit status
+    - {match: "CMakeLists", value: "add_executable(app main.c worker.c)"}
+  checks:
+    - {type: choice, option: "multiple definition", field_in_answer: "類別"}
+    - {type: contains_any, items: ["extern"], name: mentions_extern}
+  golden: |
+    類別：F
+    證據：「multiple definition of `g_counter'」
+    原因（1 句）：shared.h 第 5 行定義了變數，兩個 .c 都 include
+    要修的檔案與位置：shared.h:5 改成 extern 宣告，定義只放在 main.c（用 extern）
+
+- id: b4-add-lib
+  tags: [build, cmake, patch]
+  desc: 建置 4：給最小修改加 hardware_dma，保持原風格（沒 PRIVATE）
+  card: {file: "05-cmake-build.md", title: "建置 4/7"}
+  fills:
+    - {match: "要做的事", value: "app_dma 要用 hardware/dma.h（目前 fatal error: hardware/dma.h: No such file or directory）"}
+    - match: "檔案段落"
+      value: |
+            30	add_executable(app_dma app_dma.c)
+            31	target_link_libraries(app_dma pico_stdlib)
+            32	pico_enable_stdio_usb(app_dma 1)
+            33	pico_enable_stdio_uart(app_dma 0)
+            34	pico_add_extra_outputs(app_dma)
+    - {match: "不能改", value: "target 名稱 app_dma"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "target_link_libraries\\(app_dma[^)\\n]*hardware_dma", name: adds_hardware_dma}
+    - {type: not_regex, pattern: "target_link_libraries\\(app_dma\\s+PRIVATE", name: keeps_plain_style}
+    - {type: regex, pattern: "rm -rf build[^\\n]*[:：]\\s*否", name: no_rm_needed}
+    - {type: no_full_dump, max_copied_lines: 3}
+  golden: |
+    CMakeLists.txt:31
+    修改前：target_link_libraries(app_dma pico_stdlib)
+    修改後：target_link_libraries(app_dma pico_stdlib hardware_dma)
+    要不要 rm -rf build：否（只加 link）
+    驗證指令（1 行）：cmake --build build -j && ls -l build/app_dma.uf2
+    成功的樣子：沒有 error，app_dma.uf2 是剛產生的
+
+- id: b4-keep-private
+  tags: [build, cmake, patch, hard]
+  desc: 原本用 PRIVATE → 新增 pico_multicore 也要用 PRIVATE（混用會 configure 失敗）
+  card: {file: "05-cmake-build.md", title: "建置 4/7"}
+  fills:
+    - {match: "要做的事", value: "app 要用 multicore_launch_core1（pico/multicore.h）"}
+    - match: "檔案段落"
+      value: |
+            12	add_executable(app main.c)
+            13	target_link_libraries(app PRIVATE pico_stdlib hardware_dma)
+            14	pico_add_extra_outputs(app)
+    - {match: "不能改", value: "target 名稱 app"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "target_link_libraries\\(app\\s+PRIVATE[^)\\n]*pico_multicore", name: keeps_private}
+    - {type: not_regex, pattern: "^\\s*target_link_libraries\\(app\\s+pico_multicore", name: no_mixed_plain, category: correctness}
+  golden: |
+    CMakeLists.txt:13
+    修改前：target_link_libraries(app PRIVATE pico_stdlib hardware_dma)
+    修改後：target_link_libraries(app PRIVATE pico_stdlib hardware_dma pico_multicore)
+    要不要 rm -rf build：否（只加 link）
+    驗證指令（1 行）：cmake --build build -j
+    成功的樣子：沒有 undefined reference to multicore_launch_core1

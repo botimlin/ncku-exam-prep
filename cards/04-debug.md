@@ -26,7 +26,7 @@ Task (EN): List up to 3 likely causes ranked by likelihood, each with evidence a
 2. 驗證方法要是 1 個指令或 1 個小改動。
 只輸出：
 | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
-範例：| 1 | DMA count 填成 bytes | 高 | 「dma_channel_configure(..., 4096, true)」 | 印出 count | 4096 而非 1024 → 確認 |
+範例（只示範格式，內容不要照抄）：| 1 | DMA count 填成 bytes | 高 | 「dma_channel_configure(..., 4096, true)」 | 印出 count | 4096 而非 1024 → 確認 |
 
 ---
 
@@ -46,7 +46,7 @@ Task (EN): Design ONE minimal experiment that tells hypothesis A from B. Do not 
 如果看到 ___ → 是 A
 如果看到 ___ → 是 B
 都不是 → 下一個要懷疑的：
-範例：
+範例（只示範格式，內容不要照抄）：
 1. worker.c:30 迴圈後加 printf("n=%u\n", n)
 如果看到 n=1024 → 是 A
 如果看到 n=4096 → 是 B
@@ -67,7 +67,7 @@ Task (EN): Explain the FIRST error in one plain sentence, then list its 3 most c
 白話（1 句）：
 | 常見原因 | 怎麼檢查（1 個指令） |（3 列）
 先檢查：第幾列（理由 1 句）
-範例：
+範例（只示範格式，內容不要照抄）：
 第一個錯誤：「undefined reference to `dma_channel_claim'」
 白話：連結時找不到這個函式的實作
 | 沒 link hardware_dma | grep -n target_link_libraries CMakeLists.txt |
@@ -90,7 +90,7 @@ Task (EN): Explain why the change fixed the symptom, judge if it is a root-cause
 理由（1 句）：
 確認指令（1 行）：
 成功的樣子：
-範例：
+範例（只示範格式，內容不要照抄）：
 確認指令：for i in $(seq 50); do ./prog; done | sort | uniq -c
 成功的樣子：只有一種輸出，而且和 expected 相同
 

@@ -22,7 +22,7 @@ Task (EN): Classify every path into one category A–G. Use only the data. Answe
 | 路徑 | 類別 | 理由（≤ 10 字） |
 技術判斷（每項 是 / 否 + 證據檔名）：ROS 2（package.xml、*.launch.py）、pico-sdk（pico_sdk_import.cmake、*.pio）、micro-ROS（libmicroros）、純 Linux C、Python
 先打開的 5 個檔：
-範例：| ./.gitlab-ci.yml | B | CI 評分 |
+範例（只示範格式，內容不要照抄）：| ./.gitlab-ci.yml | B | CI 評分 |
 
 ---
 
@@ -45,7 +45,7 @@ Task (EN): Explain each CI job in the fixed slots. Quote the YAML lines. Use onl
 5 評分怎麼判定、分數印在 log 哪裡：
 6 本地重現的指令（照 script 抄）：
 7 不能改的檔名 / 路徑 / target / 輸出格式：
-範例：3 觸發條件：commit message 要含題號　證據：「if: $CI_COMMIT_MESSAGE =~ /Q1/」
+範例（只示範格式，內容不要照抄）：3 觸發條件：commit message 要含題號　證據：「if: $CI_COMMIT_MESSAGE =~ /Q1/」
 
 ---
 
@@ -93,7 +93,7 @@ I DMA 複製、count 單位、unclaim、sniffer CRC、DMA+PIO → pico/app_dma.c
 規則：選不出來就選「都不像」。
 只輸出：
 | 小題 | 類別 | 證據：「題目原句」 | 範本 |
-範例：| 2-3 | I | 「count 是筆數不是位元組」 | pico/app_dma.c |
+範例（只示範格式，內容不要照抄）：| 2-3 | I | 「count 是筆數不是位元組」 | pico/app_dma.c |
 
 ---
 
@@ -115,4 +115,4 @@ Task (EN): Make a time plan table. Every sub-question first gets a working versi
 只輸出：
 | 時段 | 小題 | 目標（能動版 / 某項優化） | 完成判準 | 超時備案 |
 第一個能動版要做的最小改動（≤ 3 條）：
-範例：| 0:30–1:10 | 2-3 | 能動版：DMA count 改筆數 | CI 正確性 PASS | 先交 CPU 版 |
+範例（只示範格式，內容不要照抄）：| 0:30–1:10 | 2-3 | 能動版：DMA count 改筆數 | CI 正確性 PASS | 先交 CPU 版 |

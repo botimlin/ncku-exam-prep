@@ -27,7 +27,7 @@ Task (EN): Fill the table using only the CMakeLists.txt and CI script below. Quo
 | 輸出檔與位置 | | |
 | judge 的 configure 指令 | | |
 | judge 的 build 指令 | | |
-範例：| 連的函式庫 | app_dma：pico_stdlib、hardware_dma | 「target_link_libraries(app_dma hardware_dma)」 |
+範例（只示範格式，內容不要照抄）：| 連的函式庫 | app_dma：pico_stdlib、hardware_dma | 「target_link_libraries(app_dma hardware_dma)」 |
 
 ---
 
@@ -43,13 +43,13 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 {{貼}}
 [環境] pico-sdk {{2.2.0}}；PICO_BOARD={{pico2}}；PICO_PLATFORM={{rp2350-arm-s}}；最近改了 {{…}}
 <<<資料 結束>>>
-類別：A 找不到 SDK / pico_sdk_import　B cache 殘留（換過 board / platform）　C CMake 語法或順序　D 找不到 header　E undefined reference　F multiple definition　G RAM / flash overflowed　H 其他
+類別：A 找不到 SDK / pico_sdk_import　B cache 殘留（換過 board / platform）　C CMake 語法或順序（例：pico_sdk_import 在 project() 後 → unknown pseudo-op .syntax）　D 找不到 header　E undefined reference　F multiple definition（header 變數改 extern）　G RAM / flash overflowed　H 其他
 只輸出 4 行：
 類別：
 證據：「錯誤原文」
 原因（1 句）：
-要修的檔案與位置：
-範例：
+要修的檔案與位置：（D、E 寫出函式庫名：hardware/xxx.h → hardware_xxx；B 一律 rm -rf build 重來）
+範例（只示範格式，內容不要照抄）：
 類別：D
 證據：「fatal error: hardware/dma.h: No such file or directory」
 原因：app_dma 沒 link hardware_dma
@@ -91,8 +91,8 @@ Task (EN): Output a minimal patch (max 6 changed lines) for the build file below
 <<<資料 結束>>>
 規則：
 1. 最多改 6 行，只改資料中的檔案。
-2. 照原本寫法：原本 target_link_libraries 沒寫 PRIVATE，就繼續不寫（混用會 configure 失敗）。
-3. 函式庫名：`hardware/xxx.h` → `hardware_xxx`；`pico/xxx.h` → `pico_xxx`。
+2. 加函式庫：修改後 = 修改前那一行，只在最後的 `)` 前面加「空格 + 新名稱」，其他字（含 PRIVATE）一個都不動。
+3. 名稱看 header，不是函式名：`hardware/xxx.h` → `hardware_xxx`；`pico/xxx.h` → `pico_xxx`。
 只輸出：
 檔名:行號
 修改前：
@@ -100,7 +100,7 @@ Task (EN): Output a minimal patch (max 6 changed lines) for the build file below
 要不要 rm -rf build：是 / 否（理由 1 句）
 驗證指令（1 行）：
 成功的樣子：
-範例：
+範例（只示範格式，內容不要照抄）：
 CMakeLists.txt:37
 修改前：target_link_libraries(app_dma hardware_dma)
 修改後：target_link_libraries(app_dma hardware_dma hardware_pio)

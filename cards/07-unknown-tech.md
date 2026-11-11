@@ -37,7 +37,7 @@ Task (EN): List only functions that appear in the pasted header, in usage order,
 只輸出：
 | ★ | 函式 | 用途 | 阻塞? 是/否/看不出 | 重要參數 | 回傳值 |
 struct / enum（≤ 5 列）：| 名稱 | 用途 |
-範例：| ★ | dma_channel_configure | 設定並可立即啟動 | 否 | count = 傳輸次數 | 無 |
+範例（只示範格式，內容不要照抄）：| ★ | dma_channel_configure | 設定並可立即啟動 | 否 | count = 傳輸次數 | 無 |
 
 ---
 
@@ -53,7 +53,7 @@ Task (EN): Explain the example line by line in a table: what it does, required o
 只輸出：
 | 行號 | 在做什麼 | 必要 / 可選 | 影響效能?（buffer、批次、模式、硬體加速） |
 最後 1 行：照抄這個範例要先準備什麼（檔案、函式庫、硬體接線）。
-範例：| 12 | 設定每次傳 32 bit | 必要 | 是：搭配 count 決定總量 |
+範例（只示範格式，內容不要照抄）：| 12 | 設定每次傳 32 bit | 必要 | 是：搭配 count 決定總量 |
 
 ---
 

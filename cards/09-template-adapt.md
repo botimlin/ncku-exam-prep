@@ -44,7 +44,7 @@ Task (EN): Map each requirement in the spec to the template. Fill the table; sta
 只輸出這個表，每格 ≤ 1 行，最多 10 列：
 | 題目要求 | 範本對應（函式 / 常數 / 行號） | 狀態 | 證據 |
 表後再輸出 1 行：先做哪一列（能最快跑出第一版的那列）。
-範例：
+範例（只示範格式，內容不要照抄）：
 | 回傳 u32 總和 | handle() 的 CMD_SUM_U32（app_serial.c:30） | 直接可用 | 「case CMD_SUM_U32」 |
 | topic 叫 /input | node_template.py 的 in_topic | 要改 | 「declare_parameter("in_topic", "/number")」 |
 
@@ -71,7 +71,7 @@ Task (EN): Edit only the template block below to meet the spec. Output a minimal
 另一端要改：（沒有寫「無」）
 驗證指令（1 行）：
 成功的樣子：
-範例：
+範例（只示範格式，內容不要照抄）：
 app_serial.c:37
 修改前：sum += v;   // TODO(改這裡)
 修改後：sum += v * v;   // TODO(改這裡) // 已改：平方和
@@ -141,7 +141,7 @@ Task (EN): List every interface difference between the spec and the template in 
 只輸出：
 | 項目 | 題目 | 範本 | 要改的檔案:函式 |
 改法（1 句）：在哪一層加轉換
-範例：| len 大小端 | big-endian | `<H` 小端 | frame.py:encode、serial_proto.c:proto_feed |
+範例（只示範格式，內容不要照抄）：| len 大小端 | big-endian | `<H` 小端 | frame.py:encode、serial_proto.c:proto_feed |
 
 ---
 
@@ -164,4 +164,4 @@ Task (EN): Review the diff against the checklist. For each item answer exactly O
 只輸出：
 | # | 結果 | 證據（diff 那一行） |
 最嚴重的 1 個問題與修法（≤ 2 行）：
-範例：| 3 | 有問題 | 「dma_channel_configure(ch, &c, dst, src, n, true)」少 write_increment |
+範例（只示範格式，內容不要照抄）：| 3 | 有問題 | 「dma_channel_configure(ch, &c, dst, src, n, true)」少 write_increment |

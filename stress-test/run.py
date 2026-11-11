@@ -367,8 +367,8 @@ def build_case(case, cards, variant="card", paste_limit=None):
 
 
 # ============================================================ checks
-EVID_RE = re.compile(r"(?:證據|依據|出處|原文|[Ee]vidence|[Qq]uote)\s*[:：]\s*((?:[「『“\"][^」』”\"\n]{1,400}[」』”\"]\s*[、,，;；及和]?\s*)+)")
-QUOTE_RE = re.compile(r"[「『“\"]([^」』”\"\n]{1,400})[」』”\"]")
+EVID_RE = re.compile(r"(?:證據|依據|出處|原文|[Ee]vidence|[Qq]uote)\s*[:：]\s*((?:[「『“\"`][^」』”\"`\n]{1,400}[」』”\"`]\s*[、,，;；及和]?\s*)+)")
+QUOTE_RE = re.compile(r"[「『“\"`]([^」』”\"`\n]{1,400})[」』”\"`]")  # 反引號 `…` 也算逐字引用
 FENCE_RE = re.compile(r"```[^\n]*\n(.*?)(?:```|\Z)", re.S)
 SIMPLIFIED = set("这们个为说时码数据题错误应该将对设计还过实现问务样处与关键线输读写执锁断满载变环检测验调试优连传递级缓区节点")
 ABSENT_DEFAULT = ["資料中沒有"]
@@ -557,6 +557,9 @@ def run_check(chk, resp, ctx):
         r["passed"], r["detail"] = len(bad) <= chk.get("max", 4), f"{len(bad)} simplified-only chars {''.join(bad[:10])}"
     elif t == "evidence_grounded":
         quotes = collect_quotes(resp, chk.get("fields", []))
+        # 卡片自己的佔位字（例如表頭「證據：「原文」」）被模型照抄時不算引用
+        card_nq = nq(ctx["card"].text) if ctx["card"] else ""
+        quotes = [q for q in quotes if not (card_nq and nq(q) and nq(q) in card_nq and len(nq(q)) <= 12)]
         minq = chk.get("min_quotes", "auto")
         if minq == "auto":
             minq = 1 if (ctx["card"] and "證據" in ctx["card"].text) else 0
@@ -1069,7 +1072,7 @@ def cmd_list_cards(cards, problems, cases):
     print(f"{'file':24s} {'kind':5s} {'chars':>5s} {'blanks':>6s} {'en':2s} {'cases':>5s}  title")
     for c in cards:
         flag = "!" if len(c.text) > CARD_BUDGET else " "
-        print(f"{c.file:24s} {c.kind[:3]:5s} {len(c.text):5d}{flag} {len(c.blanks):6d} {'y' if c.en_text else '-':2s} {refs[c.key]:5d}  {c.title}")
+        print(f"{c.file:24s} {c.kind[:3]:5s} {len(c.text):5d}{flag} {len(c.blanks):6d} {'y' if (c.en_block or c.has_task_en) else '-':2s} {refs[c.key]:5d}  {c.title}")
     files = sorted({c.file for c in cards})
     print(f"\n{len(cards)} cards in {len(files)} files; {sum(len(c.text) > CARD_BUDGET for c in cards)} over {CARD_BUDGET} chars")
     for p in problems:

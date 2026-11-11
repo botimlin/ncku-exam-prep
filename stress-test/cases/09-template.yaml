@@ -1,0 +1,256 @@
+# 範本卡：開場補充（1）、規格對照（2）、改 TODO（3）、二進位批次（4）、檢查清單（7）
+
+- id: tpl1-ack
+  tags: [template, format]
+  desc: 範本 1/7 讀完只回「了解」
+  dummy_ok: true
+  card: {file: "09-template-adapt.md", title: "範本 1/7"}
+  checks:
+    - {type: contains_any, items: ["了解"]}
+    - {type: max_chars, max: 20}
+  golden: "了解"
+
+- id: tpl2-map
+  tags: [template, grounding]
+  desc: 題目要求對到 serial_bridge.py；/input 要改、/numbers 現有；「回傳最大值」範本沒有
+  card: {file: "09-template-adapt.md", title: "範本 2/7"}
+  fills:
+    - match: "題目規格"
+      value: |2
+        1. 節點訂閱 /input（std_msgs/Int32MultiArray），把陣列送到 Pico。
+        2. Pico 回傳陣列的總和（u32，mod 2^32），節點發佈到 /sum（std_msgs/UInt32）。
+        3. Pico 也要回傳陣列的最大值，節點發佈到 /max（std_msgs/Int32）。
+        4. 每個陣列最多 100000 個數字。
+    - match: "範本檔頭"
+      value: {file: "預製程式碼/ros2/serial_bridge.py", lines: [1, 20]}
+    - match: "TODO 位置"
+      value: |2
+        34:        self.declare_parameter("port", "/dev/ttyACM0")   # TODO(改這裡) ls /dev/ttyACM* 看是哪個
+        35:        self.declare_parameter("batch_size", 0)          # TODO(改這裡) 1=一次一個, 0=塞滿一包
+        45:        self.pub_sum = self.create_publisher(UInt32, "/sum", 10)   # TODO(改這裡) 輸出 topic/型別
+        65:                total = (total + unpack_u32(reply)[0]) & 0xFFFFFFFF   # TODO(改這裡) 合併方式
+  checks:
+    - {type: table_rows, min: 4, max: 12}
+    - {type: table_cell, key: "最大|max", col: 2, regex: "範本沒有"}
+    - {type: table_cell, key: "/input|訂閱", col: 2, regex: "要改"}
+    - {type: evidence_grounded}
+    - {type: regex, pattern: "先做[^\\n]*", name: first_row_line}
+  golden: |
+    | 題目要求 | 範本對應（函式 / 常數 / 行號） | 狀態 | 證據 |
+    | 訂閱 /input Int32MultiArray | 訂閱 /numbers | 要改 | 「/numbers (std_msgs/Int32MultiArray)」 |
+    | 回傳總和發佈 /sum UInt32 | pub_sum（serial_bridge.py:45） | 直接可用 | 「--SUM_U32--> Pico --> /sum (std_msgs/UInt32)」 |
+    | 回傳最大值發佈 /max | 無 | 範本沒有 | 範本只有 SUM_U32 和 CRC32 |
+    | 最多 100000 個數字 | batch_size 0 塞滿一包，分包合併（:65） | 直接可用 | 「0  = 批次: 一包塞滿 CHUNK_BYTES」 |
+    先做：第 1 列（改訂閱 topic 就能跑出總和）
+
+- id: tpl3-square
+  tags: [template, patch]
+  desc: 改成平方和；保留 TODO 並加「已改」；另一端 fake_pico 也要改
+  card: {file: "09-template-adapt.md", title: "範本 3/7"}
+  fills:
+    - match: "規格原文"
+      value: "SUM_U32 指令改為回傳 payload 中所有 u32 的「平方和」，結果取 mod 2^32。封包格式不變。"
+    - match: "範本這一段"
+      value: {file: "預製程式碼/pico/app_serial.c", lines: [24, 57], number_lines: true}
+    - {match: "不能改", value: "封包格式、cmd 編號、函式名稱"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "app_serial\\.c\\s*[:：]\\s*37", name: right_line}
+    - {type: regex, pattern: "修改後\\s*[:：][^\\n]*v\\s*\\*\\s*v", name: squares}
+    - {type: regex, pattern: "修改後\\s*[:：][^\\n]*TODO\\(改這裡\\)", name: keeps_todo}
+    - {type: regex, pattern: "另一端要改\\s*[:：][^\\n]*(fake_pico|frame\\.py|serial_bridge)", name: other_side}
+    - {type: no_full_dump, max_copied_lines: 4}
+  golden: |
+    app_serial.c:37
+    修改前：sum += v;                                  // TODO(改這裡) 換成題目要的計算
+    修改後：sum += v * v;                              // TODO(改這裡) 換成題目要的計算 // 已改：平方和
+    另一端要改：fake_pico.py 的 handle() 同樣改成平方和
+    驗證指令（1 行）：python3 serial_bridge.py --ros-args -p port:=/dev/pts/N（另開 fake_pico.py）
+    成功的樣子：/sum 等於電腦端算的平方和 & 0xFFFFFFFF
+
+- id: tpl3-newcmd
+  tags: [template, patch, hard]
+  desc: 新增 cmd 0x04 MAX_U32 → 另一端要列出 serial_proto.h / frame.py / fake_pico.py
+  card: {file: "09-template-adapt.md", title: "範本 3/7"}
+  fills:
+    - match: "規格原文"
+      value: "新增指令 0x04 MAX_U32：payload 是 u32 little-endian 陣列，回傳其中最大的 u32（4 bytes）。其他指令不變。"
+    - match: "範本這一段"
+      value: {file: "預製程式碼/pico/app_serial.c", lines: [24, 57], number_lines: true}
+    - {match: "不能改", value: "封包格式、既有 cmd 0x01~0x03 的行為"}
+  checks:
+    - {type: patch_format, max_patches: 3}
+    - {type: regex, pattern: "CMD_MAX_U32|0x04", name: new_cmd}
+    - {type: k_of, k: 2, items: ["serial_proto.h", "frame.py", "fake_pico.py"], name: lists_other_files}
+    - {type: max_code_block_lines, max: 16}
+  golden: |
+    app_serial.c:42
+    修改前：    }
+    修改後：    }
+        case CMD_MAX_U32: {                            // 已改：新增 0x04
+            uint32_t n = f->len / 4, mx = 0;
+            for (uint32_t i = 0; i < n; i++) { uint32_t v; memcpy(&v, f->payload + 4 * i, 4); if (v > mx) mx = v; }
+            memcpy(reply, &mx, 4); proto_send(f->cmd, f->seq, reply, 4); break; }
+    另一端要改：serial_proto.h 加 #define CMD_MAX_U32 0x04；frame.py 加 CMD_MAX_U32 = 0x04；fake_pico.py 的 handle() 加 0x04
+    驗證指令（1 行）：python3 -c "from frame import *" 後用 transact 送 0x04
+    成功的樣子：回傳的 u32 等於 max(data)
+
+- id: tpl4-binary
+  tags: [template, optimize]
+  desc: 文字一行一個 → 設計二進位批次；要用 u32 LE、每包 ≤ 4096 bytes（1024 筆）
+  card: {file: "09-template-adapt.md", title: "範本 4/7"}
+  fills:
+    - match: "傳送端"
+      value: |2
+        for v in data:
+            ser.write(f"{v}\n".encode())
+            total = int(ser.readline())
+    - match: "接收端"
+      value: |2
+        while (scanf("%ld", &v) == 1) { sum += v; printf("%lu\n", sum); }
+    - {match: "型別", value: "int32"}
+    - {match: "範圍", value: "0 ~ 1000000"}
+    - {match: "N", value: "20000"}
+    - {match: "路徑", value: "USB 序列埠（frame.py ↔ serial_proto）"}
+  checks:
+    - {type: card_slots, min_fraction: 0.8}
+    - {type: regex, pattern: "4\\s*bytes|4 ?位元組|u32|<I|little", name: encoding}
+    - {type: regex, pattern: "1024|4096", name: per_packet}
+    - {type: contains_any, items: ["pack_u32", "SUM_U32", "batch_size"], name: uses_template}
+    - {type: max_code_block_lines, max: 6}
+  golden: |
+    每筆編碼：u32 little-endian，4 bytes（frame.py 的 pack_u32）
+    每包幾筆：4096 / 4 = 1024 筆，共 20 包
+    要改的檔案與函式：電腦端改用 serial_bridge.py 的 batch_size:=0（CMD_SUM_U32）；Pico 端用 app_serial.c 的 handle()
+    怎麼確認結果不變：同一組 data 用 sum(data) & 0xFFFFFFFF 和 Pico 回傳比對
+    預估加速與依據：範本實測一次一個 664 ms → 批次 1.9 ms，約 300 倍
+
+- id: tpl7-review-write-incr
+  tags: [template, review]
+  desc: diff 拿掉 write_increment → 第 3 項有問題
+  card: {file: "09-template-adapt.md", title: "範本 7/7"}
+  fills:
+    - value: |
+        diff --git a/pico/app_dma.c b/pico/app_dma.c
+        @@ -124,9 +124,8 @@ static void part4_overlap(void) {
+             dma_channel_config c = dma_channel_get_default_config((uint)ch);
+             channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        -    channel_config_set_write_increment(&c, true);                       // ⚠ copy 一定要開寫遞增！
+             dma_channel_configure((uint)ch, &c, dst, src, dma_encode_transfer_count(N_WORDS), true);  // 開始，但「不等」
+             do_other_work();
+             dma_channel_wait_for_finish_blocking((uint)ch);
+             dma_channel_unclaim((uint)ch);
+  checks:
+    - {type: table_cell, key: "^3$", col: 1, regex: "有問題"}
+    - {type: regex, pattern: "最嚴重[^\\n]*\\n?[^\\n]*write_increment", name: worst_is_write_incr}
+    - {type: table_rows, min: 8, max: 12}
+  golden: |
+    | # | 結果 | 證據（diff 那一行） |
+    | 1 | 看不到 | |
+    | 2 | OK | 「dma_encode_transfer_count(N_WORDS)」 |
+    | 3 | 有問題 | 「-    channel_config_set_write_increment(&c, true);」被刪掉 |
+    | 4 | 看不到 | |
+    | 5 | 看不到 | |
+    | 6 | 看不到 | |
+    | 7 | 看不到 | |
+    | 8 | 看不到 | |
+    | 9 | 看不到 | |
+    最嚴重的 1 個問題與修法（≤ 2 行）：第 3 項，write_increment 被刪掉（預設 false），把那一行加回來
+
+- id: tpl7-review-printf
+  tags: [template, review]
+  desc: app_serial.c 加 printf → 第 6 項有問題
+  card: {file: "09-template-adapt.md", title: "範本 7/7"}
+  fills:
+    - value: |
+        diff --git a/pico/app_serial.c b/pico/app_serial.c
+        @@ -35,6 +35,7 @@ static void handle(const frame_t *f) {
+                     uint32_t v;
+                     memcpy(&v, f->payload + 4 * i, 4);         // 用 memcpy 取 u32（合法、編譯器會變成一條 ldr）
+                     sum += v;                                  // TODO(改這裡) 換成題目要的計算
+        +            printf("i=%lu v=%lu sum=%lu\n", (unsigned long)i, (unsigned long)v, (unsigned long)sum);
+                 }
+                 memcpy(reply, &sum, 4);                        // ARM / RISC-V 都是 little-endian
+                 proto_send(f->cmd, f->seq, reply, 4);
+  checks:
+    - {type: table_cell, key: "^6$", col: 1, regex: "有問題"}
+    - {type: regex, pattern: "最嚴重[^\\n]*\\n?[^\\n]*printf", name: worst_is_printf}
+  golden: |
+    | # | 結果 | 證據（diff 那一行） |
+    | 1 | OK | 「memcpy(reply, &sum, 4);」 |
+    | 2 | 看不到 | |
+    | 3 | 看不到 | |
+    | 4 | 看不到 | |
+    | 5 | 看不到 | |
+    | 6 | 有問題 | 「+            printf("i=%lu v=%lu sum=%lu\n"」 |
+    | 7 | 看不到 | |
+    | 8 | 看不到 | |
+    | 9 | 看不到 | |
+    最嚴重的 1 個問題與修法（≤ 2 行）：第 6 項，二進位串流裡 printf 會弄壞封包，刪掉那行（要 debug 改用 LED 或 UART）
+
+- id: tpl7-review-count
+  tags: [template, review, hard]
+  desc: 4096 bytes 用 DMA_SIZE_32 卻傳 4096 → 第 2 項有問題
+  card: {file: "09-template-adapt.md", title: "範本 7/7"}
+  fills:
+    - value: |
+        diff --git a/pico/app_dma.c b/pico/app_dma.c
+        @@ -10,0 +10,9 @@
+        +static uint8_t rx_buf[4096] __attribute__((aligned(4)));   // 4096 bytes
+        +static uint8_t tx_buf[4096] __attribute__((aligned(4)));
+        +static void copy_rx_to_tx(void) {
+        +    int ch = dma_claim_unused_channel(true);
+        +    dma_channel_config c = dma_channel_get_default_config((uint)ch);
+        +    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        +    channel_config_set_write_increment(&c, true);
+        +    dma_channel_configure((uint)ch, &c, tx_buf, rx_buf, dma_encode_transfer_count(4096), true);
+        +    dma_channel_wait_for_finish_blocking((uint)ch);
+        +    dma_channel_unclaim((uint)ch);
+        +}
+  checks:
+    - {type: table_cell, key: "^2$", col: 1, regex: "有問題"}
+    - {type: regex, pattern: "1024", name: gives_1024}
+  golden: |
+    | # | 結果 | 證據（diff 那一行） |
+    | 1 | 看不到 | |
+    | 2 | 有問題 | 「dma_encode_transfer_count(4096)」用 DMA_SIZE_32，4096 bytes 應該是 1024 次 |
+    | 3 | OK | 「channel_config_set_write_increment(&c, true);」「dma_channel_unclaim((uint)ch);」 |
+    | 4 | 看不到 | |
+    | 5 | OK | 「static uint8_t rx_buf[4096]」 |
+    | 6 | 看不到 | |
+    | 7 | 看不到 | |
+    | 8 | 看不到 | |
+    | 9 | 看不到 | |
+    最嚴重的 1 個問題與修法（≤ 2 行）：第 2 項，count 改成 dma_encode_transfer_count(4096 / 4)
+
+- id: tpl7-review-clean
+  tags: [template, review, hard, false-positive]
+  desc: 正確的 diff（只改成平方和）→ 不能報「有問題」
+  card: {file: "09-template-adapt.md", title: "範本 7/7"}
+  fills:
+    - value: |
+        diff --git a/pico/app_serial.c b/pico/app_serial.c
+        @@ -34,7 +34,7 @@ static void handle(const frame_t *f) {
+                 for (uint32_t i = 0; i < n; i++) {
+                     uint32_t v;
+                     memcpy(&v, f->payload + 4 * i, 4);         // 用 memcpy 取 u32（合法、編譯器會變成一條 ldr）
+        -            sum += v;                                  // TODO(改這裡) 換成題目要的計算
+        +            sum += v * v;                              // TODO(改這裡) 換成題目要的計算 // 已改：平方和
+                 }
+                 memcpy(reply, &sum, 4);                        // ARM / RISC-V 都是 little-endian
+                 proto_send(f->cmd, f->seq, reply, 4);
+  checks:
+    - {type: not_regex, pattern: "^\\|\\s*\\d+\\s*\\|\\s*有問題", name: no_false_alarm, category: correctness}
+    - {type: table_rows, min: 8, max: 12}
+  golden: |
+    | # | 結果 | 證據（diff 那一行） |
+    | 1 | OK | 「memcpy(reply, &sum, 4);」 |
+    | 2 | 看不到 | |
+    | 3 | 看不到 | |
+    | 4 | 看不到 | |
+    | 5 | 看不到 | |
+    | 6 | OK | diff 裡沒有 printf |
+    | 7 | 看不到 | |
+    | 8 | 看不到 | |
+    | 9 | 看不到 | |
+    最嚴重的 1 個問題與修法（≤ 2 行）：沒有發現問題

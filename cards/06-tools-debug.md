@@ -26,7 +26,7 @@ Task (EN): From the gdb output, find the crash line in MY code and pick one caus
 證據：「bt 或變數值原文」
 說明（1 句）：
 確認用的 gdb 指令（1 個）：
-範例：
+範例（只示範格式，內容不要照抄）：
 位置：sum.c:42 add_all
 原因：B
 證據：「i = 1024」「int buf[1024]」
@@ -53,7 +53,7 @@ Task (EN): From the FIRST sanitizer report, give the line in MY code and pick on
 證據：「報告原文」
 誰出錯（變數、越界幾 bytes，或哪兩個執行緒）：
 說明（1 句）：
-範例：
+範例（只示範格式，內容不要照抄）：
 位置：parse.c:17
 類型：A
 證據：「READ of size 4 … 0 bytes after 400-byte region」
@@ -112,23 +112,28 @@ Task (EN): Act as a checklist host. Ask me ONE check at a time in the fixed orde
 ---
 
 【提示卡｜工具 5/9｜序列埠收到的資料不對】→ 工具 7
-Task (EN): Align expected vs actual bytes field by field in a table, find the FIRST difference, pick one cause A–H. Answer in Traditional Chinese.
-任務：逐欄位比對預期和實際的 bytes，找第一個不同處。
-取得：預期 `python3 -c "from frame import encode;print(encode(0x02,1,bytes(4)).hex(' '))"`；實際先關掉其他用這個 port 的程式，`stty -F /dev/ttyACM0 raw -echo; timeout 2 cat /dev/ttyACM0 | xxd | head -20`
+Task (EN): The table below was made by a script. Pick ONE cause A–H and say which side to fix. Do not recount bytes yourself. Answer in Traditional Chinese.
+任務：看程式比對好的表，判斷原因。
+取得（3 步）：
+1 實際：先關掉其他用這個 port 的程式，`stty -F /dev/ttyACM0 raw -echo; timeout 2 cat /dev/ttyACM0 | xxd -p | head -5`
+2 預期：`python3 -c "from frame import encode;print(encode(0x02,1,bytes(4)).hex(' '))"`
+3 比對：`cd ros2 && python3 frame.py diff "預期hex" "實際hex"`，整段輸出貼下面
 <<<資料 開始>>>
-[封包格式] {{AA 55 | cmd u8 | seq u8 | len u16 LE | payload | crc32 u32 LE（範圍 cmd..payload）}}
-[預期 hex] {{貼}}
-[實際 hex] {{貼}}
+{{貼 frame.py diff 的輸出}}
+[送出端] {{電腦 → Pico / Pico → 電腦}}
 <<<資料 結束>>>
 原因：A 多了 0D（CRLF 轉換沒關）　B 混入文字（printf）　C 大小端顛倒　D len 單位錯（bytes vs 筆數）　E CRC 範圍或初值錯　F 少收（read 沒累積）　G 錯一格（同步字被吃掉、多一個 byte）　H 其他
-只輸出：
-| 欄位 | 預期 | 實際 | 相同? |
-（每個欄位一列）
-第一個不同：
+規則：表和「線索」是程式算的，以它為準。
+只輸出 4 行：
+第一個不同：（照抄表下面那行）
 原因：
-哪一端要改：
-範例：| len | 04 00 | 00 04 | 否 |
-
+證據：「表裡不同的那一列」
+哪一端要改（檔案或設定）：
+範例（只示範格式，內容不要照抄）：
+第一個不同：len（預期 14 bytes，實際 14 bytes）
+原因：C
+證據：「| len | 04 00 | 00 04 | 否 |」
+哪一端要改：送出端，len 改用 little-endian（struct "<H"）
 ---
 
 【提示卡｜工具 6/9｜ROS 2 節點看不到彼此】
@@ -142,13 +147,19 @@ Task (EN): Compare side A and side B item by item, mark each OK or NG with evide
 [B：ros2 node list; ros2 topic list -t] {{貼}}
 [ros2 topic info -v /{{topic}}] {{貼}}
 <<<資料 結束>>>
-固定項目：1 兩邊都有 ROS_DISTRO=jazzy　2 ROS_DOMAIN_ID 相同（沒設 = 0）　3 ROS_AUTOMATIC_DISCOVERY_RANGE、RMW_IMPLEMENTATION 相同　4 不同容器時都有 --net=host　5 topic 名稱與 namespace 完全相同　6 型別相同　7 Publisher / Subscription count 都 ≥ 1　8 Reliability、Durability 相容
-只輸出：
+只輸出（照這 8 列填，不要增減列）：
 | 項目 | 結果 OK/NG/資料中沒有 | 證據 |
-第一個 NG：
+| 1 兩邊 ROS_DISTRO=jazzy | | |
+| 2 ROS_DOMAIN_ID 相同（沒設=0） | | |
+| 3 DISCOVERY_RANGE、RMW 相同 | | |
+| 4 不同容器都 --net=host | | |
+| 5 topic 名稱與 namespace 相同 | | |
+| 6 型別相同 | | |
+| 7 Pub / Sub count 都 ≥ 1 | | |
+| 8 Reliability、Durability 相容 | | |
+第一個 NG：（寫項目編號和名稱）
 下一步（1 個指令）：
 提示：看得到 node 卻收不到資料、又是不同容器 → 可能是 Fast DDS 共享記憶體跨容器，兩邊加 `--ipc=host` 試試（⚠️未實測）。名單顯示怪就先 `ros2 daemon stop`。
-
 ---
 
 【提示卡｜工具 7/9｜依定位結果最小修改（程式碼）】
@@ -172,7 +183,7 @@ Task (EN): Using the diagnosis, output a minimal patch (max 8 changed lines), ke
 為什麼（1 句）：
 驗證指令（1 行）：
 成功的樣子：
-範例：
+範例（只示範格式，內容不要照抄）：
 sum.c:42
 修改前：for (i = 0; i <= n; i++)
 修改後：for (i = 0; i < n; i++)
