@@ -215,7 +215,6 @@
         3. 每筆的大小只能是 1、2 或 4 個位元組，而且位址要對齊。
         4. 通道是有限資源，用之前要取得、用完要歸還。這個引擎只有四個。
         使用的節奏固定是四拍：描述 (configure) → 啟動 (start) → 等待 (wait / busy) → 取用結果
-    - {match: "它是", value: "它是 CPU 以外的搬運單位，用來 複製或填值記憶體"}
     - {match: "初始化", value: "claim → configure → start → wait → release"}
     - {match: "關鍵 API", value: "engine_claim、engine_configure、engine_start、engine_wait、engine_release、engine_abort"}
     - {match: "限制", value: "最多 4 個通道；每筆 1/2/4 bytes 要對齊；count 填總共幾個 bytes"}

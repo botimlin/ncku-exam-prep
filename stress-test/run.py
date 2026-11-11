@@ -381,6 +381,7 @@ CATEGORY = {"regex": "format", "not_regex": "format", "max_chars": "format", "mi
             "contains_any": "correctness", "contains_all": "correctness", "not_contains": "correctness",
             "k_of": "correctness", "rank_first": "correctness", "field_matches": "correctness",
             "choice": "correctness", "table_cell": "correctness", "table_rows": "format"}
+FIELD_PAREN = r"(?:\s*[（(][^）)\n]*[）)])?"  # 欄位名後面照抄卡片的（說明）也算
 GLOBAL_CHECKS = [{"type": "not_empty"}, {"type": "no_simplified", "max": 4}]
 
 
@@ -610,7 +611,7 @@ def run_check(chk, resp, ctx):
         hit = [i for i in chk["items"] if _hit(first, i, icase)]
         r["passed"], r["detail"] = bool(hit), f"first item: {first.strip()[:80]!r}"
     elif t in ("answer_field", "field_matches"):
-        m = re.search(r"(?:" + chk["field"] + r")\s*[:：]\s*(.+)", resp)
+        m = re.search(r"(?:" + chk["field"] + r")" + FIELD_PAREN + r"\s*[:：]\s*(.+)", resp)
         if not m:
             r["detail"] = f"field '{chk['field']}' not found"
         else:
@@ -637,12 +638,12 @@ def run_check(chk, resp, ctx):
         else:
             lab, letter, desc = found
             field = chk.get("field_in_answer", lab)
-            m = re.search(r"(?:" + re.escape(field) + r")\s*[:：]\s*\**\s*([A-Z])(?![A-Za-z])", resp)
+            m = re.search(r"(?:" + re.escape(field) + r")" + FIELD_PAREN + r"\s*[:：]\s*\**\s*([A-Z])(?![A-Za-z])", resp)
             if m:
                 r["passed"] = m.group(1) == letter
                 r["detail"] = f"{field}: answered {m.group(1)}, expected {letter} ({desc[:30]})"
             else:
-                mv = re.search(r"(?:" + re.escape(field) + r")\s*[:：]\s*(.+)", resp)
+                mv = re.search(r"(?:" + re.escape(field) + r")" + FIELD_PAREN + r"\s*[:：]\s*(.+)", resp)
                 ok = bool(mv) and nq(desc)[:6].lower() in nq(mv.group(1)).lower()
                 r["passed"] = ok
                 r["detail"] = f"{field}: no letter; expected {letter} ({desc[:30]})" + (" — matched by description" if ok else "")

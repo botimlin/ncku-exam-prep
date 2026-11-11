@@ -45,14 +45,14 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 <<<資料 結束>>>
 類別：A 找不到 SDK / pico_sdk_import　B cache 殘留（換過 board / platform）　C CMake 語法或順序（例：pico_sdk_import 在 project() 後 → unknown pseudo-op .syntax）　D 找不到 header　E undefined reference　F multiple definition（header 變數改 extern）　G RAM / flash overflowed　H 其他
 只輸出 4 行：
-類別：
-證據：「錯誤原文」
+證據：「…」（照抄錯誤那 1 行）
 原因（1 句）：
+類別（照抄選項，例如「D 找不到 header」）：
 要修的檔案與位置：（D、E 寫出函式庫名：hardware/xxx.h → hardware_xxx；B 一律 rm -rf build 重來）
 範例（只示範格式，內容不要照抄）：
-類別：D
 證據：「fatal error: hardware/dma.h: No such file or directory」
 原因：app_dma 沒 link hardware_dma
+類別：D 找不到 header
 要修的檔案與位置：CMakeLists.txt 的 target_link_libraries(app_dma …)
 
 ---
@@ -72,9 +72,9 @@ Task (EN): Classify the FIRST colcon build error into one category A–H. Quote 
 <<<資料 結束>>>
 類別：A 沒 source 或不在工作區根目錄　B 找不到依賴（find_package / package.xml）　C C++ 編譯錯　D 連結錯（ament_target_dependencies 沒寫）　E setup.py / entry_points 錯　F 自訂訊息 rosidl 錯　G 舊 build 殘留　H 其他
 只輸出 4 行：
-類別：
-證據：「錯誤原文」
+證據：「…」（照抄錯誤那 1 行）
 原因（1 句）：
+類別（照抄選項）：
 要修的檔案與位置：
 修法只能改檔案或重編；考場不能安裝套件（不用 apt、pip、rosdep）。
 

@@ -1,0 +1,303 @@
+# 第二批：開考 2/4、範本 5/6、讀題 4、除錯 3、優化 4、建置 1、長貼上
+
+- id: exam2-ci
+  tags: [exam, ci, grounding]
+  desc: 讀 .gitlab-ci.yml：觸發 = commit message 開頭 Q2-1；分數印 SCORE；本地重現照 script 抄
+  card: {file: "10-exam-day-flow.md", title: "開考 2/5"}
+  fills:
+    - match: "貼 .gitlab-ci.yml"
+      value: |
+        stages: [build, judge]
+        variables:
+          PICO_BOARD: pico2
+        build-q21:
+          stage: build
+          image: registry.exam.local/srecruit/pico:2026
+          rules:
+            - if: '$CI_COMMIT_MESSAGE =~ /^Q2-1/'
+          script:
+            - cmake -S q21 -B build -DPICO_BOARD=$PICO_BOARD
+            - cmake --build build -j8
+          artifacts:
+            paths: [build/q21.uf2]
+        judge-q21:
+          stage: judge
+          image: registry.exam.local/srecruit/judge:2026
+          rules:
+            - if: '$CI_COMMIT_MESSAGE =~ /^Q2-1/'
+          script:
+            - python3 /judge/flash_and_run.py build/q21.uf2 --case all
+            - python3 /judge/score.py --json result.json   # prints "SCORE: <0-100>"
+    - {match: "評分相關檔案", value: "（repo 裡沒有，judge 在 image 的 /judge/）"}
+  checks:
+    - {type: regex, pattern: "觸發[^\\n]*(Q2-1|commit message|CI_COMMIT_MESSAGE)", name: trigger}
+    - {type: regex, pattern: "(評分|分數)[^\\n]*SCORE", name: score_line}
+    - {type: contains_all, items: ["cmake -S q21 -B build", "cmake --build build"], name: local_repro}
+    - {type: evidence_grounded, min_quotes: 2}
+    - {type: regex, pattern: "(?m)^\\s*7\\s*不能改", name: has_slot7}
+  golden: |
+    1 stages 與 job 名稱：build、judge；build-q21、judge-q21　證據：「stages: [build, judge]」
+    2 每個 job 的 image：registry.exam.local/srecruit/pico:2026、registry.exam.local/srecruit/judge:2026　證據：「image: registry.exam.local/srecruit/pico:2026」
+    3 觸發條件（rules / only / commit message / 分支）：commit message 開頭是 Q2-1　證據：「if: '$CI_COMMIT_MESSAGE =~ /^Q2-1/'」
+    4 建置指令：cmake -S q21 -B build -DPICO_BOARD=pico2 後 cmake --build build -j8　證據：「cmake --build build -j8」
+    5 評分怎麼判定、分數印在 log 哪裡：/judge/score.py 印出 SCORE: <0-100>　證據：「python3 /judge/score.py --json result.json」
+    6 本地重現的指令（照 script 抄）：cmake -S q21 -B build -DPICO_BOARD=pico2 && cmake --build build -j8（judge 在 image 裡，本地資料中沒有）
+    7 不能改的檔名 / 路徑 / target / 輸出格式：build/q21.uf2　證據：「paths: [build/q21.uf2]」
+
+- id: exam4-match
+  tags: [exam, choice]
+  desc: 3 小題各選類別：2-1 → E、2-2 → F、2-3 → I
+  card: {file: "10-exam-day-flow.md", title: "開考 4/5"}
+  fills:
+    - value: |
+        - 2-1：/processor 節點收不到 /sensor_raw 的資料（程式沒有錯誤訊息）。請找出原因並修好，讓 /filtered 每秒有 50 筆資料。
+        - 2-2：感測器回傳 32-bit 的狀態字：bits 31..28 是 version，bits 27..16 是 temperature（有號，單位 0.1°C），bits 15..0 是 checksum。請實作 decode_status()。
+        - 2-3：把 copy_frame() 的 CPU 迴圈改成用 DMA 搬 4096 bytes；注意 count 是筆數不是位元組；完成後通道要歸還。
+  checks:
+    - {type: table_cell, key: "2-1", col: 1, regex: "^\\**E"}
+    - {type: table_cell, key: "2-2", col: 1, regex: "^\\**F"}
+    - {type: table_cell, key: "2-3", col: 1, regex: "^\\**I"}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    | 小題 | 類別 | 證據：「題目原句」 | 範本 |
+    | 2-1 | E | 「/processor 節點收不到 /sensor_raw 的資料」 | ros2/node_template.py、ros2/README.md |
+    | 2-2 | F | 「bits 31..28 是 version」 | bits-riscv/bitops.h、packet_fields.c |
+    | 2-3 | I | 「注意 count 是筆數不是位元組」 | pico/app_dma.c |
+
+- id: tpl5-split-sort
+  tags: [template, choice]
+  desc: 排序拆 2 片板子（USB 序列埠）→ 可以、選 A、用 merge
+  card: {file: "09-template-adapt.md", title: "範本 5/7"}
+  fills:
+    - {match: "計算", value: "排序"}
+    - {match: "資料量", value: "200000 個 u32"}
+    - {match: "現在耗時", value: "單板 1.9 s（傳輸 0.3 s、Pico 排序 1.6 s）"}
+    - {match: "拆法", value: "2 片板子（USB 序列埠 /dev/ttyACM0、/dev/ttyACM1）"}
+    - {match: "合併方式", value: "各自排序再 merge"}
+    - {match: "現在的計算程式", value: "reply = transact(ser, CMD_SORT, pack_u32(data))"}
+  checks:
+    - {type: regex, pattern: "能不能拆\\s*[:：]\\s*\\**可以", name: can_split}
+    - {type: choice, option: "multi_device", field_in_answer: "選"}
+    - {type: regex, pattern: "瓶頸在[^\\n]*計算", name: bottleneck_compute}
+    - {type: contains_any, items: ["merge_two_sorted", "merge", "kway"], name: merge}
+  golden: |
+    能不能拆：可以（各自排序再 merge）
+    選：A
+    瓶頸在：計算（Pico 排序 1.6 s / 1.9 s）
+    要改的 TODO(改這裡)：multi_device.py 的切塊與合併改用 merge_two_sorted
+    怎麼確認平行版 == 單機版：和 sorted(data) 逐一比對
+
+- id: tpl5-crc-nosplit
+  tags: [template, hard]
+  desc: CRC 拆給 2 片板子 → 不行（串列運算）
+  card: {file: "09-template-adapt.md", title: "範本 5/7"}
+  fills:
+    - {match: "計算", value: "CRC"}
+    - {match: "資料量", value: "1 MB 的一份檔案（題目要整份檔案的一個 CRC32）"}
+    - {match: "現在耗時", value: "0.8 s"}
+    - {match: "拆法", value: "2 片板子"}
+    - {match: "合併方式", value: "（不知道）"}
+    - {match: "現在的計算程式", value: "crc = crc32_update(0, buf, len)"}
+  checks:
+    - {type: regex, pattern: "能不能拆\\s*[:：]\\s*\\**不行", name: cannot_split}
+    - {type: contains_any, items: ["串列", "依賴前一", "前面的結果", "不能各算", "sequential"], name: reason}
+  golden: |
+    能不能拆：不行（CRC 是串列運算，不能各算一段再合併）
+    選：無（不拆）
+    瓶頸在：計算（資料中沒有分段量測）
+    要改的 TODO(改這裡)：無，改用查表或 DMA sniffer 加速單板
+    怎麼確認平行版 == 單機版：和 zlib.crc32 比對
+
+- id: tpl6-iface
+  tags: [template, grounding]
+  desc: 題目 len big-endian、欄位順序 cmd,len,seq → 表要列出大小端與順序差異
+  card: {file: "09-template-adapt.md", title: "範本 6/7"}
+  fills:
+    - {match: "題目的介面原文", value: "封包：0xA5 | cmd u8 | len u16 big-endian | seq u8 | payload | crc16-CCITT big-endian（範圍 cmd..payload）"}
+    - {match: "範本的介面", value: "frame.py：AA 55 | cmd u8 | seq u8 | len u16 LE | payload | crc32 u32 LE（zlib）"}
+    - {match: "相關程式碼", value: "body = struct.pack(\"<BBH\", cmd, seq & 0xFF, len(payload)) + bytes(payload)\nreturn HDR + body + struct.pack(\"<I\", zlib.crc32(body) & 0xFFFFFFFF)"}
+  checks:
+    - {type: table_rows, min: 4}
+    - {type: regex, pattern: "big|大端|>H", name: endian_row}
+    - {type: regex, pattern: "順序|order", name: order_row}
+    - {type: regex, pattern: "crc16|CRC-16|CCITT", name: crc_row}
+    - {type: regex, pattern: "0xA5|A5|同步|sync|開頭", name: sync_row}
+  golden: |
+    | 項目 | 題目 | 範本 | 要改的檔案:函式 |
+    | 同步字 | 0xA5（1 byte） | AA 55 | frame.py:encode、FrameParser |
+    | 欄位順序 | cmd、len、seq | cmd、seq、len | frame.py:encode |
+    | len 大小端 | big-endian | `<H` 小端 | frame.py:encode |
+    | CRC 規格 | crc16-CCITT big-endian | crc32 u32 LE | frame.py:encode |
+    改法（1 句）：在 frame.py 的 encode / FrameParser 這一層換成題目格式，上層程式不動
+
+- id: read4-doc
+  tags: [read, grounding]
+  desc: 暫存器段落精讀：位元範圍照抄、MODE 值、無預設值時寫資料中沒有
+  card: {file: "02-read-spec.md", title: "讀題 4/6"}
+  fills:
+    - {match: "文件名稱", value: "RP2350 datasheet"}
+    - {match: "章節", value: "12.6 DMA CH0_TRANS_COUNT"}
+    - {match: "一句話目標", value: "用 DMA 搬 4096 bytes"}
+    - value: |
+        CH0_TRANS_COUNT
+        Bits 31:28  MODE  RW  When MODE is 0x0, the transfer count decrements with each transfer until 0, and then the channel triggers the next channel indicated by CTRL_CHAIN_TO.
+                              When MODE is 0x1, the transfer count decrements with each transfer until 0, and then the channel re-triggers itself.
+                              When MODE is 0xF, the transfer count does not decrement. The DMA channel performs an endless sequence of transfers.
+        Bits 27:0   COUNT RW  28-bit transfer count (256 million transfers maximum).
+                              Program the number of bus transfers a channel will perform before halting. Note that, if transfers are larger than one byte, this is not equal to the number of bytes transferred (see CTRL_DATA_SIZE).
+  checks:
+    - {type: contains_all, items: ["31:28", "27:0"], name: keeps_bit_ranges}
+    - {type: regex, pattern: "0xF|ENDLESS|endless|不會遞減|不遞減", name: mode_f}
+    - {type: regex, pattern: "不等於[^\\n]*(位元組|bytes)|not equal to the number of bytes|筆數|傳輸次數", name: pitfall}
+    - {type: regex, pattern: "預設值[^\\n]*資料中沒有|\\|\\s*資料中沒有\\s*\\|", name: default_absent}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    1. 摘要（3 句）：CH0_TRANS_COUNT 設定通道要做幾次 bus transfer。MODE 決定數完之後的行為。COUNT 是 28-bit。
+    2. 欄位表：
+    | 名稱 | 位元 | 意義 | 預設值 | 讀寫（RO / RW / WC） |
+    | MODE | 31:28 | 0x0 鏈到下一通道、0x1 重新觸發自己、0xF 不遞減無限傳輸 | 資料中沒有 | RW |
+    | COUNT | 27:0 | 傳輸次數（最多 256 million） | 資料中沒有 | RW |
+    3. 操作順序：1. 算出筆數 2. 寫入 COUNT 3. 啟動通道
+    4. 限制與陷阱：COUNT 是筆數不是 bytes，證據：「this is not equal to the number of bytes transferred」
+    5. 和我的題目的關係：4096 bytes 用 32-bit 傳輸要填 1024
+
+- id: dbg3-pyserial
+  tags: [debug, error]
+  desc: ModuleNotFoundError serial → 白話 + 常見原因含 python3-serial / pyserial
+  card: {file: "04-debug.md", title: "除錯 3/6"}
+  fills:
+    - {match: "環境", value: "ROS 2 Jazzy 容器；python3 serial_bridge.py --ros-args -p port:=/dev/ttyACM0"}
+    - value: |
+        Traceback (most recent call last):
+          File "/work/ros2/serial_bridge.py", line 25, in <module>
+            import serial
+        ModuleNotFoundError: No module named 'serial'
+  checks:
+    - {type: regex, pattern: "第一個錯誤\\s*[:：][^\\n]*No module named 'serial'", name: quotes_error}
+    - {type: contains_any, items: ["python3-serial", "pyserial"], name: names_package}
+    - {type: table_rows, min: 3, max: 5}
+    - {type: not_regex, pattern: "dma_channel_claim|hardware_dma", name: no_example_copy, category: grounding}
+  golden: |
+    第一個錯誤：「ModuleNotFoundError: No module named 'serial'」
+    白話（1 句）：這個 Python 環境沒有安裝 pyserial
+    | 常見原因 | 怎麼檢查（1 個指令） |
+    | 容器沒裝 python3-serial | dpkg -l | grep python3-serial |
+    | 用了別的 python（venv） | which python3 |
+    | 檔名叫 serial.py 蓋掉套件 | ls serial.py |
+    先檢查：第 1 列（ros 容器預設沒有 pyserial）
+
+- id: opt4-printf
+  tags: [optimize, choice]
+  desc: DMA 改完沒變快，量測區段含 printf → 原因 B，保留
+  card: {file: "03-optimize.md", title: "優化 4/6"}
+  fills:
+    - {match: "改動", value: "copy_frame() 的 CPU 迴圈改成 DMA；量測區段是 t0=time_us_64(); copy_frame(); printf(\"copied %d\\n\", n); t1=time_us_64();"}
+    - {match: "正確性", value: "相同（dst 和 src 逐一比對一致）"}
+    - {match: "之前", value: "820"}
+    - {match: "之後", value: "790"}
+    - {match: "單位", value: "us"}
+    - {match: "N", value: "11"}
+    - {match: "原本預期", value: "快 5 倍以上"}
+  checks:
+    - {type: regex, pattern: "符合預期\\s*[:：]\\s*\\**否", name: not_expected}
+    - {type: choice, option: "printf", field_in_answer: "原因"}
+    - {type: regex, pattern: "決定\\s*[:：][^\\n]*保留", name: keep}
+  golden: |
+    符合預期：否
+    原因（選「否」時，選 A–F + 1 句依據）：B，量測區段包含 printf("copied %d\n", n)
+    決定：保留並 commit（正確性相同）
+    下一步量什麼：把 printf 移到 t1 之後再量 copy_frame()
+
+- id: opt4-wrong-result
+  tags: [optimize, hard]
+  desc: 變快但正確性不同 → 一定回復
+  card: {file: "03-optimize.md", title: "優化 4/6"}
+  fills:
+    - {match: "改動", value: "SUM 迴圈改成一次讀 8 bytes"}
+    - {match: "正確性", value: "第一個不同處：case 7 預期 4000000005，實際 4000000001"}
+    - {match: "之前", value: "95"}
+    - {match: "之後", value: "41"}
+    - {match: "單位", value: "us"}
+    - {match: "N", value: "11"}
+    - {match: "原本預期", value: "快 2 倍"}
+  checks:
+    - {type: regex, pattern: "決定\\s*[:：][^\\n]*回復", name: revert}
+    - {type: not_regex, pattern: "決定\\s*[:：][^\\n]*保留並 commit", name: not_keep}
+  golden: |
+    符合預期：否
+    原因（選「否」時，選 A–F + 1 句依據）：F，結果不正確（case 7 差 4）
+    決定：回復（正確性不同就一定回復）
+    下一步量什麼：先找出 case 7 為什麼差 4（len 不是 8 的倍數的尾巴）
+
+- id: b1-read-cmake
+  tags: [build, cmake, grounding]
+  desc: 解讀 CMakeLists + CI：judge 的 configure/build 指令照抄；PIO header 有
+  card: {file: "05-cmake-build.md", title: "建置 1/7"}
+  fills:
+    - match: "CMakeLists.txt"
+      value: {file: "預製程式碼/pico/CMakeLists.txt", lines: [6, 55]}
+    - value: |
+        script:
+          - cmake -S pico -B build -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
+          - cmake --build build -j8 --target app_dma
+  checks:
+    - {type: table_cell, key: "judge 的 configure", col: 1, regex: "cmake -S pico -B build"}
+    - {type: table_cell, key: "judge 的 build", col: 1, regex: "--target app_dma|app_dma"}
+    - {type: table_cell, key: "PIO", col: 1, regex: "pico_generate_pio_header|\\.pio"}
+    - {type: evidence_grounded, min_quotes: 2}
+  golden: |
+    | 項目 | 內容 | 證據 |
+    | target 與原始檔 | app_serial、app_multicore、app_dma、app_dma_pio、app_pio | 「add_app(app_dma app_dma.c)」 |
+    | 連的函式庫 | pico_stdlib、hardware_dma 等 | 「target_link_libraries(app_dma hardware_dma)」 |
+    | 巨集 / 編譯選項 | PICO_STDIO_DEFAULT_CRLF=0 | 資料中沒有 |
+    | PICO_BOARD / PICO_PLATFORM / build type | pico2、Release | 「-DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release」 |
+    | stdio（usb / uart） | usb | 資料中沒有 |
+    | PIO header、extra outputs | pico_generate_pio_header | 資料中沒有 |
+    | 輸出檔與位置 | build/app_dma.uf2 | 資料中沒有 |
+    | judge 的 configure 指令 | cmake -S pico -B build -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release | 「cmake -S pico -B build -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release」 |
+    | judge 的 build 指令 | cmake --build build -j8 --target app_dma | 「cmake --build build -j8 --target app_dma」 |
+
+- id: long-paste-asan
+  tags: [tools, sanitizer, long, context]
+  desc: 報告前面塞很長的程式輸出（接近貼上上限）→ 仍要照格式、類型 A
+  card: {file: "06-tools-debug.md", title: "工具 2/9"}
+  pad: {fill: report, to_chars: 3600, position: before, filler: {ref: noise}}
+  data:
+    noise: |
+      [worker 0] processed batch 0001 ok (1024 items, 0.82 ms)
+      [worker 1] processed batch 0002 ok (1024 items, 0.79 ms)
+      [worker 2] processed batch 0003 ok (1024 items, 0.85 ms)
+      [worker 3] processed batch 0004 ok (1024 items, 0.80 ms)
+      [main] queue depth 3, free buffers 5, total items 4096
+  fills:
+    - name: report
+      match: "SUMMARY"
+      value: |
+        ==9001==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x502000000058 at pc 0x55c1d0a1b4f1 bp 0x7ffe3a9c4d10 sp 0x7ffe3a9c4d00
+        READ of size 8 at 0x502000000058 thread T0
+            #0 0x55c1d0a1b4f0 in checksum /work/agg.c:33
+            #1 0x55c1d0a1b6a2 in main /work/agg.c:71
+        0x502000000058 is located 0 bytes after 8-byte region [0x502000000050,0x502000000058)
+        allocated by thread T0 here:
+            #0 0x7f7b0c4fd9c7 in malloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:69
+            #1 0x55c1d0a1b65d in main /work/agg.c:66
+        SUMMARY: AddressSanitizer: heap-buffer-overflow /work/agg.c:33 in checksum
+    - match: "報告指到"
+      value: |2
+            30	uint64_t checksum(const uint64_t *v, size_t n) {
+            31	    uint64_t s = 0;
+            32	    for (size_t i = 0; i <= n; i++)
+            33	        s ^= v[i];
+            34	    return s;
+            35	}
+  checks:
+    - {type: choice, option: "heap-buffer-overflow", field_in_answer: "類型"}
+    - {type: regex, pattern: "位置\\s*[:：][^\\n]*agg\\.c\\s*[:：]\\s*3[23]", name: location}
+    - {type: max_lines, max: 8}
+    - {type: not_regex, pattern: "processed batch", name: ignores_noise}
+  golden: |
+    位置：agg.c:33
+    類型：A
+    證據：「0 bytes after 8-byte region」
+    誰出錯（變數、越界幾 bytes，或哪兩個執行緒）：v[n]，只配置了 1 個 uint64_t
+    說明（1 句）：迴圈用了 i <= n

@@ -20,14 +20,14 @@ Task (EN): From the measurements, pick ONE bottleneck type A–F and quote the n
 類型：A 運算　B 記憶體 / 匯流排　C I/O 或通訊等待　D 同步（鎖競爭、false sharing）　E 演算法複雜度　F 量測不足，無法判斷
 只輸出 5 行：
 瓶頸在哪一段：
-類型：
-證據：「量測數字原文」
+證據：「…」（照抄量測數字）
+類型（照抄選項，例如「C I/O 或通訊等待」）：
 這段佔總時間比例 p：（整段拿掉的加速上限 = 1 / (1 − p)）
 還缺的量測點（選 F 時必填）：
 範例（只示範格式，內容不要照抄）：
 瓶頸在哪一段：send_all()
-類型：C
 證據：「send 412 ms / total 480 ms」
+類型：C I/O 或通訊等待
 p：0.86（上限約 7 倍）
 還缺的量測點：無
 

@@ -22,16 +22,16 @@ Task (EN): From the gdb output, find the crash line in MY code and pick one caus
 規則：跳過 libc / SDK 內部的框，從第一個我的函式看起。資料沒有的寫「資料中沒有」。
 只輸出 5 行：
 位置：檔名:行號 函式
-原因：
-證據：「bt 或變數值原文」
+證據：「…」（照抄 bt 或變數值）
 說明（1 句）：
+原因（照抄選項，例如「B 陣列越界」）：
 確認用的 gdb 指令（1 個）：
 範例（只示範格式，內容不要照抄）：
-位置：sum.c:42 add_all
-原因：B
-證據：「i = 1024」「int buf[1024]」
-說明：迴圈 i <= n 多跑一次
-確認用的 gdb 指令：print n
+位置：foo.c:77 foo_fill
+證據：「k = 64」「char tmp[64]」
+說明：迴圈 k <= len 多跑一次
+原因：B 陣列越界
+確認用的 gdb 指令：print len
 
 ---
 
@@ -49,15 +49,15 @@ Task (EN): From the FIRST sanitizer report, give the line in MY code and pick on
 規則：只看第一個報告。位置選報告 `#0 #1…` 中第一個我的檔案。
 只輸出 5 行：
 位置：檔名:行號
-類型：
-證據：「報告原文」
+證據：「…」（照抄報告 1 行）
 誰出錯（變數、越界幾 bytes，或哪兩個執行緒）：
+類型（照抄選項，例如「A heap-buffer-overflow」）：
 說明（1 句）：
 範例（只示範格式，內容不要照抄）：
-位置：parse.c:17
-類型：A
+位置：foo.c:17
 證據：「READ of size 4 … 0 bytes after 400-byte region」
 誰出錯：arr[100]，陣列只有 100 個 int
+類型：A heap-buffer-overflow
 說明：迴圈上限用了 <=
 
 ---
@@ -79,8 +79,8 @@ Task (EN): Find the ONE blocking call where the program hangs and pick one cause
 只輸出 5 行：
 卡住的呼叫：檔名:行號 函式
 它在等：
-原因：
-證據：「原文」
+證據：「…」（照抄 1 行）
+原因（照抄選項，例如「A 等資料」）：
 確認實驗（1 個，例如在哪加 LED 或改成 timeout 版）：
 
 ---
@@ -126,13 +126,13 @@ Task (EN): The table below was made by a script. Pick ONE cause A–H and say wh
 規則：表和「線索」是程式算的，以它為準。
 只輸出 4 行：
 第一個不同：（照抄表下面那行）
-原因：
 證據：「表裡不同的那一列」
+原因（照抄選項，例如「C 大小端顛倒」）：
 哪一端要改（檔案或設定）：
 範例（只示範格式，內容不要照抄）：
 第一個不同：len（預期 14 bytes，實際 14 bytes）
-原因：C
 證據：「| len | 04 00 | 00 04 | 否 |」
+原因：C 大小端顛倒
 哪一端要改：送出端，len 改用 little-endian（struct "<H"）
 ---
 
