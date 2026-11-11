@@ -417,6 +417,8 @@ def collect_quotes(resp, extra_fields=()):
                     if not found and len(nq(cell)) >= 4 and not re.search(r"資料中沒有|看不到|無相關|^無$", cell):
                         found = [cell.strip()]  # 證據欄沒加「」：整格當引用
                     quotes += found
+    if not quotes:  # 沒寫「證據：」標籤但有用「…」引用原文（≥ 8 字）也算
+        quotes = [q for q in re.findall(r"「([^」\n]{8,400})」", resp)]
     seen, out = set(), []
     for q in quotes:
         if q not in seen:

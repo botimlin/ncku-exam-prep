@@ -104,8 +104,8 @@ Task (EN): Design a binary batched encoding for this data. Fill the fixed slots 
 ---
 
 【提示卡｜範本 5/7｜把工作拆給 N 片板子 / 2 個核心】→ 範本 3
-Task (EN): Decide if this work can be split, then pick ONE template from the list. Fill the fixed slots only. Answer in Traditional Chinese.
-任務：判斷能不能拆，選一個範本。
+Task (EN): Decide if this work can be split, then pick ONE template from the list. CRC / SHA over one stream can NOT be split. Fill the fixed slots only. Answer in Traditional Chinese.
+任務：判斷能不能拆（CRC、SHA 這種一段接一段的運算不能拆），選一個範本。
 <<<資料 開始>>>
 [計算] {{排序 / CRC / SHA / BNN / 加總}}，資料量 {{N}}，現在耗時 {{…}}
 [拆法] {{N 片板子 / Pico 雙核 / 電腦多執行緒}}

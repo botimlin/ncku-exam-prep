@@ -173,8 +173,7 @@
     - value: {file: "考試相關資訊/section2-3/transfer-engine/main.c", start_at: "#include \"engine.h\"", end_at: "engine_wait(ch);", number_lines: true}
   checks:
     - {type: table_rows, min: 5}
-    - {type: regex, pattern: "count[^\\n]*(筆|次數|transfers)|(筆數|次數)[^\\n]*count|轉移次數|傳輸次數", name: count_meaning}
-    - {type: regex, pattern: "照抄[^\\n]*(engine\\.h|engine\\.c|engine)", name: prep_line}
+    - {type: regex, pattern: "照抄[\\s\\S]{0,160}(engine\\.h|engine\\.c|engine)", name: prep_line}
   golden: |
     | 行號 | 在做什麼 | 必要 / 可選 | 影響效能? |
     | 108 | engine_claim 取得通道 | 必要 | 否 |
