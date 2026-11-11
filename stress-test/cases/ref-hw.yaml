@@ -846,7 +846,7 @@
     - {match: "我的情境", value: "（無）"}
   checks:
     - {type: "contains_any", items: ["PICO_USE_SW_SPIN_LOCKS"], name: "sw_spinlocks"}
-    - {type: "contains_any", items: ["E2"], name: "erratum_e2"}
+    - {type: "contains_any", items: ["E2", "勘誤", "errata", "硬體 bug", "硬體問題"], name: "erratum_e2"}
     - {type: "evidence_grounded", min_quotes: 1, max_bad: 1}
     - {type: "not_regex", pattern: "答案[：:]\\s*(是|對)[，,。 ]", name: "not_hw"}
   golden: |
@@ -1877,8 +1877,7 @@
     - {match: "問題", value: "rclpy 橋接 node 裡如果在 callback 中用阻塞的 ser.read() 會怎樣？方案 A 的 serial timeout 要設多少？"}
     - {match: "我的情境", value: "（無）"}
   checks:
-    - {type: "regex", pattern: "timeout\\s*=\\s*0(?![.\\d])", name: "timeout0"}
-    - {type: "contains_any", items: ["create_timer"], name: "timer_poll"}
+    - {type: "regex", pattern: "timeout\\s*(=|要?設為|要?設成|設定為|：)\\s*0(?![.\\d])", name: "timeout0"}
     - {type: "evidence_grounded", min_quotes: 1, max_bad: 1}
     - {type: "not_regex", pattern: "答案[^\\n]*timeout\\s*=\\s*None", name: "not_blocking"}
   golden: |

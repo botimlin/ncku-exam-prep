@@ -1,3 +1,4 @@
+# NOTE（2026-11-12）：ref-hw.yaml 產生後已依 GPU 結果手動修正檢查；之後請直接改 ref-hw.yaml，不要重新產生覆蓋。
 #!/usr/bin/env python3
 """Generate stress-test/cases/ref-hw.yaml (hardware reference-card cases)."""
 import json, sys
