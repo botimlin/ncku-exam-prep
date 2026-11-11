@@ -29,7 +29,7 @@ Task (EN): Answer my question using ONLY the reference card(s) pasted earlier in
 ---
 
 【提示卡｜查詢 2/2｜用參考卡檢查我的程式】
-Task (EN): First list the rules/pitfalls written on the pasted reference card(s). Then check my code against each rule: OK / 違反 / 看不到, quoting the code line. Answer in Traditional Chinese.
+Task (EN): First list the rules written on the pasted reference card(s). For each rule, copy the related code line(s) with line numbers BEFORE judging, then judge OK / 違反 / 看不到. Answer in Traditional Chinese.
 任務：用前面貼的參考卡上的規則，逐條檢查我的程式。
 <<<資料 開始>>>
 [我的程式，帶行號]（`cat -n f.c | sed -n 30,70p`）
@@ -38,7 +38,8 @@ Task (EN): First list the rules/pitfalls written on the pasted reference card(s)
 規則：
 1. 規則只能來自參考卡，最多 8 條，照抄卡上的寫法。
 2. 程式裡找不到相關的行 → 「看不到」；只有找得到那一行才能判「違反」。
+填法：規則有「之前 / 之後 / 先 / 最後」→ 抄出兩邊的行號比大小；規則有「每次 / 一定要」→ 每個出現的地方都要找。
 先輸出：參考卡上的規則（逐條照抄，≤ 8 條，編號 1～8）
 再輸出：
-| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+| # | 程式相關的行（照抄，含行號；沒有寫「無」） | 規則要的是 | 結果 OK / 違反 / 看不到 |
 最該先修的 1 條（沒有寫「無」）：
