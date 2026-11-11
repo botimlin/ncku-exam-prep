@@ -89,6 +89,9 @@ BOOKS = [
 ]
 
 CSS = r"""
+pre.card { white-space: pre-wrap; word-break: break-all; font-size: 8.6pt; line-height: 1.42;
+  border: 1px solid #999; border-radius: 4px; padding: 6px 8px; margin: 8px 0; break-inside: avoid;
+  font-family: "Noto Sans Mono CJK TC", "Noto Sans CJK TC", monospace; background: #fafafa; }
 @page {
   size: A4;
   margin: 12mm 11mm 14mm 11mm;
@@ -152,7 +155,14 @@ def build_html(title: str, subtitle: str, files: list[str], flow: bool) -> str:
         md = path.read_text(encoding="utf-8")
         t = chapter_title(md, rel)
         toc.append(f"<li>{html.escape(t)} <span class='src'>（{html.escape(rel)}）</span></li>")
-        body = md_to_html(md)
+        if rel.startswith("cards/"):
+            # 貼上卡要「逐行照原樣」：每張卡用 <pre> 排，不讓 Markdown 把換行合併、把 * 當斜體
+            chunks = re.split(r"\n---\n", md)
+            body = md_to_html(chunks[0]) + "".join(
+                f"<pre class='card'>{html.escape(c.strip())}</pre>" if c.strip().startswith("【") else md_to_html(c)
+                for c in chunks[1:] if c.strip())
+        else:
+            body = md_to_html(md)
         # 在第一個 h1 後面標出來源檔
         body = body.replace("</h1>", f"</h1><div class='src'>{html.escape(rel)}</div>", 1)
         parts.append(f"<section class='chapter'>{body}</section>")
