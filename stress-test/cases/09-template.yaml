@@ -39,7 +39,7 @@
     | 題目要求 | 範本對應（函式 / 常數 / 行號） | 狀態 | 證據 |
     | 訂閱 /input Int32MultiArray | 訂閱 /numbers | 要改 | 「/numbers (std_msgs/Int32MultiArray)」 |
     | 回傳總和發佈 /sum UInt32 | pub_sum（serial_bridge.py:45） | 直接可用 | 「--SUM_U32--> Pico --> /sum (std_msgs/UInt32)」 |
-    | 回傳最大值發佈 /max | 無 | 範本沒有 | 範本只有 SUM_U32 和 CRC32 |
+    | 回傳最大值發佈 /max | 無 | 範本沒有 | 看不到 max |
     | 最多 100000 個數字 | batch_size 0 塞滿一包，分包合併（:65） | 直接可用 | 「0  = 批次: 一包塞滿 CHUNK_BYTES」 |
     先做：第 1 列（改訂閱 topic 就能跑出總和）
 

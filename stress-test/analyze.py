@@ -18,6 +18,20 @@ for f in sorted(glob.glob(os.path.join(run_dir, "*", "raw.jsonl"))):
         continue
     rows += [json.loads(l) for l in open(f, encoding="utf-8")]
 rows = [r for r in rows if r.get("status") in ("ok", "scored", None) or "passed" in r]
+if "--rescore" in sys.argv:  # 用目前的 run.py 檢查規則重新評分（不用重跑模型）
+    import importlib.util
+    here = os.path.dirname(os.path.abspath(__file__))
+    spec = importlib.util.spec_from_file_location("runmod", os.path.join(here, "run.py"))
+    R = importlib.util.module_from_spec(spec); spec.loader.exec_module(R)
+    cards, _ = R.parse_cards()
+    cases = {c["id"]: c for c in R.load_cases(os.path.join(here, "cases", "*.yaml"))}
+    for r in rows:
+        c = cases.get(r["case"])
+        if not c or r.get("response") is None:
+            continue
+        b = R.build_case(c, cards, variant=r.get("variant") or "card")
+        res, ok = R.evaluate(c, r["response"], b)
+        r["checks"], r["passed"] = res, ok
 models = sorted({r["model"] for r in rows}, key=lambda m: [x for x in m.replace(":", " ").split()])
 cases = sorted({r["case"] for r in rows})
 by = collections.defaultdict(list)

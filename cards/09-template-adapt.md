@@ -62,8 +62,8 @@ Task (EN): Edit only the template block below to meet the spec. Output a minimal
 <<<資料 結束>>>
 規則：
 1. 最多改 10 行；變數、函式、協定欄位名稱照原樣。
-2. `TODO(改這裡)` 保留，同一行後面加「// 已改：…」。
-3. 另一端要一起改時，寫出檔名和要改什麼。新增 cmd 要改 4 處：serial_proto.h、app_serial.c 的 handle()、frame.py 常數、fake_pico.py 的 handle()。
+2. 只輸出真的改了的行；`TODO(改這裡)` 保留，只在改了的那一行後面加「// 已改：…」。
+3. 另一端要一起改時，寫出檔名和要改什麼（改了計算方式 → 假板子 fake_pico.py 的 handle() 也要一樣改）。新增 cmd 要改 4 處：serial_proto.h、app_serial.c 的 handle()、frame.py 常數、fake_pico.py 的 handle()。
 只輸出：
 檔名:行號
 修改前：
@@ -120,9 +120,9 @@ D pico_dualcore_micro_ros.c：core0 跑 micro-ROS、core1 算
 E linux-perf/parallel_template.c：pthread 切塊、各自累加最後合併
 合併可用 algo/sort.c 的 merge_two_sorted / kway_merge。CRC、SHA 是串列運算，不能各算一段再合併。
 只輸出 5 行：
-能不能拆：可以 / 不行（理由 1 句）
+能不能拆（只寫「可以」或「不行」＋理由 1 句）：
 選：A–E
-瓶頸在：傳輸 / 計算（依據 1 句）
+瓶頸在（只寫「傳輸」或「計算」＋依據 1 句）：
 要改的 TODO(改這裡)：
 怎麼確認平行版 == 單機版：
 
@@ -161,7 +161,8 @@ Task (EN): Review the diff against the checklist. For each item answer exactly O
 7 micro-ROS 收：`.data=buf; .capacity=N; .size=0` 先配置；發：publish 前設 `.size`
 8 新 cmd 在 serial_proto.h、handle()、frame.py、fake_pico.py 都有且編號一致
 9 兩核 / 中斷共用的變數有 volatile 和鎖
-只輸出：
+規則：只有 diff 裡 + 或 - 開頭的行能判「有問題」，證據抄那一行；diff 沒有相關的行 → 「看不到」。
+只輸出（9 列）：
 | # | 結果 | 證據（diff 那一行） |
-最嚴重的 1 個問題與修法（≤ 2 行）：
+最嚴重的 1 個問題與修法（沒有就寫「無」，≤ 2 行）：
 範例（只示範格式，內容不要照抄）：| 3 | 有問題 | 「dma_channel_configure(ch, &c, dst, src, n, true)」少 write_increment |

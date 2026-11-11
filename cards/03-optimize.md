@@ -17,7 +17,7 @@ Task (EN): From the measurements, pick ONE bottleneck type A–F and quote the n
 [熱點程式碼]
 {{貼}}
 <<<資料 結束>>>
-類型：A 運算　B 記憶體 / 匯流排　C I/O 或通訊等待　D 同步（鎖競爭、false sharing）　E 演算法複雜度　F 量測不足，無法判斷
+類型：A 運算　B 記憶體 / 匯流排　C I/O 或通訊等待　D 同步（鎖競爭、false sharing）　E 演算法複雜度　F 量測不足（只有總時間、沒有分段數字）
 只輸出 5 行：
 瓶頸在哪一段：
 證據：「…」（照抄量測數字）
@@ -91,9 +91,9 @@ Task (EN): Judge this measurement in the 4 fixed slots. Pick reasons only from l
 <<<資料 結束>>>
 不如預期的原因：A 量到 debug 版　B 量測區段含 printf / log　C 硬體卸載（DMA / PIO / core1）沒真的在跑　D 瓶頸其實在別處　E 變異太大、次數太少　F 其他
 只輸出 4 行：
-符合預期：是 / 否
+符合預期（只寫「是」或「否」）：
 原因（選「否」時，選 A–F + 1 句依據）：
-決定：保留並 commit / 回復（正確性不同就一定回復）
+決定（只寫「保留並 commit」或「回復」；正確性不同就一定回復）：
 下一步量什麼：
 
 ---

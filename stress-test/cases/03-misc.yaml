@@ -227,5 +227,34 @@
     | # | 對 / 錯 / 資料中沒有 | 證據：「原文」 | 正確說法（判錯時） |
     | 1 | 對 | 「「複製」和「填值」用的是同一個引擎」 | |
     | 2 | 對 | 「描述 (configure) → 啟動 (start) → 等待 (wait / busy) → 取用結果」 | |
-    | 3 | 資料中沒有 | 文件沒有列出 engine_abort 等 API 名稱 | |
+    | 3 | 資料中沒有 | 資料中沒有 engine_abort | |
     | 4 | 錯 | 「count 的單位是「幾筆傳輸」，不是「幾個位元組」」 | count 填幾筆傳輸，不是 bytes |
+
+- id: dbg1-write-incr-ref
+  tags: [debug, dma, rank, reference]
+  desc: 同 dbg1-write-incr，但先貼 DMA 參考卡 2/8（考場實際用法）→ 第一個原因要是 write_increment
+  turns:
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}
+      assistant: "收到"
+  card: {file: "04-debug.md", title: "除錯 1/6"}
+  fills:
+    - {match: "指令與目的", value: "用 DMA 把 src 複製到 dst（1024 個 u32）"}
+    - {match: "預期", value: "dst 全部等於 src"}
+    - {match: "實際", value: "dst[0] = src[1023]，dst[1]~dst[1023] 全是 0"}
+    - {match: "錯誤訊息", value: "（沒有錯誤訊息）"}
+    - match: "相關程式碼"
+      value: |2
+            52	    int ch = dma_claim_unused_channel(true);
+            53	    dma_channel_config c = dma_channel_get_default_config(ch);
+            54	    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            55	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), true);
+            56	    dma_channel_wait_for_finish_blocking(ch);
+    - {match: "上次能用之後改了", value: "把設定改成用 dma_channel_get_default_config 的預設值"}
+    - {match: "已經試過", value: "把 1024 改成 512，dst[0] 變成 src[511]"}
+    - {match: "環境", value: "Pico 2（RP2350）ARM"}
+  checks:
+    - {type: rank_first, items: ["write_increment", "寫入位址", "寫遞增", "寫入遞增", "write increment", "dst 沒有遞增", "目的位址"], name: first_cause_write_incr}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
+    | 1 | 預設 write_increment 是 false，每次都寫到 dst[0] | 高 | 「dst[0] = src[1023]」 | 加 channel_config_set_write_increment(&c, true) | dst 全對 → 確認 |

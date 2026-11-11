@@ -80,7 +80,7 @@ Task (EN): Summarize this document section in the 5 fixed slots using only the t
 2. 沒有的寫「資料中沒有」。
 只輸出這 5 段：
 1. 摘要（3 句）
-2. 欄位表：| 名稱 | 位元 | 意義 | 預設值 | 讀寫（RO / RW / WC） |
+2. 欄位表：| 名稱 | 位元 | 意義 | 預設值 | 讀寫（RO / RW / WC） |（文件沒寫的格填「資料中沒有」，不要猜 0）
 3. 操作順序（1. 2. 3.）
 4. 限制與陷阱（對齊、最大值、時序、errata），每點附證據：「原文」
 5. 和我的題目的關係（≤ 2 行）
@@ -97,11 +97,12 @@ Task (EN): Describe this code in the 4 fixed slots. Do not suggest changes. Say 
 規則：
 1. 看不到定義的函式寫「看不到定義」，不要猜。
 2. 每個熱點和可疑處附行號。
-只輸出這 4 段：
-1. 呼叫結構（縮排條列，≤ 12 行）：初始化 / 主流程 / 輸出 / 同步點
+只輸出這 5 段：
+1. 呼叫結構（縮排條列，≤ 12 行，不要貼程式碼）：初始化 / 主流程 / 輸出 / 同步點
 2. 熱點（≤ 3 個）：行號 + 為什麼耗時
 3. 可疑處（≤ 3 個）：行號 + 為什麼可疑
 4. 用到的硬體或系統 API：| API | 作用 | 行號 |（例如 dma_、pio_、multicore_、spin_lock、create_subscription）
+5. 看不到定義的函式（逐一列出；沒有寫「無」）：
 範例（第 2 段）：L42 for 迴圈每筆呼叫 printf → USB I/O 很慢
 
 ---

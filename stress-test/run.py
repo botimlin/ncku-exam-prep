@@ -413,7 +413,10 @@ def collect_quotes(resp, extra_fields=()):
             for i in cols:
                 if i < len(rw):
                     cell = re.sub(r"^證據\s*[:：]\s*", "", rw[i])
-                    quotes += QUOTE_RE.findall(cell)
+                    found = QUOTE_RE.findall(cell)
+                    if not found and len(nq(cell)) >= 4 and not re.search(r"資料中沒有|看不到|無相關|^無$", cell):
+                        found = [cell.strip()]  # 證據欄沒加「」：整格當引用
+                    quotes += found
     seen, out = set(), []
     for q in quotes:
         if q not in seen:
@@ -496,6 +499,9 @@ def run_check(chk, resp, ctx):
         r["skipped"], r["detail"] = True, f"card does not ask for it (if_card /{chk['if_card']}/)"
         return r
     icase = chk.get("ignore_case", True)
+    if t in ("regex", "not_regex", "answer_field", "field_matches", "choice", "rank_first"):
+        # 模型常把答案寫在「標籤：」的下一行（或用 - 條列）→ 接回同一行再比對
+        resp = re.sub(r"([:：])[ \t]*\n[ \t]*(?:[-*•][ \t]*)?(?=\S)", r"\1 ", resp)
     code_free = FENCE_RE.sub("", resp)
     if t == "not_empty":
         r["passed"] = bool(resp.strip())
@@ -567,6 +573,7 @@ def run_check(chk, resp, ctx):
         corpus = nq("\n".join(ctx["corpus"]))
         bad = []
         for q in quotes:
+            q = q.strip().rstrip("。.，,；;、 ")  # 結尾標點差異不算錯
             parts = [p for p in re.split(r"…+|\.{3,}|⋯", q) if len(nq(p)) >= 2]
             if any(nq(p) not in corpus for p in parts):
                 bad.append(q)
