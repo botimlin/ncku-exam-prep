@@ -27,7 +27,7 @@
 9. `taskENTER_CRITICAL()` 在 SMP 下會**關本核中斷（BASEPRI）＋取得兩把跨核 spinlock**，等於全系統 kernel 鎖。只放幾行讀寫，越短越好。
 10. 最快的 task 間訊號是 **task notification**（官方說解除阻塞比 binary semaphore 快 45%、更省 RAM），但只能有一個接收者。
 11. 必開除錯：`configASSERT`、`configCHECK_FOR_STACK_OVERFLOW = 2`、`configUSE_MALLOC_FAILED_HOOK = 1`；檢查 `xTaskCreate` 回傳值是否 `pdPASS`、`xQueueCreate` 是否回傳 NULL。
-12. 在 task 裡可以用 pico-sdk 的 `sleep_ms()`（`configSUPPORT_PICO_TIME_INTEROP = 1` 時會變成 FreeRTOS 層級的阻塞），但 `busy_wait_ms()` 會真的佔住 CPU。
+12. 在 task 裡可以用 pico-sdk 的 `sleep_ms()`（`configSUPPORT_PICO_SYNC_INTEROP = 1` 時會變成 FreeRTOS 層級的阻塞），但 `busy_wait_ms()` 會真的佔住 CPU。
 
 ---
 
@@ -291,7 +291,8 @@ pico-examples 原版與上面的差別：原版 `configCHECK_FOR_STACK_OVERFLOW 
 | `configUSE_CORE_AFFINITY` | 1（才能綁核；`pico_flash` 的 `flash_safe_execute` 在 FreeRTOS SMP 下也要求它，否則 `#error`） |
 | `configRUN_MULTIPLE_PRIORITIES` | pico 用 1；設 0 時兩核只會同時跑同優先權的 task |
 | `configSUPPORT_PICO_SYNC_INTEROP` | 1：SDK 的 `mutex_t`、`semaphore_t`、`queue_t` 等在 FreeRTOS task 裡阻塞時會以 FreeRTOS 方式阻塞（讓出 CPU）；可在 FreeRTOS task 與非 FreeRTOS 核 / IRQ 間共用 |
-| `configSUPPORT_PICO_TIME_INTEROP` | 1：`sleep_ms/sleep_us/sleep_until` 在 task 中會真正在 FreeRTOS 層阻塞 |
+| `configSUPPORT_PICO_SYNC_INTEROP` | 1：`sleep_ms/sleep_us/sleep_until` 與 pico_sync（mutex / sem）在 task 中會真正在 FreeRTOS 層阻塞 |
+| `configSUPPORT_PICO_TIME_INTEROP` | 1：pico_time 的 alarm / timer 與 FreeRTOS 整合 |
 | `configTICK_RATE_HZ` | 1000（1 ms 解析度）。調低 → tick 中斷開銷少，但延遲解析度變粗 |
 | `configTOTAL_HEAP_SIZE` | heap_1/2/4 的總大小（bytes）。用 `xPortGetMinimumEverFreeHeapSize()` 校正 |
 | `configCHECK_FOR_STACK_OVERFLOW` | 0 不檢查；1 context switch 時檢查 SP 是否越界（快、不完整）；2 再檢查 stack 尾端填充 pattern 是否被改（較慢，能抓到大多數） |
@@ -320,7 +321,7 @@ pico-examples 原版與上面的差別：原版 `configCHECK_FOR_STACK_OVERFLOW 
 | `multicore_fifo_push/pop_blocking` 自己傳資料 | 不建議（SDK 的 `multicore.h` 也建議不要自己用 FIFO，因為 RTOS / launch 會用）；改用 FreeRTOS queue / notification |
 | `spin_lock_blocking` + 自己的 spinlock | 仍可用於極短的跨核保護，但不能在持鎖時呼叫任何 FreeRTOS API；task 間通常改用 `taskENTER_CRITICAL` 或 mutex |
 | `critical_section_t`、`mutex_t`、`semaphore_t`、`queue_t`（pico_sync / pico_util） | 開 `configSUPPORT_PICO_SYNC_INTEROP` 後在 task 裡可用，阻塞時會讓出 CPU；適合「FreeRTOS task ↔ 非 FreeRTOS 核 / IRQ」的情境 |
-| `sleep_ms(10)` | 開 TIME_INTEROP 後在 task 中 = FreeRTOS 阻塞，OK；但慣例上仍建議 `vTaskDelay(pdMS_TO_TICKS(10))` |
+| `sleep_ms(10)` | 開 SYNC_INTEROP 後在 task 中 = FreeRTOS 阻塞，OK；但慣例上仍建議 `vTaskDelay(pdMS_TO_TICKS(10))` |
 | `busy_wait_ms(10)` | 真的佔住 CPU 10 ms（pico-examples 用它示範「忙等會餓死低優先權 task」） |
 | `add_repeating_timer_ms` | 仍可用（callback 在 IRQ context）；在 callback 中只能呼叫 `FromISR` API |
 | `multicore_lockout_*` / flash 寫入 | 用 `flash_safe_execute()`；FreeRTOS SMP 下 pico_flash 會用 FreeRTOS 機制讓另一核停下來（`PICO_FLASH_SAFE_EXECUTE_SUPPORT_FREERTOS_SMP`，預設 1） |

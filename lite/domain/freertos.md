@@ -23,7 +23,7 @@ target_link_libraries(app PRIVATE pico_stdlib FreeRTOS-Kernel-Heap4)
 target：`FreeRTOS-Kernel`（含 pico_multicore）、`-Heap1..5`、`-Static`。上游 repo 需 init submodule Community-Supported-Ports。
 
 ## FreeRTOSConfig.h 重點
-`configNUMBER_OF_CORES 2`、`configUSE_CORE_AFFINITY 1`、`configRUN_MULTIPLE_PRIORITIES 1`（0=只同優先權並行）、`configTICK_RATE_HZ 1000`、`configTOTAL_HEAP_SIZE (128*1024)`、`configSUPPORT_PICO_SYNC_INTEROP 1`、`configSUPPORT_PICO_TIME_INTEROP 1`（task 內 `sleep_ms` 會讓出 CPU；`busy_wait_ms` 不會）、`configCHECK_FOR_STACK_OVERFLOW 2`、`configUSE_MALLOC_FAILED_HOOK 1`、`configASSERT(x)`（Release -DNDEBUG 會讓 assert 失效）。RP2350 Arm 必設：`configENABLE_MPU 0`、`configENABLE_TRUSTZONE 0`、`configRUN_FREERTOS_SECURE_ONLY 1`、`configENABLE_FPU 1`、`configMAX_SYSCALL_INTERRUPT_PRIORITY 16`。
+`configNUMBER_OF_CORES 2`、`configUSE_CORE_AFFINITY 1`、`configRUN_MULTIPLE_PRIORITIES 1`（0=只同優先權並行）、`configTICK_RATE_HZ 1000`、`configTOTAL_HEAP_SIZE (128*1024)`、`configSUPPORT_PICO_SYNC_INTEROP 1`（task 內 `sleep_ms` 會讓出 CPU；`busy_wait_ms` 不會）、`configSUPPORT_PICO_TIME_INTEROP 1`、`configCHECK_FOR_STACK_OVERFLOW 2`、`configUSE_MALLOC_FAILED_HOOK 1`、`configASSERT(x)`（Release -DNDEBUG 會讓 assert 失效）。RP2350 Arm 必設：`configENABLE_MPU 0`、`configENABLE_TRUSTZONE 0`、`configRUN_FREERTOS_SECURE_ONLY 1`、`configENABLE_FPU 1`、`configMAX_SYSCALL_INTERRUPT_PRIORITY 16`。
 
 ## API
 - `xTaskCreate(fn,"n",words,arg,prio,&h)`；`xTaskCreateAffinitySet(...,prio,1u<<core,&h)`；`vTaskCoreAffinitySet(h,mask)`

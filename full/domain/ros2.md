@@ -322,7 +322,7 @@ rclpy 中把整數傳給 `qos_profile`（如 `create_publisher(Int32, '/number',
 - 預設事件 callback 會在 log 印 WARN（rclpy / rclcpp 原始碼確認的字串）：
   - publisher 端：`New subscription discovered on topic '/x', requesting incompatible QoS. No messages will be sent to it. Last incompatible policy: RELIABILITY`
   - subscription 端：`New publisher discovered on topic '/x', offering incompatible QoS. No messages will be received from it. Last incompatible policy: ...`
-  - 型別不同：`Incompatible type on topic '/x', no messages will be sent to it.`（rclpy / rclcpp 的預設 callback 都有；需 RMW 支援此事件）
+  - 型別不同：**通常沒有 WARN**，只是收不到；`ros2 topic list -t` 會看到同一個 topic 列出兩種型別（例：`/y [std_msgs/msg/Int32, std_msgs/msg/Int64]`，Jazzy 實測）
 - 確認方式：`ros2 topic info -v /x`，逐一比對每個端點的 Reliability / Durability。
 - `ros2 topic echo` 會自動配對 publisher，所以「echo 看得到、我的 node 收不到」常是自己的 subscription QoS 太嚴格（例如要求 RELIABLE 但 publisher 是 BEST_EFFORT）。
 - 用 CLI 重現：`ros2 topic echo /x --qos-reliability reliable` 去接 best-effort publisher → 收不到且出現 warning。
