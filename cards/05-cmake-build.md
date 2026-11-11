@@ -25,8 +25,8 @@ Task (EN): Fill the table using only the CMakeLists.txt and CI script below. Quo
 | stdio（usb / uart） | | |
 | PIO header、extra outputs | | |
 | 輸出檔與位置 | | |
-| judge 的 configure 指令 | | |
-| judge 的 build 指令 | | |
+| CI 的 configure 指令（抄 [CI 建置指令]） | | |
+| CI 的 build 指令（抄 [CI 建置指令]） | | |
 範例（只示範格式，內容不要照抄）：| 連的函式庫 | app_dma：pico_stdlib、hardware_dma | 「target_link_libraries(app_dma hardware_dma)」 |
 
 ---

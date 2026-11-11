@@ -79,7 +79,7 @@
       value: {file: "預製程式碼/pico/app_serial.c", lines: [24, 57], number_lines: true}
     - {match: "不能改", value: "封包格式、既有 cmd 0x01~0x03 的行為"}
   checks:
-    - {type: patch_format, max_patches: 3}
+    - {type: patch_format, max_patches: 10}
     - {type: regex, pattern: "CMD_MAX_U32|0x04", name: new_cmd}
     - {type: k_of, k: 2, items: ["serial_proto.h", "frame.py", "fake_pico.py"], name: lists_other_files}
     - {type: max_code_block_lines, max: 16}

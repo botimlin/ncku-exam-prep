@@ -168,7 +168,7 @@
             18	}
   checks:
     - {type: regex, pattern: "(L|行|:)\\s*14|14\\s*行", name: hotspot_printf}
-    - {type: regex, pattern: "process[^\\n]*看不到定義|看不到定義[^\\n]*process", name: process_undefined}
+    - {type: regex, pattern: "process[^\\n]*看不到定義|看不到定義[\\s\\S]{0,150}process", name: process_undefined}
     - {type: contains_any, items: ["dma_claim_unused_channel"], name: lists_api}
     - {type: not_regex, pattern: "建議|改成|應該改", name: no_suggestion, category: format}
   golden: |

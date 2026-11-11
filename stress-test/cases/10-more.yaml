@@ -243,8 +243,8 @@
           - cmake -S pico -B build -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
           - cmake --build build -j8 --target app_dma
   checks:
-    - {type: table_cell, key: "judge 的 configure", col: 1, regex: "cmake -S pico -B build"}
-    - {type: table_cell, key: "judge 的 build", col: 1, regex: "--target app_dma|app_dma"}
+    - {type: table_cell, key: "configure 指令", col: 1, regex: "cmake -S pico -B build"}
+    - {type: table_cell, key: "build 指令", col: 1, regex: "--target app_dma|app_dma"}
     - {type: table_cell, key: "PIO", col: 1, regex: "pico_generate_pio_header|\\.pio"}
     - {type: evidence_grounded, min_quotes: 2}
   golden: |

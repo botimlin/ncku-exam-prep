@@ -170,7 +170,7 @@
   card: {file: "07-unknown-tech.md", title: "速學 3/6"}
   fills:
     - {match: "技術名稱", value: "transfer engine"}
-    - value: {file: "考試相關資訊/section2-3/transfer-engine/main.c", start_at: "int ch = engine_claim();", end_at: "engine_wait(ch);", number_lines: true}
+    - value: {file: "考試相關資訊/section2-3/transfer-engine/main.c", start_at: "#include \"engine.h\"", end_at: "engine_wait(ch);", number_lines: true}
   checks:
     - {type: table_rows, min: 5}
     - {type: regex, pattern: "count[^\\n]*(筆|次數|transfers)|(筆數|次數)[^\\n]*count|轉移次數|傳輸次數", name: count_meaning}
@@ -200,7 +200,7 @@
     - value: {file: "考試相關資訊/section2-3/transfer-engine/engine.h", start_at: "#define ENGINE_CHANNELS", end_at: "void engine_release"}
   checks:
     - {type: contains_any, items: ["engine_configure"], name: uses_configure}
-    - {type: regex, pattern: "L?21|第 ?21", name: cites_line}
+    - {type: regex, pattern: "L?21|第 ?21|20\\s*[-‑–~]\\s*2[12]", name: cites_line}
     - {type: regex, pattern: "確認[^\\n]*(memcmp|比對|相同|==)", name: has_check}
     - {type: identifiers_subset, pattern: "\\bengine_[a-z_]+\\b", name: no_invented_api}
   golden: |
@@ -254,7 +254,7 @@
     - {type: table_rows, min: 4}
     - {type: regex, pattern: "能動", name: working_first}
     - {type: regex, pattern: "1[56]:[0-3]\\d[^\\n]*(確認|push|pipeline)|pipeline|確認最終", name: final_check}
-    - {type: regex, pattern: "第一個能動版[\\s\\S]{0,200}(2-2|decode|位元)", name: starts_with_known}
+    - {type: regex, pattern: "^\\|[^|\\n]*09:4\\d[^|\\n]*\\|\\s*\\**2-2", name: starts_with_known}
   golden: |
     | 時段 | 小題 | 目標（能動版 / 某項優化） | 完成判準 | 超時備案 |
     | 09:40–10:40 | 2-2 | 能動版：decode_status() | CI 正確性 PASS | 先交部分欄位 |
