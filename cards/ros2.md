@@ -36,10 +36,10 @@
 - 兩個同名 node（node list 出現重複）→ 參數 / service 混亂；用 `--ros-args -r __node:=新名`。
 - node 消失 → 程式結束或 callback 例外；Python traceback 在啟動它的終端機。
 - `topic list` 與現況不符 → daemon 快取，`ros2 daemon stop` 後重試。
-- 型別不同（Int32 vs Int64 vs example_interfaces/msg/Int32）→ 連不上，預設印 WARN `Incompatible type on topic`。
+- 型別不同（Int32 vs Int64）→ 連不上、通常無 WARN；`ros2 topic list -t` 同一 topic 列出兩種型別。
 - `ROS_DOMAIN_ID` 不一致 → 互相看不見。
 - 改完程式沒重 build / 沒重新 source（C++ 一定要重 build；Python 沒用 --symlink-install 也要）。
-- 跨 container 時 discovery 正常但收不到資料 → Fast DDS 共享記憶體傳輸在不同 container 間不通（⚠️未驗證於考場環境；同一 container 內不會發生）。
+- 兩個 container 都 `--network host`：topic list 看得到但收不到 → Fast DDS 共享記憶體不通（實測）；兩邊加 `--ipc host`（預設 bridge 網路正常）。
 
 ---
 
@@ -110,11 +110,11 @@ if __name__ == '__main__':
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 環境：ROS 2 Jazzy（ros2cli / rclpy jazzy 分支原始碼確認）。
 1. `ros2 topic pub --once`（或 `-t N`）預設 `-w/--wait-matching-subscriptions` = 1：等到 1 個「相容」subscription 才發。沒 subscriber 或 QoS 不相容 → 一直卡著像當掉。強制發：`-w 0`，或 `--max-wait-time-secs 3`。不加 --once/-t 時 -w 預設 0、每秒發一次。
-2. rclpy 訊息欄位預設不檢查範圍（Iron 起關閉）。Int32 的 `data` 給超出 int32 的值不丟例外，在 C 層轉型時靜默變錯值（`(int32_t)PyLong_AsLong(v)`，64-bit Linux 上相當於取低 32 位 = 二補數回繞；⚠️未實測）。Python int 本身不溢位，要依規格自己決定截斷 / 夾限 / 回繞。設 `ROS_PYTHON_CHECK_FIELDS=1`（或建構時 `check_fields=True`）才會 assert；此時 callback 例外會讓 spin 中止、node 消失。回繞：`((v + 2**31) & 0xFFFFFFFF) - 2**31`。
+2. rclpy 訊息欄位預設不檢查範圍（Iron 起關閉）。Int32 的 `data` 給超出 int32 的值不丟例外，在 C 層轉型時靜默變錯值（取低 32 位 = 二補數回繞；實測 2**31+5 → -2147483643）。Python int 本身不溢位，要依規格自己決定截斷 / 夾限 / 回繞。設 `ROS_PYTHON_CHECK_FIELDS=1`（或建構時 `check_fields=True`）才會 assert；此時 callback 例外會讓 spin 中止、node 消失。回繞：`((v + 2**31) & 0xFFFFFFFF) - 2**31`。
 3. Executor / callback group：node 預設 callback group 是 MutuallyExclusive。只換 MultiThreadedExecutor、callback 都在預設 group → 仍一次一個。要並行：MultiThreadedExecutor 且放不同 group（或 Reentrant）。Python 有 GIL，純運算不會多核加速。
 4. callback 內同步 service call（`client.call()`）→ 死結；用 `call_async` + `future.add_done_callback`。
 5. `ros2 topic delay` 只能用在有 `header.stamp` 的訊息（Int32 不行）。
-6. `ROS_LOCALHOST_ONLY` 已 deprecated，改 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`。
+6. `ROS_LOCALHOST_ONLY` 已 deprecated（設 1 仍生效但印 WARN），改 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`（預設 SUBNET）。
 7. `ros2 service call` 型別必填；`ros2 action type` 是 Jazzy 新增。
 8. rclpy 有 `from rclpy.experimental import EventsExecutor`（7.1.4 起，實驗性）。
 

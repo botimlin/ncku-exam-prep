@@ -1,0 +1,2093 @@
+# 參考卡（軟體）：先貼一張參考卡、模型回「收到」，再用 11-ask-reference.md 的查詢 1/2（回答）或 2/2（檢查程式）。
+# 每張參考卡至少 1 題「只有這張卡答得出來」；每份檔案 ≥ 2 題「卡上沒有」（要回「資料中沒有」）與 1 題 check-code。
+# 卡片內容已對照 Jazzy docker image、GCC 13.3、Python 3.12.3、官方原始碼查證（2026-11-12）。
+
+# ============================================================ ROS 2（ros2.md）
+
+- id: ref-ros2-ladder-docker-exec
+  tags: [ref, sw, ros2]
+  desc: 除錯階梯 0：非互動 docker exec 不讀 .bashrc → bash -c 'source … && ros2 …'
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 docker exec rosbox ros2 topic list 會出現 ros2: command not found，但 docker exec -it rosbox bash 進去再打就可以。為什麼？不進去的話指令要怎麼寫？"}
+  checks:
+    - {type: contains_any, items: ["source /opt/ros/jazzy/setup.bash", "bash -c"], name: source_cmd}
+    - {type: contains_any, items: [".bashrc", "非互動"], name: reason_bashrc}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "apt(-get)?\\s+install|重新安裝|重裝", name: no_reinstall}
+  golden: |
+    證據：「非互動 `docker exec <c> ros2 ...` 不讀 .bashrc」
+    答案：非互動的 docker exec 不讀 .bashrc，所以沒有 ROS 環境；改用 docker exec rosbox bash -c 'source /opt/ros/jazzy/setup.bash && ros2 topic list'。
+    注意事項：先 printenv | grep -i ROS 確認有 ROS_DISTRO=jazzy
+    不確定的地方：無
+
+- id: ref-ros2-symptom-first-lost
+  tags: [ref, sw, ros2]
+  desc: 症狀表：第一筆總是不見 → VOLATILE 下 publish 太早、discovery 未完成（不是 BEST_EFFORT）
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的 subscriber 每次都少收第一筆（有時前兩筆），之後都正常。最優先懷疑什麼？"}
+    - {match: "我的情境", value: "publisher 一啟動就馬上 publish，QoS 用 10"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "discovery|太早|VOLATILE", name: first_lost_discovery}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(是|因為|懷疑)\\s*BEST_EFFORT", name: not_best_effort}
+  golden: |
+    證據：「第一筆或前幾筆總是不見 → VOLATILE 下 publish 太早，discovery 未完成。」
+    答案：VOLATILE 下 publisher 太早 publish，discovery 還沒完成，前幾筆沒人收。
+    注意事項：偶爾少幾筆才是 BEST_EFFORT / depth 太小
+    不確定的地方：無
+
+- id: ref-ros2-symptom-type-mismatch
+  tags: [ref, sw, ros2]
+  desc: 型別不同（Int32 vs Int64）通常沒有 WARN；用 ros2 topic list -t 看（查證後修正的事實）
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "publisher 用 std_msgs/msg/Int32、subscriber 用 std_msgs/msg/Int64，同一個 topic /y。log 會出現什麼警告？要怎麼確認是型別不同？"}
+  checks:
+    - {type: contains_any, items: ["topic list -t", "list -t"], name: list_t}
+    - {type: regex, pattern: "無\\s*WARN|沒有[^\\n]{0,8}(WARN|警告)|不會[^\\n]{0,6}(WARN|警告)", name: no_warn}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "Incompatible type on topic|incompatible QoS", name: no_invented_warn}
+  golden: |
+    證據：「型別不同（Int32 vs Int64）→ 連不上、通常無 WARN；`ros2 topic list -t` 同一 topic 列出兩種型別。」
+    答案：通常沒有任何 WARN，只是連不上；用 ros2 topic list -t，/y 會同時列出 Int32 和 Int64 兩種型別。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-ros2-qos-sensor-vs-default
+  tags: [ref, sw, ros2]
+  desc: QoS 相容：pub BEST_EFFORT（sensor_data）+ sub RELIABLE（qos=10）→ 不相容、收不到
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "publisher 用 qos_profile_sensor_data，我的 node 用 create_subscription(Int32, '/x', cb, 10)。我的 node 收得到嗎？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "不相容|收不到|不能|無法", name: incompatible}
+    - {type: contains_any, items: ["BEST_EFFORT"], name: names_policy}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(?<!不)(收得到|可以收到|能收到)", name: not_compatible}
+  golden: |
+    證據：「Reliability：pub BEST_EFFORT + sub RELIABLE → 不相容；其他相容。」「sensor_data：KEEP_LAST、depth 5、BEST_EFFORT、VOLATILE。」
+    答案：收不到。10 是 RELIABLE，sensor_data 的 publisher 是 BEST_EFFORT，這對不相容，完全不傳。
+    注意事項：不相容是靜默失敗，只有 WARN「requesting incompatible QoS」；用 ros2 topic info -v /x 比對
+    不確定的地方：無
+
+- id: ref-ros2-rclpy-arg-order
+  tags: [ref, sw, ros2]
+  desc: rclpy create_subscription (type, topic, callback, qos)；qos=10 = KEEP_LAST 10、RELIABLE、VOLATILE
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "rclpy 的 create_subscription 參數順序是什麼？最後那個 10 代表什麼 QoS？"}
+  checks:
+    - {type: regex, pattern: "type[^\\n]*topic[^\\n]*callback[^\\n]*qos", name: order_rclpy}
+    - {type: contains_all, items: ["KEEP_LAST", "RELIABLE"], name: qos10}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*BEST_EFFORT|\\(\\s*type\\s*,\\s*topic\\s*,\\s*qos", name: no_wrong_order}
+  golden: |
+    證據：「subscription (type, topic, callback, qos)。qos=10 即 KEEP_LAST 10、RELIABLE、VOLATILE。」
+    答案：順序是 (type, topic, callback, qos)；10 = KEEP_LAST depth 10、RELIABLE、VOLATILE。
+    注意事項：沒 spin 則 callback 不跑
+    不確定的地方：無
+
+- id: ref-ros2-jazzy-int32-overflow
+  tags: [ref, sw, ros2]
+  desc: rclpy Int32 給超範圍值不丟例外、靜默回繞（實測 2**31+5 → -2147483643）
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我把 msg.data = 2**31 + 5 指定給 std_msgs/msg/Int32 再 publish，會丟例外嗎？對方收到的值是多少？"}
+    - {match: "我的情境", value: "沒有設 ROS_PYTHON_CHECK_FIELDS"}
+  checks:
+    - {type: contains_any, items: ["-2147483643"], name: wrapped_value}
+    - {type: regex, pattern: "不(會)?丟|不檢查|靜默", name: no_exception}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*((?<!不)會丟|OverflowError|丟出例外)", name: no_overflow_error}
+  golden: |
+    證據：「rclpy 訊息欄位預設不檢查範圍（Iron 起關閉）。」「實測 2**31+5 → -2147483643」
+    答案：不會丟例外，在 C 層取低 32 位回繞，對方收到 -2147483643。
+    注意事項：設 ROS_PYTHON_CHECK_FIELDS=1 才會 assert；回繞公式 ((v + 2**31) & 0xFFFFFFFF) - 2**31
+    不確定的地方：無
+
+- id: ref-ros2-jazzy-localhost
+  tags: [ref, sw, ros2]
+  desc: Jazzy 只在本機通訊 → ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST（ROS_LOCALHOST_ONLY 已 deprecated）
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "在 Jazzy 要讓 ROS 2 node 只跟本機通訊、不要被網路上別人的 node 看到，要設哪個環境變數？"}
+  checks:
+    - {type: contains_any, items: ["ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST"], name: discovery_range}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(設|用|export)?\\s*`?ROS_LOCALHOST_ONLY", name: not_localhost_only}
+  golden: |
+    證據：「`ROS_LOCALHOST_ONLY` 已 deprecated（設 1 仍生效但印 WARN），改 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`（預設 SUBNET）。」
+    答案：設 ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST；每個 shell 都要一樣。
+    注意事項：ROS_LOCALHOST_ONLY 在 Jazzy 已 deprecated
+    不確定的地方：無
+
+- id: ref-ros2-executor-default-group
+  tags: [ref, sw, ros2]
+  desc: 只換 MultiThreadedExecutor、callback 都在預設 group → 仍一次一個
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我把 rclpy.spin(node) 換成 MultiThreadedExecutor，timer 和 subscription 都沒指定 callback_group。它們會同時執行嗎？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "不會|一次一個|不能", name: not_parallel}
+    - {type: contains_any, items: ["MutuallyExclusive"], name: default_group}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(會|可以)", name: no_yes}
+  golden: |
+    證據：「node 預設 group = MutuallyExclusive。」「只有 MultiThreadedExecutor + 不同 group（或 Reentrant）才真的並行」
+    答案：不會，兩個都在預設的 MutuallyExclusive group，仍一次一個；要放不同 group 才並行。
+    注意事項：rclpy 有 GIL，純運算不加速；共享資料要加鎖
+    不確定的地方：無
+
+- id: ref-ros2-perf-intra-process
+  tags: [ref, sw, ros2]
+  desc: 同 process 零複製 intra-process 只有 rclcpp
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的 pipeline 是 rclpy 寫的兩個 node，可以開 intra-process 零複製來降低延遲嗎？"}
+  checks:
+    - {type: regex, pattern: "只有\\s*rclcpp|rclpy\\s*(不能|不支援|沒有)|不行|不可以", name: rclcpp_only}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "rclpy\\s*(也)?(可以|能)(用|開|使用)", name: no_rclpy_ipc}
+  golden: |
+    證據：「同 process 零複製（只有 rclcpp）：`rclcpp::NodeOptions().use_intra_process_comms(true)`」
+    答案：不行，intra-process 零複製只有 rclcpp；rclpy 要改成 rclcpp 才能用。
+    注意事項：熱路徑改 rclcpp 通常提升最大
+    不確定的地方：無
+
+- id: ref-ros2-cli-rclcpp-order
+  tags: [ref, sw, ros2]
+  desc: rclcpp create_subscription 是 (topic, qos, callback)，和 rclpy 不同
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "rclcpp 的 create_subscription 參數順序是什麼？"}
+  checks:
+    - {type: regex, pattern: "topic\\s*,\\s*qos\\s*,\\s*(callback|cb)", name: order_rclcpp}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*topic\\s*,\\s*(callback|cb)\\s*,\\s*qos", name: not_rclpy_order}
+  golden: |
+    證據：「C++ subscription 參數是 (topic, qos, callback)，與 rclpy 不同。」
+    答案：(topic, qos, callback)，例如 create_subscription<std_msgs::msg::Int32>("/number",10,cb)。
+    注意事項：sub_ 要存成成員 SharedPtr，區域變數離開 scope 就被銷毀
+    不確定的地方：無
+
+- id: ref-ros2-cli-private-name
+  tags: [ref, sw, ros2]
+  desc: 名稱解析：~/number 在 ns /ns、node n → /ns/n/number
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "node 名稱 n、namespace /ns，程式裡 topic 寫 ~/number，實際的 topic 全名是什麼？寫 number 呢？"}
+  checks:
+    - {type: contains_all, items: ["/ns/n/number", "/ns/number"], name: resolved}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "~/number[^\\n]*→\\s*/number\\b|答案[^\\n]*~/number[^\\n]*/n/number(?<!/ns/n/number)", name: no_wrong_resolve}
+  golden: |
+    證據：「`number` 相對 → `/ns/number`；`~/number` 私有 → `/ns/n/number`。」
+    答案：~/number 是 /ns/n/number；number 是 /ns/number。
+    注意事項：區分大小寫，差一字就是另一個 topic
+    不確定的地方：無
+
+- id: ref-ros2-absent-shm-size
+  tags: [ref, sw, ros2, absent]
+  desc: QoS 卡沒寫 Fast DDS 共享記憶體大小 → 資料中沒有
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Jazzy 預設的 Fast DDS 共享記憶體 segment 大小是多少？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "\\d+\\s*(MB|KB|MiB|KiB|bytes)", name: no_invented_size, category: grounding}
+  golden: |
+    證據：「確認：`ros2 topic info -v /x` 逐端比對。」
+    答案：資料中沒有；這張卡只寫 QoS，沒有共享記憶體大小。
+    注意事項：無
+    不確定的地方：要查 Fast DDS 官方文件
+
+- id: ref-ros2-absent-bag
+  tags: [ref, sw, ros2, absent]
+  desc: CLI 卡沒寫 ros2 bag → 資料中沒有，不編壓縮格式
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "ros2 bag record 要壓縮的話有哪些壓縮格式可以選？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "zstd|lz4|gzip|--compression-format", name: no_invented_bag, category: grounding}
+  golden: |
+    證據：「`ros2 interface show std_msgs/msg/Int32`」
+    答案：資料中沒有；卡上沒有 ros2 bag。
+    注意事項：無
+    不確定的地方：去查 docs.ros.org/en/jazzy 的 ros2 bag 教學
+
+- id: ref-ros2-check-sleep-in-callback
+  tags: [ref, sw, ros2, check-code]
+  desc: 查詢 2/2：callback 內 time.sleep → 違反「callback 不可 time.sleep()」，其他不亂報
+  turns:
+    - card: {file: "ros2.md", title: "ROS 2 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            12	        self.create_timer(0.01, self.fast_loop, callback_group=g_timer)
+            13	        self.create_subscription(Int32, '/number', self.on_msg, 10, callback_group=g_sub)
+            14	    def on_msg(self, msg):
+            15	        with self.lock:
+            16	            self.last = msg.data
+            17	        time.sleep(0.5)
+            18	    def fast_loop(self):
+            19	        with self.lock:
+            20	            v = self.last
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*time\\.sleep|time\\.sleep[^\\n]*違反", name: sleep_flagged}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. MutuallyExclusive：同組一次一個。Reentrant：同組（含同一 callback 自己）可並行。
+    2. 只有 MultiThreadedExecutor + 不同 group（或 Reentrant）才真的並行 → 共享資料加鎖
+    3. callback 不可 `time.sleep()` / `while True`；固定頻率用 timer。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | OK | 12 / 13 各自不同 group |
+    | 2 | OK | 15 with self.lock: |
+    | 3 | 違反 | 17 time.sleep(0.5) |
+    最該先修的 1 條：第 17 行 time.sleep 拿掉，改用 timer
+
+# ============================================================ git / 環境（git-env.md）
+
+- id: ref-git-ci-default-stage
+  tags: [ref, sw, git]
+  desc: .gitlab-ci.yml 沒寫 stage 的 job 預設屬於 test
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 1/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: ".gitlab-ci.yml 裡有一個 job 叫 judge-job，沒有寫 stage:，它屬於哪個 stage？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "test", name: stage_test}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "預設(屬於|是|為)\\s*`?build", name: not_build}
+  golden: |
+    證據：「stage: build              # 沒寫 stage 的 job 預設屬於 test」
+    答案：沒寫 stage 的 job 預設屬於 test。
+    注意事項：看 stages: 列出的階段順序
+    不確定的地方：無
+
+- id: ref-git-unstage
+  tags: [ref, sw, git]
+  desc: 取消 add 但保留修改 → git restore --staged / git reset file（不是 reset --hard）
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 2/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我已經 git add 了 main.c，但這次不想 commit 它。怎麼取消 add、但保留我在檔案裡的修改？"}
+  checks:
+    - {type: contains_any, items: ["git restore --staged main.c", "git reset main.c", "restore --staged", "git reset file.c"], name: unstage_cmd}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(reset --hard|checkout -- main\\.c|git restore main\\.c)", name: no_discard}
+  golden: |
+    證據：「取消 add：`git reset file.c`（或 `git restore --staged file.c`）」
+    答案：git restore --staged main.c（或 git reset main.c），檔案內容的修改會保留。
+    注意事項：git reset --hard 會丟資料，非必要不用
+    不確定的地方：無
+
+- id: ref-git-docker-rm-lost
+  tags: [ref, sw, git]
+  desc: --rm 容器沒掛載 → 修改刪除後消失
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 3/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 docker run --rm -it --name X ros:jazzy-ros-core 進去改了 /root/ws/src/node.py，沒有用 -v。exit 之後這個修改還在嗎？要怎麼保留？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "不在|消失|不見|沒了|不會保留", name: lost}
+    - {type: contains_any, items: ["-v", "掛載", "docker cp", "commit", "push"], name: how_keep}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(還在|會保留|在)", name: not_kept}
+  golden: |
+    證據：「`docker run --rm -it --name X image`：啟動並進入，離開即刪除」「容器刪除後，沒掛載到主機的修改會消失。」
+    答案：不在了，--rm 離開即刪除，沒掛載的修改會消失；改用 docker run --rm -it -v "$PWD:/work" image 掛載，或離開前 docker cp / commit、push。
+    注意事項：重要的東西 commit / push 或掛載
+    不確定的地方：無
+
+- id: ref-git-pthread-link
+  tags: [ref, sw, git]
+  desc: -pthread 編譯與連結都要加
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 4/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我分兩步：gcc -c -pthread a.c 然後 gcc a.o -o a。-pthread 只放在編譯那一步夠嗎？"}
+  checks:
+    - {type: regex, pattern: "連結[^\\n]{0,10}(也|都)要|編譯與連結都要|不夠", name: link_too}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(夠|可以|足夠)", name: not_enough}
+  golden: |
+    證據：「`-pthread`（編譯與連結都要）」
+    答案：不夠，-pthread 編譯與連結都要加：gcc a.o -o a -pthread。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-git-absent-rebase
+  tags: [ref, sw, git, absent]
+  desc: git 卡沒寫 rebase -i → 資料中沒有
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 2/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "怎麼用 git rebase -i 把最後 3 個 commit 壓成 1 個？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "squash|fixup|HEAD~3", name: no_invented_rebase, category: grounding}
+  golden: |
+    證據：「注意：`git reset --hard`、`git push --force` 會丟資料，非必要不用，用前先 `git tag` 備份。」
+    答案：資料中沒有；卡上沒有 rebase。
+    注意事項：改歷史後要 push --force 會丟資料，先 git tag 備份
+    不確定的地方：查 git-scm.com 的 git-rebase 文件
+
+- id: ref-git-absent-ci-rules
+  tags: [ref, sw, git, absent]
+  desc: pipeline 卡沒寫 rules / only → 資料中沒有
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 1/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: ".gitlab-ci.yml 的 rules: 跟 only: 差在哪？要怎麼讓 job 只在 main 分支跑？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "CI_COMMIT_BRANCH|CI_COMMIT_REF_NAME|if:\\s*\\$|only:\\s*\\n?\\s*-\\s*main", name: no_invented_rules, category: grounding}
+  golden: |
+    證據：「`.gitlab-ci.yml` 要看的重點：」
+    答案：資料中沒有；卡上只列 stages、stage、image、script、artifacts。
+    注意事項：無
+    不確定的地方：查 GitLab CI/CD YAML 語法文件
+
+- id: ref-git-check-force-push
+  tags: [ref, sw, git, check-code]
+  desc: 查詢 2/2：腳本用 git push --force 沒先 tag → 違反卡上的注意
+  turns:
+    - card: {file: "git-env.md", title: "git/環境 2/4"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+             1	git status
+             2	git diff --staged
+             3	git add src/node.py
+             4	git commit -m "fix QoS depth"
+             5	git push --force
+             6	git log --oneline --graph -20
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*--force|--force[^\\n]*違反", name: force_flagged}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. `git reset --hard`、`git push --force` 會丟資料，非必要不用，用前先 `git tag` 備份。
+    2. `.gitignore` 確認 `build/` 等產物不會被加入。
+    3. 考試帳密只用在考試 GitLab。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | 違反 | 5 git push --force |
+    | 2 | 看不到 | — |
+    | 3 | 看不到 | — |
+    最該先修的 1 條：第 5 行改成 git push（不要 --force），要改歷史先 git tag 備份
+
+# ============================================================ C / Linux 效能（c-linux-perf.md）
+
+- id: ref-cperf-struct-padding
+  tags: [ref, sw, c-perf]
+  desc: struct {char,double,char,int} 24B → 欄位由大到小 16B
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我有 100 萬個 struct { char a; double b; char c; int d; }。只改欄位順序，每個 struct 可以從幾 bytes 變成幾 bytes？要怎麼排？"}
+  checks:
+    - {type: contains_all, items: ["24", "16"], name: sizes}
+    - {type: contains_any, items: ["由大到小", "大到小"], name: order_rule}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(變成|→|到)\\s*(14|13|12|20)\\s*(B|bytes|位元組)", name: no_wrong_size}
+  golden: |
+    證據：「欄位由大到小排（{char,double,char,int} 24B→16B）」
+    答案：24B → 16B；欄位由大到小排：double b、int d、char a、char c。
+    注意事項：介面固定時不能改
+    不確定的地方：無
+
+- id: ref-cperf-fp-accumulators
+  tags: [ref, sw, c-perf]
+  desc: double 累加改 4 個累加器會改結果（只有整數安全）
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "for (i = 0; i < n; i++) s += a[i]; 其中 a 和 s 是 double，judge 逐位元比對輸出。可以改成 4 個累加器加速嗎？"}
+  checks:
+    - {type: regex, pattern: "浮點會改結果|改(變)?結果|不行|不可以|不建議", name: changes_result}
+    - {type: contains_any, items: ["整數"], name: int_only}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能|沒問題)", name: not_ok}
+  golden: |
+    證據：「`s += a[i]` 相依鏈 | 整數用 4 個累加器+處理尾端 | 浮點會改結果」
+    答案：不行；4 個累加器只適合整數，double 改了加法順序，浮點會改結果，逐位元比對會錯。
+    注意事項：一次改一處 → cmp 比對輸出
+    不確定的地方：無
+
+- id: ref-cperf-perf-paranoid
+  tags: [ref, sw, c-perf]
+  desc: Ubuntu perf_event_paranoid 預設 4 → perf 不能用，改 gprof / clock_gettime（不能改 sysctl）
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "考場容器裡 perf stat ./prog 出現 No supported events found。perf_event_paranoid 預設是多少？不能改系統設定的話要改用什麼量測？"}
+  checks:
+    - {type: regex, pattern: "paranoid[^\\n]{0,12}4|=\\s*4\\b|預設\\s*(是|為)?\\s*4", name: paranoid4}
+    - {type: contains_any, items: ["gprof", "clock_gettime"], name: alternative}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "sysctl\\s+-w|echo\\s+-?[0-2]\\s*>|paranoid[^\\n]{0,6}(=|是|為)\\s*[0-2]\\b", name: no_sysctl}
+  golden: |
+    證據：「Ubuntu 實測預設 perf_event_paranoid=4（一般使用者 perf stat 出現 No supported events found）」「不能改 sysctl → 改用 gprof 或 clock_gettime 手動計時。」
+    答案：預設 4；不能改 sysctl，改用 gprof（gcc -O2 -pg）或 clock_gettime 分段計時。
+    注意事項：gprof 要程式正常結束才寫 gmon.out
+    不確定的地方：無
+
+- id: ref-cperf-nproc-cgroup
+  tags: [ref, sw, c-perf]
+  desc: cpu.max "150000 100000" ≈ 1.5 顆；nproc（coreutils < 9.8）不看配額
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "容器裡 nproc 印 12，cat /sys/fs/cgroup/cpu.max 是 150000 100000。實際可用幾顆 CPU？nproc 可信嗎？"}
+  checks:
+    - {type: contains_any, items: ["1.5"], name: quota}
+    - {type: regex, pattern: "不(一定)?(可信|看)|不準", name: nproc_untrusted}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:][^\\n]*(可用|有)\\s*12\\s*顆", name: not_12}
+  golden: |
+    證據：「cpu.max "150000 100000" ≈ 1.5 顆；"max 100000" = 不限。」「nproc 不一定看 cgroup 配額（coreutils 9.8 前不看）。」
+    答案：約 1.5 顆；nproc 不可信，coreutils 9.8 前不看 cgroup 配額，執行緒數依 cpu.max 決定。
+    注意事項：judge 若量 CPU 時間，多執行緒不會變快
+    不確定的地方：無
+
+- id: ref-cperf-harness-zero
+  tags: [ref, sw, c-perf]
+  desc: 計時 harness 量到 0 秒 = 結果沒被使用而被刪（用 KEEP / g_sink）
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 bench() 量一個加總函式，-O2 下 min 0.000 ms。是函式太快嗎？要怎麼改？"}
+  checks:
+    - {type: contains_any, items: ["被刪", "沒被使用", "沒用到"], name: dce}
+    - {type: contains_any, items: ["KEEP", "g_sink"], name: keep_macro}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(是|對)[，,]?\\s*(函式)?太快", name: not_too_fast}
+  golden: |
+    證據：「量到 0 秒 = 結果沒被使用而被刪。」「#define KEEP(x) (g_sink = (long long)(x))」
+    答案：不是太快，是結果沒被使用而被編譯器刪掉；把結果 KEEP(sum) 寫進 volatile g_sink。
+    注意事項：不用 -O0 量
+    不確定的地方：無
+
+- id: ref-cperf-fp-contract
+  tags: [ref, sw, c-perf]
+  desc: 避免 a*b+c 被合成 FMA → -ffp-contract=off（GNU 模式預設 fast）
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "同一個 C 程式在 aarch64 和 x86-64 上 -O2 編譯，浮點輸出末位不同。可能是什麼？要加什麼旗標？"}
+  checks:
+    - {type: contains_any, items: ["-ffp-contract=off"], name: flag}
+    - {type: contains_any, items: ["FMA"], name: fma}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "加\\s*`?-ffast-math|加\\s*`?-Ofast", name: no_fast_math}
+  golden: |
+    證據：「GNU 模式（預設 -std=gnu17）預設 -ffp-contract=fast：有 FMA 時（aarch64 一律有；x86 需 -mfma / x86-64-v3 / native）a*b+c 可能合成 FMA，末位不同 → 加 -ffp-contract=off。」
+    答案：aarch64 把 a*b+c 合成 FMA；加 -ffp-contract=off。
+    注意事項：-ffast-math / -Ofast 會改浮點結果
+    不確定的地方：無
+
+- id: ref-cperf-vec-aliasing
+  tags: [ref, sw, c-perf]
+  desc: -fopt-info-vec-missed「possible aliasing」→ restrict（確定不重疊）或 #pragma GCC ivdep
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "gcc -O3 -fopt-info-vec-missed 說我的迴圈 possible aliasing 沒有向量化。要怎麼改？"}
+  checks:
+    - {type: contains_any, items: ["restrict"], name: restrict}
+    - {type: contains_any, items: ["不重疊", "ivdep"], name: caveat}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "-march=native[^\\n]*(解決|就好|可以)", name: no_march_native}
+  golden: |
+    證據：「possible aliasing / versioned | restrict（確定不重疊才加）、區域陣列、#pragma GCC ivdep」
+    答案：指標參數加 restrict（確定不重疊才加），或用區域陣列、#pragma GCC ivdep。
+    注意事項：restrict 騙編譯器 = UB
+    不確定的地方：無
+
+- id: ref-cperf-read-int-limits
+  tags: [ref, sw, c-perf]
+  desc: 自寫 read_int 只處理十進位整數；+5、科學記號會錯，浮點用 strtod
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "題目輸入可能出現 +5 和 1e3 這種寫法，可以直接用卡上的 read_int 嗎？浮點數呢？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "不(能|行|可以)|會錯", name: cannot}
+    - {type: contains_any, items: ["strtod"], name: strtod}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能)", name: not_yes}
+  golden: |
+    證據：「只處理十進位整數；`+5`、科學記號會錯 → 先看規格。浮點用 strtod，不要自寫。」
+    答案：不能，read_int 遇到 +5、1e3 會錯；浮點用 strtod。
+    注意事項：先看規格
+    不確定的地方：無
+
+- id: ref-cperf-setvbuf-timing
+  tags: [ref, sw, c-perf]
+  desc: setvbuf 必須在第一次輸出前呼叫
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我想用 setvbuf 把 stdout 緩衝加大到 1 MB，要在什麼時候呼叫？"}
+  checks:
+    - {type: contains_any, items: ["第一次輸出前"], name: before_first_output}
+    - {type: contains_any, items: ["_IOFBF"], name: iofbf}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(任何時候|隨時)都可以", name: not_anytime}
+  golden: |
+    證據：「`static char outbuf[1 << 20]; setvbuf(stdout, outbuf, _IOFBF, sizeof outbuf);` 必須在第一次輸出前呼叫。」
+    答案：必須在第一次輸出前呼叫，例如 main 一開始：setvbuf(stdout, outbuf, _IOFBF, sizeof outbuf)。
+    注意事項：互動題每次輸出後要 fflush(stdout)
+    不確定的地方：無
+
+- id: ref-cperf-absent-inline-param
+  tags: [ref, sw, c-perf, absent]
+  desc: 旗標卡沒寫 inline 參數值 → 資料中沒有
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "GCC 13 的 max-inline-insns-auto 在 -O2 和 -O3 各是多少？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "max-inline-insns-auto[^\\n]{0,20}\\d{2,}|\\b(15|30)\\s*(條|個指令|insns)", name: no_invented_param, category: grounding}
+  golden: |
+    證據：「`gcc -O2 -Q --help=optimizers | grep enabled`」
+    答案：資料中沒有；卡上沒有 inline 參數值。
+    注意事項：無
+    不確定的地方：查 gcc.gnu.org 的 Optimize Options（--param）
+
+- id: ref-cperf-absent-madvise
+  tags: [ref, sw, c-perf, absent]
+  desc: 快速輸入卡沒寫 mmap 參數數值 → 資料中沒有
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "用 mmap 讀輸入檔時，madvise 的 MADV_SEQUENTIAL 常數值是多少？mmap 的 prot 要填什麼？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "MADV_SEQUENTIAL\\s*(=|是|為)\\s*\\d|PROT_READ", name: no_invented_mmap, category: grounding}
+  golden: |
+    證據：「mmap+MADV_SEQUENTIAL 只適用一般檔案；stdin 是管線會失敗，要留 fread 備案。」
+    答案：資料中沒有；卡上沒寫常數值與 prot。
+    注意事項：stdin 是管線時 mmap 會失敗
+    不確定的地方：查 man7.org 的 mmap(2)、madvise(2)
+
+- id: ref-cperf-check-setvbuf-late
+  tags: [ref, sw, c-perf, check-code]
+  desc: 查詢 2/2：setvbuf 放在 printf 之後 → 違反「必須在第一次輸出前呼叫」
+  turns:
+    - card: {file: "c-linux-perf.md", title: "C/Linux 效能 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            30	static char outbuf[1 << 20];
+            31	int main(void) {
+            32	    int n = read_n();
+            33	    printf("%d\n", n);
+            34	    setvbuf(stdout, outbuf, _IOFBF, sizeof outbuf);
+            35	    for (int i = 0; i < n; i++) write_int(calc(i));
+            36	    flush_out();
+            37	    return 0;
+            38	}
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*setvbuf|setvbuf[^\\n]*違反", name: setvbuf_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*flush_out|flush_out[^\\n]*違反", name: flush_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. main 結束前一定要 flush_out()！忘記 = 輸出不完整
+    2. 加大緩衝：setvbuf(stdout, outbuf, _IOFBF, sizeof outbuf); 必須在第一次輸出前呼叫。
+    3. 互動題必須每次輸出後 fflush(stdout)，否則卡住。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | OK | 36 flush_out(); |
+    | 2 | 違反 | 34 setvbuf(stdout, outbuf, _IOFBF, sizeof outbuf); 在 33 printf 之後 |
+    | 3 | 看不到 | — |
+    最該先修的 1 條：把第 34 行移到第 32 行之前
+
+# ============================================================ Python 效能（python-perf.md）
+
+- id: ref-pyperf-process-time
+  tags: [ref, sw, py-perf]
+  desc: CPU 時間用 time.process_time()；牆鐘 perf_counter_ns；不要 time.time()
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 1/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我想知道一段程式是真的在算，還是在等 I/O。要量哪兩種時間、用哪兩個函式？"}
+  checks:
+    - {type: contains_all, items: ["process_time", "perf_counter"], name: both_clocks}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*用\\s*`?time\\.time\\(\\)", name: no_time_time}
+  golden: |
+    證據：「`time.perf_counter_ns()` 牆鐘；`time.process_time()` CPU 時間。牆鐘 ≫ CPU → 在等 I/O / 鎖 / sleep。不要用 `time.time()`。」
+    答案：牆鐘用 time.perf_counter_ns()、CPU 時間用 time.process_time()；牆鐘遠大於 CPU 時間就是在等 I/O / 鎖 / sleep。
+    注意事項：不要用 time.time()；量測輸出寫 sys.stderr
+    不確定的地方：無
+
+- id: ref-pyperf-deque
+  tags: [ref, sw, py-perf]
+  desc: list.pop(0) 當佇列 → deque.popleft()
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 2/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 list 當 BFS 的佇列，每次 q.pop(0)，n 很大時很慢。換什麼？"}
+  checks:
+    - {type: contains_any, items: ["popleft"], name: popleft}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(heapq|queue\\.Queue)", name: no_wrong_ds}
+  golden: |
+    證據：「`list.pop(0)` 當佇列 → `deque.popleft()`；環形緩衝 `deque(maxlen=N)`：10～100×」
+    答案：換成 collections.deque，用 q.popleft()，約 10～100 倍。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-pyperf-numpy-to-msg
+  tags: [ref, sw, py-perf]
+  desc: numpy → msg.data 先 .tobytes()（memcpy）；直接給 numpy 逐元素 71 ms（查證後修正）
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 3/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我有一個 100 萬個元素的 numpy int32 陣列 arr，要放進 Int32MultiArray 的 msg.data。直接 msg.data = arr 快嗎？最快怎麼寫？"}
+  checks:
+    - {type: contains_any, items: ["tobytes"], name: tobytes}
+    - {type: contains_any, items: ["71", "逐元素", "比 list 還慢"], name: numpy_slow}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(快|很快|直接給就好)", name: not_fast}
+  golden: |
+    證據：「memoryview：36 ms；numpy 陣列：71 ms（都被當一般 iterable 逐元素，比 list 還慢）」「msg.data = np_arr.astype(np.int32, copy=False).tobytes()」
+    答案：不快，直接給 numpy 會逐元素 71 ms；改 msg.data = arr.astype(np.int32, copy=False).tobytes()，走 memcpy。
+    注意事項：ROS_PYTHON_CHECK_FIELDS=1 時指定 list 非常慢
+    不確定的地方：無
+
+- id: ref-pyperf-spin-once-busy
+  tags: [ref, sw, py-perf]
+  desc: while rclpy.ok() 內 spin_once(timeout_sec=0) → busy loop CPU 100% + 每次加入/移出 executor
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 4/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的主迴圈是 while rclpy.ok(): rclpy.spin_once(node, timeout_sec=0)。有什麼問題？要怎麼改？"}
+  checks:
+    - {type: contains_any, items: ["100%", "busy"], name: busy_loop}
+    - {type: contains_any, items: ["rclpy.spin(node)", "SingleThreadedExecutor", "timer"], name: fix}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(沒有問題|沒問題|正確)", name: not_ok}
+  golden: |
+    證據：「`while rclpy.ok(): rclpy.spin_once(node, timeout_sec=0)`：busy loop CPU 100%，且每次都把 node 加進 / 移出 executor。」
+    答案：這是 busy loop，CPU 100%，每次還把 node 加進 / 移出 executor；改用 rclpy.spin(node) + timer。
+    注意事項：一定要自己寫迴圈就建一次 SingleThreadedExecutor，迴圈內 ex.spin_once(timeout_sec=0.01)
+    不確定的地方：無
+
+- id: ref-pyperf-fork-in-rclpy
+  tags: [ref, sw, py-perf]
+  desc: rclpy 初始化後 fork 有死結風險 → init 前建 pool 或 spawn
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 5/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我想在 rclpy node 的 callback 裡用 ProcessPoolExecutor 平行算。Python 3.12 Linux 預設的 start method 是什麼？有什麼風險、怎麼做比較安全？"}
+  checks:
+    - {type: contains_any, items: ["fork"], name: default_fork}
+    - {type: contains_any, items: ["spawn", "rclpy.init() 之前", "init() 之前"], name: safe_way}
+    - {type: contains_any, items: ["死結"], name: deadlock}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "預設[^\\n]{0,6}(spawn|forkserver)", name: not_spawn_default}
+  golden: |
+    證據：「3.12 在 Linux 預設 fork；process 內已有多個 thread 時 fork 會發 DeprecationWarning。」「建議：在 `rclpy.init()` 之前建 pool，或 `multiprocessing.get_context('spawn')`」
+    答案：預設 fork；rclpy 已有背景 thread，fork 有死結風險，改在 rclpy.init() 之前建 pool，或用 get_context('spawn')。
+    注意事項：worker 函式要是模組頂層（可 pickle）
+    不確定的地方：死結風險卡上標 ⚠️
+
+- id: ref-pyperf-from-bytes-default
+  tags: [ref, sw, py-perf]
+  desc: int.from_bytes 3.11+ byteorder 預設 'big'（協定多半 little）
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 6/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "int.from_bytes(b'\\x01\\x00') 沒給 byteorder 時是用大端還是小端？協定是 little-endian 有號 int32 要怎麼寫？"}
+  checks:
+    - {type: contains_any, items: ["big", "大端"], name: big_default}
+    - {type: contains_any, items: ["signed=True"], name: signed}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "預設[^\\n]{0,8}(little|小端)", name: not_little}
+  golden: |
+    證據：「`int.from_bytes(b, 'little', signed=True)`；3.11+ byteorder 預設 `'big'`。」
+    答案：預設 'big'（大端）；協定要寫 int.from_bytes(b, 'little', signed=True)。
+    注意事項：struct 協定用 '<' 小端無對齊
+    不確定的地方：無
+
+- id: ref-pyperf-numpy-sum-overflow
+  tags: [ref, sw, py-perf]
+  desc: numpy int32 累加溢位 → a.sum(dtype=np.int64)
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 7/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 numpy 把 int32 陣列 a 加總，結果和 Python 的 sum 不一樣（變成負數）。為什麼？怎麼修？"}
+  checks:
+    - {type: contains_any, items: ["dtype=np.int64", "int64"], name: int64}
+    - {type: contains_any, items: ["溢位", "回繞"], name: overflow}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(float|浮點)", name: no_float_fix}
+  golden: |
+    證據：「numpy int32 累加會溢位 → `a.sum(dtype=np.int64)`。」
+    答案：int32 累加溢位回繞；改 a.sum(dtype=np.int64)。
+    注意事項：Python int 不溢位，優化前後語義要一致
+    不確定的地方：無
+
+- id: ref-pyperf-absent-int-digits
+  tags: [ref, sw, py-perf, absent]
+  desc: I/O 卡沒寫 int 字串位數上限 → 資料中沒有
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 6/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Python 3.12 把很長的數字字串轉 int 時，sys.set_int_max_str_digits 的預設上限是幾位？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "4300|640", name: no_invented_limit, category: grounding}
+  golden: |
+    證據：「`int.from_bytes(b, 'little', signed=True)`；3.11+ byteorder 預設 `'big'`。」
+    答案：資料中沒有；卡上沒寫字串轉 int 的位數上限。
+    注意事項：無
+    不確定的地方：查 docs.python.org 的 sys.set_int_max_str_digits
+
+- id: ref-pyperf-absent-pypy
+  tags: [ref, sw, py-perf, absent]
+  desc: 對照表卡沒寫 PyPy → 資料中沒有，不編倍數
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 2/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "改用 PyPy 跑我的純 Python 迴圈大概會快幾倍？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "PyPy[^\\n]{0,20}\\d+\\s*(倍|×|x)", name: no_invented_speedup, category: grounding}
+  golden: |
+    證據：「熱迴圈寫在模組頂層 → 包進 `main()`。」
+    答案：資料中沒有；卡上沒有 PyPy。
+    注意事項：考場不能安裝軟體
+    不確定的地方：無
+
+- id: ref-pyperf-check-array-l
+  tags: [ref, sw, py-perf, check-code]
+  desc: 查詢 2/2：int32 欄位用 array('l') → 違反「int32 用 array('i')，不要 'l'」
+  turns:
+    - card: {file: "python-perf.md", title: "Python 效能 3/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            20	    def on_msg(self, msg):
+            21	        d = msg.data
+            22	        a = np.frombuffer(d, dtype=np.int32)
+            23	        self.saved = a.copy()
+            24	        out = array.array('l', (x * 2 for x in a))
+            25	        reply = Int32MultiArray()
+            26	        reply.data = out
+            27	        self.pub.publish(reply)
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*array\\.array\\(\\s*'l'|array\\.array\\(\\s*'l'[^\\n]*違反|違反[^\\n]*'l'|'l'[^\\n]*違反", name: array_l_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*\\.copy\\(\\)|\\.copy\\(\\)[^\\n]*違反", name: copy_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. np.frombuffer(msg.data) 是 view，要保存就 .copy()
+    2. ROS_PYTHON_CHECK_FIELDS=1 時指定 list 會先逐元素檢查，非常慢
+    3. int32 用 array('i')，不要 'l'（8 bytes）。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | OK | 23 self.saved = a.copy() |
+    | 2 | 看不到 | — |
+    | 3 | 違反 | 24 out = array.array('l', (x * 2 for x in a)) |
+    最該先修的 1 條：第 24 行改成 array.array('i', ...)
+
+# ============================================================ 演算法（algorithms-ds.md）
+
+- id: ref-algo-modulo-index
+  tags: [ref, sw, algo]
+  desc: i = (i+1) % N → N 取 2^k 用 & (N-1)，或 if (++i == N) i = 0;
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "熱迴圈裡有 idx = (idx + 1) % N，怎麼改比較快？N 不是 2 的冪時呢？"}
+  checks:
+    - {type: regex, pattern: "&\\s*\\(\\s*N\\s*-\\s*1\\s*\\)", name: mask}
+    - {type: regex, pattern: "\\+\\+\\s*(i|idx)\\s*==\\s*N", name: compare_reset}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "&\\s*N\\b(?!\\s*-)", name: no_mask_n}
+  golden: |
+    證據：「`i = (i+1) % N` | N 取 2^k 用 `& (N-1)`，或 `if (++i == N) i = 0;` | 加 _Static_assert」
+    答案：N 是 2 的冪時 idx = (idx + 1) & (N-1)；不是時寫 if (++idx == N) idx = 0;。
+    注意事項：用 & 時加 _Static_assert 確認 N 是 2 的冪
+    不確定的地方：無
+
+- id: ref-algo-ring-capacity
+  tags: [ref, sw, algo]
+  desc: 這張卡的 ring buffer 索引持續遞增 → 可用滿 N 格（256），不是 N-1
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "用卡上的 rb_t（RB_N = 256），最多能放幾個 byte？放滿後 rb_put 會怎樣？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "256", name: cap_256}
+    - {type: contains_any, items: ["false", "回傳失敗"], name: full_returns_false}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(最多|能放|可放)\\s*255", name: not_255}
+  golden: |
+    證據：「索引持續遞增、取用時 mask；可用滿 N 格。」「if (r->head - r->tail == RB_N) return false;      // 滿」
+    答案：最多 256 個（可用滿 N 格）；滿了 rb_put 回傳 false，不覆蓋。
+    注意事項：另一種設計空一格，容量 N-1；改寫舊程式要保持容量與滿時行為
+    不確定的地方：無
+
+- id: ref-algo-crc-modbus-params
+  tags: [ref, sw, algo]
+  desc: CRC-16/MODBUS 參數與 check 4B37
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "題目說封包用 CRC-16/MODBUS。poly、init、是否反射、xorout、對 \"123456789\" 的 check value 各是多少？"}
+  checks:
+    - {type: contains_all, items: ["8005", "FFFF", "4B37"], name: modbus_params}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "29B1|1021[^\\n]*MODBUS|MODBUS[^\\n]*1021", name: not_ccitt}
+  golden: |
+    證據：「| CRC-16/MODBUS | 16 | 8005 | FFFF | T | 0 | 4B37 |」
+    答案：poly 8005、init FFFF、反射（ref=T）、xorout 0、check 4B37。
+    注意事項：反射實作用 A001（8005 反射值），右移
+    不確定的地方：無
+
+- id: ref-algo-crc32-constants
+  tags: [ref, sw, algo]
+  desc: CRC-32/ISO-HDLC 右移實作用 EDB88320，check CBF43926
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "自己寫 zlib 相容的 CRC32 查表版，程式裡的多項式常數要寫哪個？算 \"123456789\" 應該得到多少？"}
+  checks:
+    - {type: contains_all, items: ["EDB88320", "CBF43926"], name: crc32_consts}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "常數[^\\n]{0,10}(寫|用)\\s*`?(0x)?04C11DB7", name: not_unreflected}
+  golden: |
+    證據：「參數：poly 04C11DB7（反射 EDB88320）、init FFFFFFFF、反射、xorout FFFFFFFF、check("123456789") = 0xCBF43926。」
+    答案：右移查表要用反射多項式 0xEDB88320；"123456789" 應得 0xCBF43926。
+    注意事項：init 與結尾都要 ~crc（xorout FFFFFFFF）
+    不確定的地方：無
+
+- id: ref-algo-modbus-byte-order
+  tags: [ref, sw, algo]
+  desc: Modbus RTU CRC 低位元組先送
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "crc16_modbus 算出 0x4B37，接在 Modbus RTU 封包後面時先送哪個 byte？"}
+  checks:
+    - {type: contains_any, items: ["低位元組先", "0x37", "37 先"], name: low_first}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(高位元組先|先送\\s*`?(0x)?4B)", name: not_high_first}
+  golden: |
+    證據：「return crc; // Modbus RTU 低位元組先送」
+    答案：低位元組先送：先 0x37，再 0x4B。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-algo-hash-delete
+  tags: [ref, sw, algo]
+  desc: open addressing 刪除不能直接設 EMPTY → tombstone
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我要在這個 hash table 加刪除功能，可以直接把那格的 key 設回 EMPTY_KEY 嗎？"}
+  checks:
+    - {type: contains_any, items: ["tombstone"], name: tombstone}
+    - {type: contains_any, items: ["探測鏈", "切斷"], name: reason}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能)", name: not_yes}
+  golden: |
+    證據：「刪除不能直接設 EMPTY（切斷探測鏈）→ tombstone。」
+    答案：不行，會切斷探測鏈，後面的 key 會找不到；要用 tombstone 標記。
+    注意事項：負載因子 α ≤ 0.7
+    不確定的地方：無
+
+- id: ref-algo-bounds-example
+  tags: [ref, sw, algo]
+  desc: a={1,2,2,2,5,7}：lower_bound(2)=1、upper_bound(2)=4、次數 3
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "a = {1,2,2,2,5,7}，lower_bound(a, 6, 2) 和 upper_bound(a, 6, 2) 各回傳多少？2 出現幾次？"}
+  checks:
+    - {type: regex, pattern: "lower_bound[^\\n]{0,15}1\\b", name: lb1}
+    - {type: regex, pattern: "upper_bound[^\\n]{0,15}4\\b", name: ub4}
+    - {type: regex, pattern: "3\\s*次|=\\s*3\\b", name: count3}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "upper_bound[^\\n=]{0,10}=\\s*3\\b", name: ub_not_3}
+  golden: |
+    證據：「例：a={1,2,2,2,5,7}：lower_bound(2)=1、upper_bound(2)=4、lower_bound(8)=6。」「出現次數 = upper - lower」
+    答案：lower_bound(2)=1、upper_bound(2)=4，出現 4-1 = 3 次。
+    注意事項：bsearch 有重複值時不保證回傳第一個
+    不確定的地方：無
+
+- id: ref-algo-qsort-cmp
+  tags: [ref, sw, algo]
+  desc: qsort 比較函式不要 a - b（溢位 UB）→ (a > b) - (a < b)
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "qsort 的比較函式寫 return *(const int*)a - *(const int*)b; 可以嗎？"}
+  checks:
+    - {type: contains_any, items: ["(a > b) - (a < b)", "(x > y) - (x < y)"], name: safe_cmp}
+    - {type: contains_any, items: ["溢位"], name: overflow}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能|沒問題)", name: not_ok}
+  golden: |
+    證據：「比較函式寫 `return (a > b) - (a < b);`，不要 `a - b`（溢位 UB）。」
+    答案：不要，a - b 會溢位（UB）；改 return (a > b) - (a < b);。
+    注意事項：qsort 不穩定；要確定結果把原始索引當最後一個鍵
+    不確定的地方：無
+
+- id: ref-algo-absent-crc64
+  tags: [ref, sw, algo, absent]
+  desc: CRC 參數表沒有 CRC-64 → 資料中沒有
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "CRC-64/ECMA-182 的 poly 和 check value 是多少？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "42F0E1EBA9EA3693|6C40DF5F0B497347|995DC9BBDF1939FA", name: no_invented_crc64, category: grounding}
+  golden: |
+    證據：「來源 reveng CRC catalogue。check = 對 ASCII "123456789" 的結果。」
+    答案：資料中沒有；表上只有 32、16、8 位元的 CRC。
+    注意事項：無
+    不確定的地方：查 reveng CRC catalogue
+
+- id: ref-algo-absent-cuckoo
+  tags: [ref, sw, algo, absent]
+  desc: hash 卡沒寫 cuckoo hashing → 資料中沒有
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "cuckoo hashing 的插入步驟是什麼？踢出幾次要 rehash？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "兩個\\s*(hash|雜湊)\\s*(函式|表)|踢出\\s*\\d+\\s*次|\\bkick", name: no_invented_cuckoo, category: grounding}
+  golden: |
+    證據：「刪除不能直接設 EMPTY（切斷探測鏈）→ tombstone。」
+    答案：資料中沒有；卡上只有 open addressing（線性探測）。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-algo-check-qsort-sub
+  tags: [ref, sw, algo, check-code]
+  desc: 查詢 2/2：比較函式 return x - y → 違反「不要 a - b（溢位 UB）」
+  turns:
+    - card: {file: "algorithms-ds.md", title: "演算法 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            40	typedef struct { int32_t key; int32_t idx; } item_t;
+            41	static int cmp_item(const void *a, const void *b) {
+            42	    int32_t x = ((const item_t *)a)->key, y = ((const item_t *)b)->key;
+            43	    if (x != y) return x - y;
+            44	    int32_t i = ((const item_t *)a)->idx, j = ((const item_t *)b)->idx;
+            45	    return (i > j) - (i < j);
+            46	}
+            47	qsort(items, n, sizeof items[0], cmp_item);
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*x\\s*-\\s*y|x\\s*-\\s*y[^\\n]*違反", name: sub_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*\\(i > j\\)|\\(i > j\\)[^\\n]*違反", name: tie_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. 比較函式寫 return (a > b) - (a < b);，不要 a - b（溢位 UB）。
+    2. 要確定結果時把原始索引當最後一個鍵。
+    3. C qsort：不保證 quicksort、不保證複雜度、不穩定。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | 違反 | 43 if (x != y) return x - y; |
+    | 2 | OK | 45 return (i > j) - (i < j); |
+    | 3 | OK | 47 qsort(items, n, sizeof items[0], cmp_item); |
+    最該先修的 1 條：第 43 行改成 return (x > y) - (x < y);
+
+# ============================================================ 平行（parallel-distributed.md）
+
+- id: ref-par-amdahl
+  tags: [ref, sw, parallel]
+  desc: Amdahl p=0.9、N=8 → 4.71；N=∞ → 10
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "熱點佔總時間 90%，開 8 個執行緒，理論加速上限是多少？無限多核心呢？"}
+  checks:
+    - {type: contains_any, items: ["4.71"], name: s8}
+    - {type: regex, pattern: "10\\s*倍|→\\s*10\\b|=\\s*10\\b", name: s_inf}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*\\b8\\s*倍", name: not_linear}
+  golden: |
+    證據：「Amdahl S = 1/((1−p)+p/N)：p=0.9 時 N=4 → 3.08、N=8 → 4.71、N=∞ → 10」
+    答案：S = 1/(0.1 + 0.9/8) ≈ 4.71 倍；無限核心也只有 10 倍。
+    注意事項：基準 T1 用最佳 serial 版
+    不確定的地方：無
+
+- id: ref-par-triangle-schedule
+  tags: [ref, sw, parallel]
+  desc: 三角形負載 static 0.42 s 最慢；static,1 或 dynamic,64 較好
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "第 i 次迭代的成本跟 i 成正比（三角形負載），8 執行緒的 OpenMP 迴圈要用哪個 schedule？"}
+  checks:
+    - {type: contains_any, items: ["dynamic,64", "static,1", "dynamic"], name: good_sched}
+    - {type: contains_any, items: ["0.26", "0.29", "0.42"], name: cites_numbers}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(用\\s*)?`?schedule\\(static\\)`?[。，,]", name: not_plain_static}
+  golden: |
+    證據：「本機實測三角形負載（成本 ∝ i，8 緒）：static 0.42 s、static,1 0.29 s、dynamic,64 0.26 s；成本均勻時 static 開銷最小。」
+    答案：用 schedule(dynamic,64)（0.26 s）或 static,1（0.29 s）；純 static 0.42 s 最慢。
+    注意事項：成本均勻時才用 static
+    不確定的地方：無
+
+- id: ref-par-no-fopenmp
+  tags: [ref, sw, parallel]
+  desc: 沒加 -fopenmp → pragma 被忽略、單執行緒；omp_* 連結失敗
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的 Makefile 只寫 gcc -O2 x.c，程式裡有 #pragma omp parallel for，也有呼叫 omp_get_wtime()。會發生什麼事？"}
+  checks:
+    - {type: contains_any, items: ["忽略", "單執行緒"], name: ignored}
+    - {type: contains_any, items: ["連結失敗", "連結"], name: link_fail}
+    - {type: contains_any, items: ["-fopenmp"], name: flag}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(自動|照樣|仍然)\\s*(平行|多執行緒)", name: not_parallel}
+  golden: |
+    證據：「沒加 -fopenmp 時 pragma 被忽略、單執行緒跑（-Wall 出現 -Wunknown-pragmas）；omp_* 呼叫會連結失敗 → 用 `#ifdef _OPENMP`。」
+    答案：pragma 被忽略、單執行緒跑，而 omp_get_wtime() 會連結失敗；編譯與連結都要加 -fopenmp。
+    注意事項：不能加旗標時用 #ifdef _OPENMP 包 omp_* 呼叫
+    不確定的地方：無
+
+- id: ref-par-single-vs-masked
+  tags: [ref, sw, parallel]
+  desc: single 結尾有 barrier；masked 只 thread 0、沒有 barrier
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "#pragma omp single 和 #pragma omp masked 差在哪？哪個結尾會等其他執行緒？"}
+  checks:
+    - {type: regex, pattern: "single[^\\n]*(結尾)?有\\s*barrier|single[^\\n]*會等", name: single_barrier}
+    - {type: regex, pattern: "masked[^\\n]*(沒有|無|不會)[^\\n]{0,4}(barrier|等)", name: masked_no_barrier}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "masked[^\\n]{0,20}(?<!沒)有\\s*barrier", name: masked_wrong}
+  golden: |
+    證據：「| single | 任一執行緒執行，結尾有 barrier |」「| masked / master | 只 thread 0，沒有 barrier |」
+    答案：single 由任一執行緒執行、結尾有 barrier 會等；masked 只由 thread 0 執行，沒有 barrier，不會等。
+    注意事項：barrier 不能放在只有部分執行緒會走到的分支
+    不確定的地方：無
+
+- id: ref-par-hist-atomic
+  tags: [ref, sw, parallel]
+  desc: 直方圖每次 atomic：4 緒 0.399 s vs serial 0.018 s → per-thread local
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "直方圖的 h[data[i]]++ 我在迴圈內加 #pragma omp atomic，開 4 個執行緒會比 serial 快嗎？要怎麼寫？"}
+  checks:
+    - {type: contains_all, items: ["0.399", "0.018"], name: numbers}
+    - {type: contains_any, items: ["per-thread", "local", "區域", "reduction"], name: fix}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(會|比較快|快)", name: not_faster}
+  golden: |
+    證據：「| 每次 atomic | 0.125 | 0.399 | 0.191 |」「| serial | 0.018 s | — | — |」
+    答案：不會，4 緒 atomic 要 0.399 s，比 serial 0.018 s 慢很多；改 per-thread local 陣列累加、最後合併（4 緒 0.005 s）。
+    注意事項：bin 很多時副本放 heap
+    不確定的地方：無
+
+- id: ref-par-deterministic-sum
+  tags: [ref, sw, parallel]
+  desc: 浮點總和與執行緒數無關 → 固定大小分塊 part[b]、依 b 順序加總
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "平行 double 加總用 reduction(+:s)，OMP_NUM_THREADS 不同時末位會變。要怎麼讓結果固定？"}
+  checks:
+    - {type: contains_any, items: ["固定大小分塊", "固定塊", "固定大小"], name: fixed_blocks}
+    - {type: contains_any, items: ["依 b 順序", "順序固定", "part[b]"], name: ordered_merge}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(用|改)\\s*(atomic|critical)", name: no_atomic}
+  golden: |
+    證據：「| 浮點總和末位不同 | 固定大小分塊（與執行緒數無關），各塊存 part[b]，依 b 順序加總 |」
+    答案：用固定大小分塊（B=4096，與執行緒數無關），各塊存 part[b]，最後依 b 順序加總，結果就固定。
+    注意事項：與完全序列 s += a[i] 仍可能差末位；serial 版也要用同樣分塊
+    不確定的地方：無
+
+- id: ref-par-fork-dup-lines
+  tags: [ref, sw, parallel]
+  desc: fork 後某些行出現兩次 → stdout 緩衝被複製；fork 前 fflush、子 _exit
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的程式 fork 出 4 個子行程，輸出導到檔案時開頭幾行重複出現好幾次，終端機上看卻正常。為什麼？"}
+  checks:
+    - {type: contains_any, items: ["fflush"], name: fflush}
+    - {type: contains_any, items: ["緩衝"], name: buffer}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(data race|競爭|race)", name: not_race}
+  golden: |
+    證據：「| fork 後某些行出現兩次 | stdout 緩衝被複製 | fork 前 fflush；子 _exit |」
+    答案：stdout 緩衝裡還沒寫出的內容被 fork 複製給每個子行程；fork 前 fflush(stdout)，子行程用 _exit 結束。
+    注意事項：接檔案時是完全緩衝，所以終端機上看不出來
+    不確定的地方：無
+
+- id: ref-par-pipe-capacity
+  tags: [ref, sw, parallel]
+  desc: pipe 預設容量 65536；≤ PIPE_BUF 4096 的 write 原子
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Linux pipe 預設能存多少 bytes？多個行程同時寫同一個 pipe，每次寫多大以內不會交錯？"}
+  checks:
+    - {type: contains_all, items: ["65536", "4096"], name: sizes}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "PIPE_BUF[^\\n]{0,10}(512|65536)|容量[^\\n]{0,8}4096", name: no_swap}
+  golden: |
+    證據：「pipe：Linux 預設容量 65536 bytes；≤ PIPE_BUF（4096）的 write 是原子的」
+    答案：預設 65536 bytes；每次 write ≤ PIPE_BUF（4096 bytes）是原子的，不會交錯。
+    注意事項：read/write 可能只做部分 → 迴圈；不用的端要關
+    不確定的地方：無
+
+- id: ref-par-absent-mpi-allreduce
+  tags: [ref, sw, parallel, absent]
+  desc: 通訊卡沒寫 MPI API 簽名 → 資料中沒有
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "MPI_Allreduce 的參數順序是什麼？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "sendbuf|recvbuf|MPI_COMM_WORLD|MPI_SUM", name: no_invented_mpi, category: grounding}
+  golden: |
+    證據：「MPI 考場多半沒裝（`which mpicc`）。」
+    答案：資料中沒有；卡上只說 MPI 多半沒裝。
+    注意事項：先 which mpicc 確認有沒有裝
+    不確定的地方：查 MPI 標準文件
+
+- id: ref-par-absent-gustafson
+  tags: [ref, sw, parallel, absent]
+  desc: 決策卡沒寫 Gustafson 定律 → 資料中沒有
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Gustafson 定律的公式是什麼？跟 Amdahl 差在哪？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "S\\s*=\\s*N\\s*[−-]|N\\s*[−-]\\s*\\(?\\s*N\\s*[−-]\\s*1|(1\\s*[−-]\\s*p)\\s*\\+\\s*p\\s*[·*×]?\\s*N", name: no_invented_formula, category: grounding}
+  golden: |
+    證據：「Amdahl S = 1/((1−p)+p/N)」
+    答案：資料中沒有；卡上只有 Amdahl 與 Karp–Flatt。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-par-check-shared-j
+  tags: [ref, sw, parallel, check-code]
+  desc: 查詢 2/2：內層迴圈變數 j 宣告在 parallel 外 → shared race
+  turns:
+    - card: {file: "parallel-distributed.md", title: "平行 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            10	void clear(int n, int m, int a[n][m]) {
+            11	    int i, j;
+            12	    #pragma omp parallel for schedule(static)
+            13	    for (i = 0; i < n; i++)
+            14	        for (j = 0; j < m; j++)
+            15	            a[i][j] = 0;
+            16	}
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*(int i, j|\\bj\\b|shared|race)|(int i, j|shared|race)[^\\n]*違反", name: j_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*schedule\\(static\\)|schedule\\(static\\)[^\\n]*違反", name: schedule_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. 編譯與連結都要 gcc -O2 -fopenmp
+    2. 迴圈內不能 break（可 continue）。
+    3. C 經典 bug：內層迴圈變數宣告在 parallel 外面 = shared → race。
+    4. 建議 default(none)，強迫每個變數明確標示。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | 看不到 | — |
+    | 2 | OK | 13–15 沒有 break |
+    | 3 | 違反 | 11 int i, j;（j 在 parallel 外宣告，是 shared） |
+    | 4 | 看不到 | — |
+    最該先修的 1 條：第 14 行改成 for (int j = 0; j < m; j++)
+
+# ============================================================ 控制 / DSP（control-dsp.md）
+
+- id: ref-dsp-q15-one
+  tags: [ref, sw, dsp]
+  desc: Q15 不能表示 +1.0，常數 1.0 寫 32767
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的濾波器增益要 1.0，係數是 Q15（int16_t）。要寫成多少？"}
+  checks:
+    - {type: contains_any, items: ["32767"], name: q15_max}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "寫(成)?\\s*`?32768|=\\s*32768\\b|0x8000(?!0)", name: not_32768}
+  golden: |
+    證據：「Q15 不能表示 +1.0，常數 1.0 寫 32767。」
+    答案：Q15 不能表示 +1.0，寫 32767（≈ 0.999969）。
+    注意事項：需要剛好 1.0 就換 Q2.14 或 Q16.16
+    不確定的地方：無
+
+- id: ref-dsp-ldivmod
+  tags: [ref, sw, dsp]
+  desc: 兩核都沒有 64-bit 除法；Arm 呼叫 __aeabi_ldivmod、RISC-V __divdi3（查證後修正）
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "RP2350 上 int64_t 除法很慢。用 objdump 檢查時，Cortex-M33 版和 Hazard3 版各要找哪個函式名？"}
+  checks:
+    - {type: contains_all, items: ["__aeabi_ldivmod", "__divdi3"], name: both_names}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(M33|Arm|ARM)[^\\n]{0,15}(找|用|呼叫)\\s*`?__divdi3", name: arm_not_divdi3}
+  golden: |
+    證據：「兩核都沒有 64-bit 除法指令（軟體函式：Arm __aeabi_ldivmod、RISC-V __divdi3，很慢）。」
+    答案：Cortex-M33 找 __aeabi_ldivmod，Hazard3 找 __divdi3。
+    注意事項：兩核都沒有 64-bit 除法指令
+    不確定的地方：無
+
+- id: ref-dsp-q15-mul-sat
+  tags: [ref, sw, dsp]
+  desc: q15_mul(-32768,-32768) 飽和成 32767
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "卡上的 q15_mul(-32768, -32768) 回傳多少？為什麼不是 -32768？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "32767", name: sat}
+    - {type: contains_any, items: ["飽和", "sat16"], name: why}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "回傳\\s*(是|為)?\\s*`?-32768", name: not_wrap}
+  golden: |
+    證據：「驗證：q15_mul(-32768,-32768)=32767」「return sat16((p + (1 << 14)) >> 15);     // (-1)×(-1) 飽和成 32767」
+    答案：回傳 32767；(-1)×(-1)=+1 超出 Q15 範圍，sat16 飽和成 32767。
+    注意事項：乘法先放大到 32 / 64 位元再移位
+    不確定的地方：無
+
+- id: ref-dsp-div-vs-shift
+  tags: [ref, sw, dsp]
+  desc: -7/2 = -3（往 0），-7>>1 = -4（往 −∞）
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我想把 x / 2 改成 x >> 1 加速，x 可能是負數。-7 / 2 和 -7 >> 1 結果一樣嗎？"}
+  checks:
+    - {type: regex, pattern: "-7\\s*/\\s*2\\s*=\\s*-3", name: div}
+    - {type: regex, pattern: "-7\\s*>>\\s*1\\s*=\\s*-4", name: shift}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(一樣|相同)", name: not_same}
+  golden: |
+    證據：「`-7 / 2 = -3`，`-7 >> 1 = -4`。」
+    答案：不一樣：-7 / 2 = -3（往 0），-7 >> 1 = -4（往 −∞）。
+    注意事項：負數要四捨五入用 (x + (1 << (n-1))) >> n
+    不確定的地方：無
+
+- id: ref-dsp-ema-bias
+  tags: [ref, sw, dsp]
+  desc: y += (x - y) >> k 收斂卡在 985（不對稱）→ acc 帶 k 位額外小數
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我的 EMA 寫 y += (x - y) >> 4;，輸入固定 1000 時輸出停在 985 上不去。為什麼？怎麼改？"}
+  checks:
+    - {type: contains_any, items: ["acc"], name: acc_fix}
+    - {type: contains_any, items: ["截斷", "不對稱", "額外小數"], name: reason}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(改成?\\s*float|用\\s*double|k\\s*改\\s*小)", name: no_float_fix}
+  golden: |
+    證據：「錯誤寫法：y += (x - y) >> k; 實測 k=4 從 0 往 1000 收斂卡在 985，往負方向卻到 -1000（不對稱偏差）。」「狀態 acc 帶 k 位額外小數（acc = y·2^k），避免截斷造成穩態誤差」
+    答案：(x - y) >> 4 把小差值截斷成 0，所以卡在 985；改用 ema_step：acc += x - (acc >> k)，輸出 acc >> k。
+    注意事項：acc 用第一筆樣本 * (1 << k) 初始化
+    不確定的地方：無
+
+- id: ref-dsp-cmsis-sign
+  tags: [ref, sw, dsp]
+  desc: CMSIS-DSP biquad 回授項是加號 → RBJ 的 a1、a2 取負號再給
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 RBJ 公式算出 a1 = -1.911196288、a2 = 0.914975054，要給 CMSIS-DSP 的 biquad 時直接填嗎？"}
+  checks:
+    - {type: contains_any, items: ["負號", "取負"], name: negate}
+    - {type: contains_any, items: ["1.911196288"], name: value}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(直接填|可以直接|是的)", name: not_direct}
+  golden: |
+    證據：「CMSIS-DSP biquad 回授項是加號 → RBJ 的 a1、a2 要取負號再給。」
+    答案：不能直接填，要取負號：給 1.911196288 和 -0.914975054。
+    注意事項：pico-sdk 沒內附 CMSIS-DSP
+    不確定的地方：無
+
+- id: ref-dsp-pid-derivative
+  tags: [ref, sw, dsp]
+  desc: 微分取量測值避免 derivative kick
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "setpoint 一改輸出就突然暴衝一下。卡上的 PID 微分項為什麼用 y 不用 e？"}
+  checks:
+    - {type: contains_any, items: ["derivative kick"], name: kick}
+    - {type: contains_any, items: ["量測值", "y[n]−y[n−1]", "y - p->y_prev", "y − y_prev"], name: measured}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*Kd\\s*[·*]\\s*\\(?\\s*e\\[n\\]\\s*[−-]\\s*e\\[n", name: not_error_deriv}
+  golden: |
+    證據：「D = −Kd·(y[n]−y[n−1])/dt（微分取量測值，避免 setpoint 跳動的 derivative kick）」
+    答案：微分取量測值 y，setpoint 跳動時 y 不會跳，就不會有 derivative kick。
+    注意事項：第一次呼叫令 y_prev = y，避免微分突波
+    不確定的地方：無
+
+- id: ref-dsp-zn-table
+  tags: [ref, sw, dsp]
+  desc: Ziegler–Nichols PID：Kp 0.6Ku、Ti Tu/2、Td Tu/8
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我量到 Ku = 4、Tu = 0.5 s。用 Ziegler–Nichols 的 PID 規則，Kp、Ki、Kd 各是多少？"}
+    - {match: "我的情境", value: "要寫出算式"}
+  checks:
+    - {type: contains_all, items: ["0.6", "Tu/2", "Tu/8"], name: zn_rule}
+    - {type: regex, pattern: "Kp\\s*=[^\\n]{0,12}2\\.4", name: kp}
+    - {type: regex, pattern: "Ki\\s*=\\s*[^\\n]{0,20}9\\.6", name: ki}
+    - {type: regex, pattern: "Kd\\s*=\\s*[^\\n]{0,20}0\\.15", name: kd}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "Kp\\s*=\\s*(2(?!\\.4)|1\\.8)", name: not_p_or_pi}
+  golden: |
+    證據：「| PID | 0.6Ku | Tu/2 | Tu/8 |」「Ki = Kp/Ti，Kd = Kp·Td」
+    答案：Kp = 0.6×4 = 2.4；Ti = 0.5/2 = 0.25 s → Ki = 2.4/0.25 = 9.6；Td = 0.5/8 = 0.0625 s → Kd = 2.4×0.0625 = 0.15。
+    注意事項：ZN 超調偏大（約 25%），當起點
+    不確定的地方：無
+
+- id: ref-dsp-fixed-period
+  tags: [ref, sw, dsp]
+  desc: 迴圈尾 sleep_ms(10) 會漂移 → delayed_by_us + sleep_until
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "控制迴圈是 for(;;){ control(); sleep_ms(10); }，實際頻率比 100 Hz 低。為什麼？要怎麼寫？"}
+  checks:
+    - {type: contains_any, items: ["漂移", "運算時間"], name: drift}
+    - {type: contains_any, items: ["sleep_until", "delayed_by_us", "add_repeating_timer_us"], name: fix}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(改成?|用)\\s*`?sleep_ms\\((9|8)\\)", name: no_fudge}
+  golden: |
+    證據：「不要 sleep_ms(10) 放迴圈尾：週期 = 10 ms + 運算時間，會漂移。」
+    答案：週期 = 10 ms + 運算時間，會漂移；改 next = delayed_by_us(next, 10000); control(); sleep_until(next);。
+    注意事項：control() 必須 < 週期；或 add_repeating_timer_us(-10000, …)，負值 = 開始到開始
+    不確定的地方：無
+
+- id: ref-dsp-absent-chebyshev
+  tags: [ref, sw, dsp, absent]
+  desc: biquad 卡沒寫 Chebyshev → 資料中沒有
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Chebyshev type I 低通（ripple 1 dB）的 biquad 係數要怎麼算？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "ε|epsilon|sinh|cosh|arcsinh", name: no_invented_cheby, category: grounding}
+  golden: |
+    證據：「係數（RBJ Audio EQ Cookbook，在主機或初始化用 double 算）：」
+    答案：資料中沒有；卡上只有 RBJ 的 LPF / HPF（Butterworth Q = 0.7071）。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-dsp-absent-cohen-coon
+  tags: [ref, sw, dsp, absent]
+  desc: 調參卡沒寫 Cohen–Coon → 資料中沒有
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "Cohen–Coon 整定法的 PI 參數公式是什麼？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "Cohen[^\\n]{0,30}\\d\\.\\d|0\\.9\\s*/|τ\\s*/\\s*θ|θ\\s*/\\s*τ", name: no_invented_cc, category: grounding}
+  golden: |
+    證據：「Ziegler–Nichols（只用 P 加到等幅振盪，得 Ku、Tu）：」
+    答案：資料中沒有；卡上只有 Ziegler–Nichols。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-dsp-check-mul-cast
+  tags: [ref, sw, dsp, check-code]
+  desc: 查詢 2/2：(int64_t)(a * b) → 違反「最常見錯誤：括號錯，a*b 先以 32 位元溢位」
+  turns:
+    - card: {file: "control-dsp.md", title: "控制DSP 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            12	static inline int32_t gain_q16(int32_t x, int32_t g) {
+            13	    int64_t p = (int64_t)(x * g);
+            14	    return (int32_t)((p + (1 << 15)) >> 16);
+            15	}
+            16	static inline int16_t clip(int32_t v) {
+            17	    return v > 32767 ? 32767 : (v < -32768 ? -32768 : (int16_t)v);
+            18	}
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*\\(int64_t\\)\\s*\\(\\s*x\\s*\\*\\s*g\\s*\\)|\\(int64_t\\)\\s*\\(\\s*x\\s*\\*\\s*g\\s*\\)[^\\n]*違反", name: cast_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*32767\\s*\\?|32767\\s*\\?[^\\n]*違反", name: clip_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. 先放大到 64 位元再移位。
+    2. 最常見錯誤：(int64_t)(a * b) 括號錯，a*b 先以 32 位元溢位（UB）。正確是 (int64_t)a * b。
+    3. 左移負數是 UB
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | OK | 14 return (int32_t)((p + (1 << 15)) >> 16); |
+    | 2 | 違反 | 13 int64_t p = (int64_t)(x * g); |
+    | 3 | 看不到 | — |
+    最該先修的 1 條：第 13 行改成 int64_t p = (int64_t)x * g;
+
+# ============================================================ FreeRTOS（freertos.md）
+
+- id: ref-rtos-stack-words
+  tags: [ref, sw, freertos]
+  desc: xTaskCreate stack 單位是 words：512 = 2 KB
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "xTaskCreate(worker, \"w\", 512, NULL, 2, &h) 的 512 是多少 bytes 的 stack？"}
+  checks:
+    - {type: contains_any, items: ["2 KB", "2KB", "2048"], name: two_kb}
+    - {type: contains_any, items: ["words", "word"], name: words}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(就是|=|是)\\s*512\\s*(bytes|位元組)", name: not_bytes}
+  golden: |
+    證據：「stack 單位是 words（4 bytes）：`xTaskCreate(..., 512, ...)` = 2 KB」
+    答案：512 是 words，每 word 4 bytes，512 × 4 = 2048 bytes = 2 KB。
+    注意事項：有 printf 至少 512
+    不確定的地方：無
+
+- id: ref-rtos-sleep-interop
+  tags: [ref, sw, freertos]
+  desc: task 內 sleep_ms 讓出 CPU 靠 SYNC_INTEROP（查證後修正，不是 TIME_INTEROP）
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 1/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "FreeRTOS task 裡呼叫 pico-sdk 的 sleep_ms(100) 會讓出 CPU 嗎？要靠哪個 config？busy_wait_ms 呢？"}
+  checks:
+    - {type: contains_any, items: ["configSUPPORT_PICO_SYNC_INTEROP", "SYNC_INTEROP"], name: sync_interop}
+    - {type: contains_any, items: ["busy_wait_ms"], name: busy}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(只|靠|需要)\\s*`?(configSUPPORT_PICO_)?TIME_INTEROP", name: not_time_interop}
+  golden: |
+    證據：「task 內 `sleep_ms()` 會讓出 CPU（靠 `configSUPPORT_PICO_SYNC_INTEROP 1`；兩個 INTEROP 都設 1）；`busy_wait_ms()` 不會」
+    答案：會讓出 CPU，靠 configSUPPORT_PICO_SYNC_INTEROP 1（兩個 INTEROP 都設 1）；busy_wait_ms 不會讓出。
+    注意事項：週期迴圈用 xTaskDelayUntil
+    不確定的地方：無
+
+- id: ref-rtos-heap-link
+  tags: [ref, sw, freertos]
+  desc: 只 link FreeRTOS-Kernel → pvPortMalloc undefined → 加 FreeRTOS-Kernel-Heap4
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "target_link_libraries(app PRIVATE pico_stdlib FreeRTOS-Kernel) 連結時出現 undefined reference to pvPortMalloc。要怎麼改？"}
+  checks:
+    - {type: contains_any, items: ["FreeRTOS-Kernel-Heap4", "-Heap4"], name: heap4}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(自己寫|自己實作|定義)\\s*`?pvPortMalloc|heap_4\\.c\\s*加進\\s*add_executable", name: no_hack}
+  golden: |
+    證據：「只 link Kernel → pvPortMalloc undefined」「target_link_libraries(app PRIVATE pico_stdlib FreeRTOS-Kernel-Heap4)」
+    答案：改 link FreeRTOS-Kernel-Heap4：target_link_libraries(app PRIVATE pico_stdlib FreeRTOS-Kernel-Heap4)。
+    注意事項：FreeRTOSConfig.h 目錄要在 include path
+    不確定的地方：無
+
+- id: ref-rtos-create-fail
+  tags: [ref, sw, freertos]
+  desc: xTaskCreate 失敗回 errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY（-1）→ 寫 != pdPASS
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 3/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "xTaskCreate 失敗時回傳什麼？if (xTaskCreate(...) == 0) 這樣檢查對嗎？"}
+  checks:
+    - {type: contains_any, items: ["errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY"], name: err_name}
+    - {type: contains_any, items: ["!= pdPASS"], name: check_form}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "xTaskCreate[^\\n]{0,12}失敗[^\\n]{0,6}(回傳|回)\\s*(NULL|0)\\b|答案[：:]\\s*(對|正確)", name: not_null}
+  golden: |
+    證據：「成功回 pdPASS；記憶體不足回 errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY（-1）→ 寫 `!= pdPASS`」
+    答案：失敗回 errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY（-1），== 0 抓不到；要寫 if (xTaskCreate(...) != pdPASS)。
+    注意事項：xQueueCreate 失敗才是回 NULL
+    不確定的地方：無
+
+- id: ref-rtos-binary-empty
+  tags: [ref, sw, freertos]
+  desc: xSemaphoreCreateBinary 建立時是空的，要先 Give 才 Take 得到
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 xSemaphoreCreateBinary() 建好之後馬上 xSemaphoreTake(s, portMAX_DELAY)，結果 task 卡住。為什麼？"}
+  checks:
+    - {type: contains_any, items: ["空的", "先 Give", "先 give", "xSemaphoreGive"], name: empty}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "建立時(是)?(滿|可用|已經有)", name: not_full}
+  golden: |
+    證據：「`xSemaphoreCreateBinary()`（建立時是空的）」
+    答案：binary semaphore 建立時是空的，要先有人 xSemaphoreGive 才 Take 得到，所以 portMAX_DELAY 一直等。
+    注意事項：事件同步也可以改用 notification
+    不確定的地方：無
+
+- id: ref-rtos-recursive-mutex
+  tags: [ref, sw, freertos]
+  desc: RecursiveMutex 只能用 xSemaphoreTakeRecursive / GiveRecursive（查證後補上）
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我用 xSemaphoreCreateRecursiveMutex() 建了鎖，可以用 xSemaphoreTake / xSemaphoreGive 拿放嗎？"}
+  checks:
+    - {type: contains_any, items: ["xSemaphoreTakeRecursive"], name: take_recursive}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能|是)", name: not_yes}
+  golden: |
+    證據：「RecursiveMutex 只能用 `xSemaphoreTakeRecursive` / `GiveRecursive`」
+    答案：不行，recursive mutex 只能用 xSemaphoreTakeRecursive / xSemaphoreGiveRecursive。
+    注意事項：mutex 不可在 ISR 用
+    不確定的地方：無
+
+- id: ref-rtos-irq-zero
+  tags: [ref, sw, freertos]
+  desc: IRQ 優先權 0x00 不可呼叫任何 FreeRTOS API → 改 ≥ 0x10
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我把 UART IRQ 設成 PICO_HIGHEST_IRQ_PRIORITY（0x00）想讓它最快，ISR 裡呼叫 xQueueSendFromISR。可以嗎？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "不(可以|行|可)", name: cannot}
+    - {type: contains_any, items: ["0x10", "0x80"], name: fix_prio}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能)", name: not_yes}
+  golden: |
+    證據：「0x00（PICO_HIGHEST_IRQ_PRIORITY）：不可呼叫任何 FreeRTOS API；不會被 critical section 遮罩」
+    答案：不可以，0x00 不能呼叫任何 FreeRTOS API（configASSERT 在 vPortValidateInterruptPriority 失敗）；改成 ≥ 0x10，例如 SDK 預設 0x80。
+    注意事項：FromISR 後要 portYIELD_FROM_ISR(woken)
+    不確定的地方：無
+
+- id: ref-rtos-critical-printf
+  tags: [ref, sw, freertos]
+  desc: SMP critical section 是全系統一把鎖、只放幾行；printf 用 mutex
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 6/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "兩個 task 在不同核心都會 printf，輸出會混在一起。可以把 printf 包在 taskENTER_CRITICAL() / taskEXIT_CRITICAL() 裡嗎？"}
+  checks:
+    - {type: contains_any, items: ["mutex"], name: use_mutex}
+    - {type: contains_any, items: ["一把鎖", "只放幾行"], name: reason}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(可以|能|是)", name: not_yes}
+  golden: |
+    證據：「是全系統一把鎖 → 只放幾行，不可呼叫阻塞 API」「較長操作（printf、走訪 list）用 mutex」
+    答案：不要，critical section 是全系統一把鎖、只放幾行；printf 這種較長操作用 mutex 保護。
+    注意事項：critical 內不可呼叫阻塞 API
+    不確定的地方：無
+
+- id: ref-rtos-highwater-unit
+  tags: [ref, sw, freertos]
+  desc: uxTaskGetStackHighWaterMark 回傳 words、越接近 0 越危險
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 7/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "uxTaskGetStackHighWaterMark(NULL) 回傳 20，單位是什麼？代表什麼？"}
+  checks:
+    - {type: contains_any, items: ["words", "word"], name: words}
+    - {type: contains_any, items: ["80", "危險", "最少剩餘"], name: meaning}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "單位(是|為)\\s*(bytes|位元組)|20\\s*(bytes|位元組)", name: not_bytes}
+  golden: |
+    證據：「`uxTaskGetStackHighWaterMark(NULL)`：歷史最少剩餘 stack（words），越接近 0 越危險」
+    答案：單位是 words；20 words = 80 bytes，代表歷史上最少只剩 80 bytes，很危險，要加大 stack。
+    注意事項：開 configCHECK_FOR_STACK_OVERFLOW 2 要實作 hook
+    不確定的地方：無
+
+- id: ref-rtos-tick-zero
+  tags: [ref, sw, freertos]
+  desc: vTaskDelay(pdMS_TO_TICKS(1)) 沒延遲 → tick 太低換算為 0
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 8/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我寫 vTaskDelay(pdMS_TO_TICKS(1))，量起來根本沒有延遲。可能是什麼原因？"}
+  checks:
+    - {type: contains_any, items: ["換算為 0", "變 0", "= 0", "為 0"], name: zero}
+    - {type: contains_any, items: ["tick"], name: tick}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[^\\n]*(heap|stack|優先權太低)", name: wrong_cause}
+  golden: |
+    證據：「| vTaskDelay(pdMS_TO_TICKS(1)) 沒延遲 | tick 太低換算為 0 |」
+    答案：configTICK_RATE_HZ 太低（例如 100 Hz），pdMS_TO_TICKS(1) 捨去後換算為 0，所以不延遲。
+    注意事項：µs 級精度用硬體 timer
+    不確定的地方：考場的 configTICK_RATE_HZ 要看 FreeRTOSConfig.h
+
+- id: ref-rtos-absent-tcp
+  tags: [ref, sw, freertos, absent]
+  desc: IPC 卡沒寫 FreeRTOS+TCP → 資料中沒有
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 4/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "FreeRTOS+TCP 建立 UDP socket 的函式名稱是什麼？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "FreeRTOS_socket|FreeRTOS_sendto|FREERTOS_AF_INET", name: no_invented_tcp, category: grounding}
+  golden: |
+    證據：「stream / message buffer：只支援單一寫入者、單一讀取者」
+    答案：資料中沒有；卡上沒有 FreeRTOS+TCP。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-rtos-absent-timer-stack
+  tags: [ref, sw, freertos, absent]
+  desc: config 卡沒寫 timer task stack 設定 → 資料中沒有
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 2/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "configTIMER_TASK_STACK_DEPTH 和 configTIMER_QUEUE_LENGTH 要設多少？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "configTIMER_TASK_STACK_DEPTH[^\\n]{0,25}\\d|configTIMER_QUEUE_LENGTH[^\\n]{0,25}\\d", name: no_invented_timer_cfg, category: grounding}
+  golden: |
+    證據：「要 `INCLUDE_xTaskDelayUntil 1`；沒定義的用預設值 → 先讀考場的 config」
+    答案：資料中沒有；卡上沒有 timer task 的設定。
+    注意事項：先讀考場的 FreeRTOSConfig.h
+    不確定的地方：無
+
+- id: ref-rtos-check-isr-send
+  tags: [ref, sw, freertos, check-code]
+  desc: 查詢 2/2：ISR 裡呼叫 xQueueSend（非 FromISR）→ 違反「ISR 只能呼叫 ...FromISR API」
+  turns:
+    - card: {file: "freertos.md", title: "FreeRTOS 5/8"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+            30	void uart_rx_isr(void) {
+            31	    BaseType_t woken = pdFALSE;
+            32	    while (uart_is_readable(uart0)) {
+            33	        uint8_t c = uart_getc(uart0);
+            34	        xQueueSend(rx_q, &c, 0);
+            35	    }
+            36	    portYIELD_FROM_ISR(woken);
+            37	}
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*xQueueSend\\(|xQueueSend\\([^\\n]*違反", name: send_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*woken = pdFALSE|woken = pdFALSE[^\\n]*違反", name: woken_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. ISR 只能呼叫 ...FromISR API（及 portYIELD_FROM_ISR、taskENTER_CRITICAL_FROM_ISR）；FromISR 不阻塞
+    2. woken 一定初始化成 pdFALSE；多個 FromISR 可共用同一個 woken
+    3. 忘了 portYIELD_FROM_ISR：被喚醒的 task 要等下次排程 → 延遲變大
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | 違反 | 34 xQueueSend(rx_q, &c, 0); |
+    | 2 | OK | 31 BaseType_t woken = pdFALSE; |
+    | 3 | OK | 36 portYIELD_FROM_ISR(woken); |
+    最該先修的 1 條：第 34 行改成 xQueueSendFromISR(rx_q, &c, &woken);
+
+# ============================================================ 官方文件導航（08-docs-map.md）
+
+- id: ref-docs-dreq-section
+  tags: [ref, sw, docs-map]
+  desc: DREQ 表在 RP2350 datasheet 12.6.4.1、Table 1254
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 1/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "DMA 的 DREQ 號碼表在 RP2350 datasheet 的哪一節、哪個表？"}
+  checks:
+    - {type: contains_all, items: ["12.6.4.1", "1254"], name: section}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "2\\.5\\.3|RP2040 datasheet", name: not_rp2040}
+  golden: |
+    證據：「12.6.4.1 System DREQ table，Table 1254（p.1015）」
+    答案：12.6.4.1 System DREQ table，Table 1254（約 p.1015）。
+    注意事項：頁碼未逐一查證，Ctrl+F 用「節號. 節名」最準
+    不確定的地方：頁碼
+
+- id: ref-docs-no-divider
+  tags: [ref, sw, docs-map]
+  desc: RP2350 沒有 RP2040 的記憶體映射除法器
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 2/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "RP2040 有 SIO 硬體整數除法器，RP2350 也有嗎？"}
+  checks:
+    - {type: field_matches, field: "答案", regex: "沒有", name: none}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "答案[：:]\\s*(有|也有)", name: not_yes}
+  golden: |
+    證據：「3.1.7 Integer divider：RP2350 沒有 RP2040 的記憶體映射除法器」
+    答案：沒有，RP2350 沒有 RP2040 那種記憶體映射除法器。
+    注意事項：晶片是 RP2350，非 RP2040
+    不確定的地方：無
+
+- id: ref-docs-safe-spinlocks
+  tags: [ref, sw, docs-map]
+  desc: RP2350-E2：可安全使用的硬體 spinlock 5、6、7、10、11、18–31
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 3/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "因為 RP2350 的勘誤，哪些硬體 spinlock 編號可以安全使用？SDK 預設用什麼鎖？"}
+  checks:
+    - {type: contains_all, items: ["10", "11", "18", "31"], name: list}
+    - {type: contains_any, items: ["軟體鎖"], name: sw_lock}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(0|0、1)\\s*[~～–-]\\s*31\\s*(都|全部)", name: not_all}
+  golden: |
+    證據：「SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31。」
+    答案：可安全使用 5、6、7、10、11、18–31；SDK 在 RP2350 預設用軟體鎖。
+    注意事項：E2 是 SIO SPINLOCK 寫入會鏡像到 +0x80
+    不確定的地方：無
+
+- id: ref-docs-dreq-header-path
+  tags: [ref, sw, docs-map]
+  desc: dreq.h 路徑一定是 rp2350/hardware_regs，不是 rp2040
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 4/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我要在 GitHub 看 pico-sdk 2.3.1 的 DREQ 號碼定義，完整的 raw 網址是什麼？"}
+  checks:
+    - {type: contains_any, items: ["pico-sdk/2.3.1/src/rp2350/hardware_regs/include/hardware/regs/dreq.h"], name: full_url}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "rp2040/hardware_regs", name: not_rp2040}
+  golden: |
+    證據：「前綴 https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.3.1/src/」「rp2350/hardware_regs/include/hardware/regs/dreq.h（DREQ 號碼）」
+    答案：https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.3.1/src/rp2350/hardware_regs/include/hardware/regs/dreq.h
+    注意事項：路徑一定要是 rp2350，不是 rp2040
+    不確定的地方：無
+
+- id: ref-docs-qos-source
+  tags: [ref, sw, docs-map]
+  desc: QoS 預設值原始碼 ros2/rmw/jazzy/.../qos_profiles.h（分支 jazzy，不是 humble）
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 5/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我想直接看 ROS 2 Jazzy QoS 預設值的原始碼，網址是什麼？"}
+  checks:
+    - {type: contains_any, items: ["raw.githubusercontent.com/ros2/rmw/jazzy/rmw/include/rmw/qos_profiles.h"], name: url}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "/(humble|iron|rolling)/", name: not_other_distro}
+  golden: |
+    證據：「QoS 預設值：https://raw.githubusercontent.com/ros2/rmw/jazzy/rmw/include/rmw/qos_profiles.h」
+    答案：https://raw.githubusercontent.com/ros2/rmw/jazzy/rmw/include/rmw/qos_profiles.h
+    注意事項：GitHub 分支一律 jazzy
+    不確定的地方：無
+
+- id: ref-docs-udm14
+  tags: [ref, sw, docs-map]
+  desc: Google 加 udm=14 不顯示 AI 摘要
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 6/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "考場禁止看搜尋引擎的 AI 摘要。用 Google 搜 rp2350 DREQ 時網址要怎麼寫？"}
+  checks:
+    - {type: contains_any, items: ["udm=14"], name: udm}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "Bing[^\\n]{0,10}(可以|推薦)|Copilot[^\\n]{0,6}(可以|推薦)", name: no_bing}
+  golden: |
+    證據：「Google 網址加 udm=14（Web 篩選，不顯示 AI 摘要）：」「https://www.google.com/search?q=rp2350+DREQ&udm=14」
+    答案：https://www.google.com/search?q=rp2350+DREQ&udm=14
+    注意事項：Google 沒保證 udm=14 永久有效；還是看到 AI 摘要就不要看、往下捲
+    不確定的地方：無
+
+- id: ref-docs-paste-table
+  tags: [ref, sw, docs-map]
+  desc: PDF 表格只留需要的幾列、改寫成「欄位 = 值」一行一個，附出處
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 7/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "我要把 datasheet 裡 DREQ 表的幾列貼給模型，從 PDF 複製出來排版亂掉了，要怎麼整理再貼？"}
+  checks:
+    - {type: contains_any, items: ["欄位 = 值", "欄位=值", "一行一個"], name: rewrite}
+    - {type: contains_any, items: ["出處", "節號"], name: source}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: not_regex, pattern: "(整份|全部|整張表)\\s*貼", name: not_whole}
+  golden: |
+    證據：「PDF 複製的表格會被打散：只留需要的幾列」「一定附出處：文件名 + 節號 + 節名，或檔案路徑 + 函式名。」
+    答案：只留需要的幾列，改寫成「欄位 = 值」一行一個，刪掉頁首頁尾與頁碼；開頭附出處 §12.6.4.1 System DREQ table。
+    注意事項：一次只貼一段，約 1200 字元以內
+    不確定的地方：無
+
+- id: ref-docs-absent-usb
+  tags: [ref, sw, docs-map, absent]
+  desc: 節號卡沒列 USB → 資料中沒有，不編節號
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 2/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "RP2350 datasheet 的 USB 控制器是第幾節？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "USB[^\\n]{0,10}1[0-9]\\.\\d|1[0-9]\\.\\d+\\s*USB", name: no_invented_section, category: grounding}
+  golden: |
+    證據：「12.1 UART、12.2 I2C、12.3 SPI、12.4 ADC、12.5 PWM（p.871、892、943、963、973）」
+    答案：資料中沒有；卡上沒列 USB 的節號。
+    注意事項：無
+    不確定的地方：去 datasheet 目錄用 Ctrl+F 搜 USB
+
+- id: ref-docs-absent-tf2
+  tags: [ref, sw, docs-map, absent]
+  desc: ROS 2 網址卡沒有 tf2 → 資料中沒有，不編網址
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 5/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 1/2"}
+  fills:
+    - {match: "問題", value: "ROS 2 Jazzy 的 tf2 教學網址是什麼？"}
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "Tutorials/Intermediate/Tf2|Tf2-Main|tf2[^\\n]{0,20}\\.html", name: no_invented_url, category: grounding}
+  golden: |
+    證據：「search.html（站內搜尋）」
+    答案：資料中沒有；卡上沒有 tf2 的網址，用 https://docs.ros.org/en/jazzy/search.html 站內搜尋。
+    注意事項：無
+    不確定的地方：無
+
+- id: ref-docs-check-paste-draft
+  tags: [ref, sw, docs-map, check-code]
+  desc: 查詢 2/2：貼原文草稿一次問兩件事 → 違反「一次只問一件事」
+  turns:
+    - card: {file: "08-docs-map.md", title: "官方文件導航 7/7"}
+      assistant: "收到"
+  card: {file: "11-ask-reference.md", title: "查詢 2/2"}
+  fills:
+    - match: "我的程式"
+      value: |2
+             1	以下摘自 RP2350 datasheet §12.6.4.1 System DREQ table（官方文件，Release 8）。晶片是 RP2350，不是 RP2040。
+             2	＜原文開始＞
+             3	DREQ_PIO0_TX0 = 0
+             4	DREQ_UART0_TX = 28
+             5	＜原文結束＞
+             6	問題：UART0 TX 的 DREQ 是幾號？另外 PIO1 的 RX FIFO 要用哪個 DREQ？
+  checks:
+    - {type: regex, pattern: "違反[^\\n]*(問題|另外|\\b6\\b)|(問題：|另外)[^\\n]*違反", name: two_questions_flagged}
+    - {type: not_regex, pattern: "違反[^\\n]*(出處|§12\\.6\\.4\\.1)|(出處|§12\\.6\\.4\\.1)[^\\n]*違反", name: source_ok}
+    - {type: not_regex, pattern: "(違反[\\s\\S]*){4,}", name: few_false_alarms}
+  golden: |
+    參考卡上的規則：
+    1. 一次只貼一段原文，約 1200 字元以內。
+    2. 一定附出處：文件名 + 節號 + 節名，或檔案路徑 + 函式名。
+    3. PDF 複製的表格會被打散：只留需要的幾列，改寫成「欄位 = 值」一行一個
+    4. 問題寫在原文後面，一次只問一件事。
+    | # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+    |---|---|---|
+    | 1 | OK | 2–5 只有一段 |
+    | 2 | OK | 1 §12.6.4.1 System DREQ table |
+    | 3 | OK | 3 DREQ_PIO0_TX0 = 0 |
+    | 4 | 違反 | 6 問題：UART0 TX 的 DREQ 是幾號？另外 PIO1 的 RX FIFO 要用哪個 DREQ？ |
+    最該先修的 1 條：第 6 行拆成兩次問

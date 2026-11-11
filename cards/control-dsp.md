@@ -7,9 +7,9 @@
 【參考卡｜控制DSP 1/8｜平台選擇與定點格式（RP2350）】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 平台：RP2350（Pico 2，非 RP2040），兩種核心可選：
-- Hazard3（RISC-V）：無 FPU，float 全部軟體模擬 → 用定點數。mul/mulh 各 1 cycle，div 18–19 cycle，有 Zbb min/max/clz。
+- Hazard3（RISC-V）：無 FPU，float 全部軟體模擬 → 用定點數。mul/mulh 各 1 cycle、div 18–19 cycle（⚠️未查證，見 datasheet 3.8.7），有 Zbb min/max/clz。
 - Cortex-M33：單精度 FPU，可用 float，不要 double（常數寫 1.0f）；DSP 指令 SMLAD（兩個 16×16 乘加）、SSAT、SMMUL。
-- 兩核都沒有 64-bit 除法指令（呼叫軟體 __divdi3，很慢）。
+- 兩核都沒有 64-bit 除法指令（軟體函式：Arm `__aeabi_ldivmod`、RISC-V `__divdi3`，很慢）。
 - Hazard3 執行期 float↔定點轉換是軟體浮點，只在初始化做；fix2float/float2fix 只在 Arm 版 pico_float 有。
 - 要和 judge 逐位元一致 → 定點 + 固定捨入規則（float 會因 FMA、旗標、平台差末位）。
 定點：實際值 = raw / 2^FRAC。寫程式時用「容器型別 + FRAC」描述最不會錯。
@@ -71,7 +71,7 @@ static inline uint32_t div_by_recip(uint32_t x, uint32_t inv) { return (uint32_t
 - float 只有 24 位尾數：16777216.0f + 1.0f == 16777216.0f；時間用整數 µs。
 - 隱性 double：`x * 0.5`、`sin()`、`printf("%f")` → 常數加 f、`-Wdouble-promotion`。
 - Hazard3 div 除以 0 不 trap（回傳 −1），C 為 UB → 先檢查。
-- 抓隱性浮點/64 位除法：objdump 找 __mulsf3、__adddf3、__divdi3。
+- 抓隱性浮點/64 位除法：objdump 找 RISC-V `__mulsf3`、`__adddf3`、`__divdi3`；Arm `__aeabi_dadd`、`__aeabi_ldivmod`。
 
 ---
 

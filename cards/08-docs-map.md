@@ -9,7 +9,7 @@
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 文件：RP2350 datasheet Release 8（2026-10-01），晶片 RP2350（Pico 2），非 RP2040。
 網址：https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf
-頁碼是頁面右下角印的頁碼，PDF 檢視器約 +1。Ctrl+F 用「節號. 節名」。
+頁碼是頁面右下角印的頁碼，PDF 檢視器約 +1（⚠️頁碼未逐一查證）。Ctrl+F 用「節號. 節名」最準。
 DMA（第 12.6 節，16 通道）：
 - 12.6.2 Configuring channels（p.1011）
 - 12.6.2.2.1 Count modes：ENDLESS、TRIGGER_SELF（p.1012）
@@ -33,7 +33,7 @@ PIO（第 11 章，3 個 PIO）：
 
 【參考卡｜官方文件導航 2/7｜RP2350 datasheet 其他常用節號】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-文件：RP2350 datasheet Release 8（2026-10-01），晶片 RP2350（Pico 2），非 RP2040。頁碼為頁面印的頁碼。
+文件：RP2350 datasheet Release 8（2026-10-01），晶片 RP2350（Pico 2），非 RP2040。頁碼為頁面印的頁碼（⚠️未逐一查證，以節號為準）。
 - 2.1.3 Atomic register access：+0x1000 XOR、+0x2000 SET、+0x3000 CLR（p.23）
 - 2.1.5 Narrow IO register writes（p.24）
 - 2.2 Address map，Table 8（p.27）
@@ -65,7 +65,7 @@ PIO（第 11 章，3 個 PIO）：
 - E2（§D.9.2，A2/A3/A4）：SIO SPINLOCK 寫入會鏡像到 +0x80。對策：用處理器原子指令；SDK 在 RP2350 預設用軟體鎖；可安全使用的硬體 spinlock：5、6、7、10、11、18–31。
 - E5（§D.4.1，A2/A3/A4）：CHAIN_TO 與 ABORT 作用中的通道交互有問題。對策：abort 前先清掉被 abort 的通道和它 chain 到的通道的 CH0_CTRL_TRIG.EN。
 - E8（§D.4.2，A2/A3/A4）：零長度傳輸時 CHAIN_TO 可能不觸發。對策：不要把 CHAIN_TO 和零長度傳輸一起用，用 dummy 傳輸取代。
-- E9（§D.5.1，只有 A2）：Bank 0 GPIO 開啟輸入時內建 pull-down 拉不下來。對策：先關 GPIO0.IE，讀之前才暫時打開；或外接 ≤ 8.2 kΩ 下拉。
+- E9（§D.5.1，A2；A3 ⚠️未查證；A4 已修）：Bank 0 GPIO 開啟輸入時內建 pull-down 拉不下來。對策：先關 GPIO0.IE，讀之前才暫時打開；或外接 ≤ 8.2 kΩ 下拉。
 - E27（§D.3.1，A2/A3/A4）：APB 與 FASTPERI 的 bus priority 套到錯的 manager。無完整修正。
 - E30（§D.2.13）：reboot() 的 delay_ms 為 0 時不重開機；傳 1。SDK 2.3.0 起自動處理。
 
@@ -87,7 +87,7 @@ pico-sdk 最新版 2.3.1（master 分支內容相同）。晶片 RP2350（Pico 2
 - rp2350/hardware_regs/include/hardware/regs/dreq.h（DREQ 號碼）
 - rp2350/hardware_regs/include/hardware/platform_defs.h（NUM_DMA_CHANNELS 等）
 路徑一定要是 rp2350，不是 rp2040。
-線上 API（瀏覽器開，程式抓會被擋）：
+線上 API（瀏覽器開）：
 https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_dma
 同頁錨點：group_channel_config、group_hardware_pio、group_sm_config、group_pio_instructions、group_hardware_irq
 high_level.html#group_pico_multicore、#group_pico_time、#group_queue
@@ -99,7 +99,7 @@ GitHub：按 t 找檔名、y 永久連結、Raw 看純文字。不要按 Copilot
 【參考卡｜官方文件導航 5/7｜ROS 2 Jazzy 文件網址】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 版本：ROS 2 Jazzy Jalisco。GitHub 分支一律 jazzy。
-前綴 https://docs.ros.org/en/jazzy/
+前綴 https://docs.ros.org/en/jazzy/（程式抓取會被擋，用瀏覽器開）
 - Concepts/Intermediate/About-Quality-of-Service-Settings.html（QoS）
 - Concepts/Intermediate/About-Executors.html
 - Concepts/Intermediate/About-Domain-ID.html

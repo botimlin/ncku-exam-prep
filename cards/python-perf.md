@@ -58,7 +58,7 @@
 - list of int：15 ms（逐元素）
 - 同型別碼 `array.array('i', ...)`：0.09 ms（memcpy）
 - `bytes` / `bytearray`：0.08 ms（memcpy）
-- memoryview / numpy 陣列：35 ms（被當一般 iterable 逐元素；numpy 為推論 ⚠️未實測）
+- memoryview：36 ms；numpy 陣列：71 ms（都被當一般 iterable 逐元素，比 list 還慢）
 寫法：
 ```python
 msg.data = out_array                        # 已是 array('i') → 最快
@@ -145,7 +145,7 @@ main()
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 環境：Python 3.12、ROS 2 Jazzy rclpy、numpy 1.26。
 陷阱：
-1. int 溢位語義：Python int 不溢位；`array('i')` 超範圍丟 OverflowError；numpy int32 陣列運算靜默回繞；rclpy Jazzy 預設不檢查訊息欄位範圍，超範圍值在 C 轉換時被強制轉型（64-bit Linux 上相當於取低 32 位 ⚠️未實測）。優化前後語義要一致且符合規格。int32 回繞：`((v + 0x80000000) & 0xFFFFFFFF) - 0x80000000`。
+1. int 溢位語義：Python int 不溢位；`array('i')` 超範圍丟 OverflowError；numpy int32 陣列運算靜默回繞；rclpy Jazzy 預設不檢查訊息欄位範圍，超範圍值在 C 轉換時取低 32 位（實測 Int32 給 2**31+5 → -2147483643）。優化前後語義要一致且符合規格。int32 回繞：`((v + 0x80000000) & 0xFFFFFFFF) - 0x80000000`。
 2. 浮點：sum 順序、numpy pairwise summation、float32 vs float64 → 末幾位不同；看規格容許誤差。
 3. numpy int32 累加會溢位 → `a.sum(dtype=np.int64)`。
 4. `np.frombuffer(bytes)` 唯讀，原地修改丟 ValueError → `.copy()`。

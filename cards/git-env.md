@@ -116,4 +116,4 @@ nm prog | grep func                           # 符號
 size prog.elf                                 # 各區段大小
 ```
 - 交叉工具鏈實際名稱用 `compgen -c | grep objdump` 或 tab 補全找。
-- pico-sdk 建置會自動產生 `.dis`（反組譯）與 `.map`（記憶體配置）檔，可直接看。
+- pico-sdk：CMakeLists 有 `pico_add_extra_outputs(目標)` 時，建置會產生 `.dis`（反組譯）與 `.map`（記憶體配置）檔，可直接看。

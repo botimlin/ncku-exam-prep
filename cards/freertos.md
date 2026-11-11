@@ -6,18 +6,18 @@
 
 【參考卡｜FreeRTOS 1/8｜核心規則（先看這張）】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
-平台：RP2350（Pico 2），非 RP2040；FreeRTOS-Kernel V11 SMP，port 為 Community-Supported-Ports 的 `RP2350_ARM_NTZ`（Cortex-M33）或 `RP2350_RISC-V`（Hazard3）；pico-sdk 2.3.1。以考場 FreeRTOSConfig.h 為準。
+平台：RP2350（Pico 2），非 RP2040；FreeRTOS-Kernel V11 SMP，port `RP2350_ARM_NTZ`（Cortex-M33）或 `RP2350_RISC-V`（Hazard3），import cmake 依 PICO_PLATFORM 自動選；pico-sdk 2.3.1。以考場 FreeRTOSConfig.h 為準。
 1. task 優先權數字越大越優先（`tskIDLE_PRIORITY` = 0 最低）；IRQ 優先權相反（0x00 最高）
 2. stack 單位是 words（4 bytes）：`xTaskCreate(..., 512, ...)` = 2 KB；有 printf 至少 512
 3. task 不忙等：`xQueueReceive(q, &x, portMAX_DELAY)`、`ulTaskNotifyTake(pdTRUE, portMAX_DELAY)`；被阻塞的 task 不吃 CPU
 4. 週期迴圈用 `xTaskDelayUntil(&last, pdMS_TO_TICKS(T))`（last 先設 `xTaskGetTickCount()`）；`vTaskDelay` 會漂移
 5. `pdMS_TO_TICKS` 整數除法捨去；tick 100 Hz 時 <10 ms 變 0
 6. ISR 只能呼叫結尾 `FromISR` 的 API，並用 `portYIELD_FROM_ISR(woken)`；mutex 不能在 ISR 用
-7. 呼叫 API 的 IRQ 優先權數值必須 ≥ 0x10（SDK 預設 0x80 可；0x00 不可）
-8. SMP：`vTaskStartScheduler()` 在 core 0 呼叫，它自己 launch core1 → 不要再 `multicore_launch_core1`、不要自己用 FIFO、不要動 spinlock OS1/OS2
+7. （Arm port）呼叫 API 的 IRQ 優先權數值必須 ≥ 0x10（SDK 預設 0x80 可；0x00 不可）
+8. SMP：`vTaskStartScheduler()` 在 core 0 呼叫，它自己 launch core1 → 不要再 `multicore_launch_core1`、不要動 spinlock OS1/OS2 與 port 用的 doorbell
 9. SMP 下高低優先權 task 可同時跑、ISR 與 task 可並行 → 共享資料一定要保護
 10. `xTaskCreate` 成功 = `pdPASS`，失敗 -1；`xQueueCreate` 失敗回 NULL；都要檢查
-11. task 內 `sleep_ms()` 會讓出 CPU（TIME_INTEROP=1 時）；`busy_wait_ms()` 不會
+11. task 內 `sleep_ms()` 會讓出 CPU（靠 `configSUPPORT_PICO_SYNC_INTEROP 1`；兩個 INTEROP 都設 1）；`busy_wait_ms()` 不會
 12. task 函式不能 return；結束用 `vTaskDelete(NULL)`
 
 ---
@@ -31,16 +31,15 @@ include(FreeRTOS_Kernel_import.cmake)
 target_include_directories(app PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(app PRIVATE pico_stdlib FreeRTOS-Kernel-Heap4)
 ```
-- kernel 路徑：`-DFREERTOS_KERNEL_PATH=`；target `FreeRTOS-Kernel`、`-Heap1`～`-Heap5`（heap_4 最常用）、`-Static`；只 link Kernel 沒 heap → pvPortMalloc undefined
-- FreeRTOSConfig.h 所在目錄要在 include path
-FreeRTOSConfig.h 重點：
-- `configNUMBER_OF_CORES 2`、`configUSE_CORE_AFFINITY 1`
-- `configRUN_MULTIPLE_PRIORITIES 1`（0 = 只有同優先權 task 才會同時跑）
+- `-DFREERTOS_KERNEL_PATH=`；target `FreeRTOS-Kernel`、`-Heap1`～`-Heap5`（常用 heap_4）、`-Static`；只 link Kernel → pvPortMalloc undefined
+FreeRTOSConfig.h（目錄要在 include path）：
+- `configNUMBER_OF_CORES 2`、`configUSE_CORE_AFFINITY 1`、`configTICK_CORE 0`、`configUSE_PASSIVE_IDLE_HOOK 0`（SMP 必須定義）
+- `configRUN_MULTIPLE_PRIORITIES 1`（0 = 只有同優先權才同時跑）
 - `configTICK_RATE_HZ 1000`、`configTOTAL_HEAP_SIZE (128*1024)`、`configMINIMAL_STACK_SIZE 512`（words）
 - `configSUPPORT_PICO_SYNC_INTEROP 1`、`configSUPPORT_PICO_TIME_INTEROP 1`
-- 除錯：`configCHECK_FOR_STACK_OVERFLOW 2`、`configUSE_MALLOC_FAILED_HOOK 1`、`configASSERT(x)`（Release 的 -DNDEBUG 讓 assert 失效）
+- 除錯：`configCHECK_FOR_STACK_OVERFLOW 2`、`configUSE_MALLOC_FAILED_HOOK 1`、`configASSERT(x)`（沒給 CMAKE_BUILD_TYPE 時預設 Release，-DNDEBUG 讓 assert 失效）
 - RP2350 Arm 必設：`configENABLE_MPU 0`、`configENABLE_TRUSTZONE 0`、`configRUN_FREERTOS_SECURE_ONLY 1`、`configENABLE_FPU 1`、`configMAX_SYSCALL_INTERRUPT_PRIORITY 16`
-- 要 `INCLUDE_xTaskDelayUntil 1`；config 沒定義就用預設值 → 先讀考場的 FreeRTOSConfig.h
+- 要 `INCLUDE_xTaskDelayUntil 1`；沒定義的用預設值 → 先讀考場的 config
 
 ---
 
@@ -68,14 +67,14 @@ void periodic_task(void *p) {
     TickType_t last = xTaskGetTickCount();
     for (;;) {
         if (xTaskDelayUntil(&last, period) == pdFALSE) {
-            /* deadline miss */
+            /* miss */
         }
         do_work();
     }
 }
 ```
-- `vTaskDelay(ticks)` 相對延遲；`vTaskDelay(0)` 不阻塞
-- `portMAX_DELAY` 在 `INCLUDE_vTaskSuspend == 1` 時 = 無限期等待
+- `vTaskDelay(ticks)` 相對延遲；`vTaskDelay(0)` 不阻塞、只 yield
+- `portMAX_DELAY` = 無限期等待（需 `INCLUDE_vTaskSuspend 1`）
 - `pdMS_TO_TICKS(ms)` = ms * configTICK_RATE_HZ / 1000（捨去）
 - µs 級精度不要靠 tick，改用硬體 timer
 
@@ -84,22 +83,22 @@ void periodic_task(void *p) {
 【參考卡｜FreeRTOS 4/8｜queue、semaphore、mutex、notification、event group、timer】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 平台：RP2350（Pico 2）FreeRTOS V11 SMP。
-queue（複製資料，多生產者 / 消費者、跨核安全）：
-- `q = xQueueCreate(len, item_size)`（失敗 NULL）
-- `xQueueSend(q, &item, ticks)`、`xQueueReceive(q, &buf, ticks)`、`xQueuePeek`
+queue（複製資料、跨核安全）：
+- `xQueueCreate(len, item_size)`（失敗 NULL）
+- `xQueueSend(q, &item, ticks)`、`xQueueReceive(q, &buf, ticks)`
 - `xQueueOverwrite` 只用於長度 1 的 queue
 - 滿 / 空回 errQUEUE_FULL / errQUEUE_EMPTY（= 0）；大資料傳指標
 semaphore / mutex（`#include "semphr.h"`）：
 - `xSemaphoreCreateBinary()`（建立時是空的）、`xSemaphoreCreateCounting(max, init)`
-- `xSemaphoreCreateMutex()`（priority inheritance，誰 Take 誰 Give，不可在 ISR）、`...RecursiveMutex()`
-- `xSemaphoreTake(s, ticks)` / `xSemaphoreGive(s)`
-- 互斥用 mutex（不用 binary）；事件同步用 notification / binary（不用 mutex）
-task notification（最快，官方：比 binary semaphore 快 45%；只有 1 個接收者）：
-- `xTaskNotifyGive(h)` + `ulTaskNotifyTake(pdTRUE, ticks)`（pdTRUE 清 0、回傳累計次數）
+- `xSemaphoreCreateMutex()`（優先權繼承、誰 Take 誰 Give、不可在 ISR）
+- `xSemaphoreTake(s, ticks)` / `xSemaphoreGive(s)`；RecursiveMutex 只能用 `xSemaphoreTakeRecursive` / `GiveRecursive`
+- 互斥用 mutex；事件同步用 notification / binary
+task notification（官方：解除阻塞比 binary semaphore 快 45%；只 1 個接收者）：
+- `xTaskNotifyGive(h)` + `ulTaskNotifyTake(pdTRUE, ticks)`（清 0、回傳次數）
 - `xTaskNotify(h, value, eSetBits)`、`xTaskNotifyWait(clr_entry, clr_exit, &val, ticks)`
-event group：`xEventGroupWaitBits(g, bits, clearOnExit, waitAll, ticks)`；bit 0–23；`...SetBitsFromISR` 經 timer task（需 configUSE_TIMERS）
-stream / message buffer：只支援單一寫入者與單一讀取者
-軟體 timer：`xTimerCreate("t", ticks, pdTRUE, id, cb)` + `xTimerStart(t, 0)`；cb 在 `Tmr Svc` task 執行，不可阻塞
+event group：`xEventGroupWaitBits(g, bits, clearOnExit, waitAll, ticks)`；bit 0–23；`...SetBitsFromISR` 經 timer task（需 configUSE_TIMERS、INCLUDE_xTimerPendFunctionCall 皆 1）
+stream / message buffer：只支援單一寫入者、單一讀取者
+軟體 timer：`xTimerCreate("t", ticks, pdTRUE, id, cb)` + `xTimerStart(t, 0)`；cb 在 Tmr Svc task 跑，不可阻塞
 
 ---
 
@@ -119,7 +118,7 @@ void my_irq_handler(void) {
 - `woken` 一定初始化成 pdFALSE；多個 FromISR 可共用同一個 woken
 - 忘了 `portYIELD_FROM_ISR`：被喚醒的 task 要等下次排程 → 延遲變大
 - ISR 內的 critical：`UBaseType_t s = taskENTER_CRITICAL_FROM_ISR(); … taskEXIT_CRITICAL_FROM_ISR(s);`
-IRQ 優先權（NVIC 高 4 bit 有效，0x00、0x10…0xF0，數字越小越優先）：
+IRQ 優先權（NVIC 高 4 bit 有效，0x00、0x10…0xF0，越小越優先）：
 - 0x00（PICO_HIGHEST_IRQ_PRIORITY）：不可呼叫任何 FreeRTOS API；不會被 critical section 遮罩
 - 0x10～0xF0（含 SDK 預設 0x80）：可呼叫 FromISR API；會被 critical section 遮罩
 - 在 0x00 呼叫 → configASSERT 在 vPortValidateInterruptPriority 失敗
@@ -128,7 +127,7 @@ IRQ 優先權（NVIC 高 4 bit 有效，0x00、0x10…0xF0，數字越小越優�
 - IRQ 在哪核啟用就在哪核執行 → 想在 core 1 處理，就在綁 core 1 的 task 裡啟用
 - IRQ 用到的 queue / task handle 建立好之後才啟用 IRQ
 - 處理中斷的 task 優先權要高（ISR 只清旗標 + notification）
-- RISC-V port：不支援巢狀中斷；不使用 configMAX_SYSCALL_INTERRUPT_PRIORITY
+- RISC-V port：不支援巢狀中斷；無 MAX_SYSCALL 優先權，critical 擋全部 IRQ（含 0x00）
 
 ---
 
@@ -141,16 +140,16 @@ IRQ 優先權（NVIC 高 4 bit 有效，0x00、0x10…0xF0，數字越小越優�
 - 資料平行：每核一個 worker、各自累加，用 event group / notification 等全部完成再合併
 - idle task 不綁核（IDLE0 不一定在 core 0）
 critical section：
-- `taskENTER_CRITICAL(); … taskEXIT_CRITICAL();`：SMP 下關本核 IRQ（BASEPRI，只擋數值 ≥ 0x10）+ 取跨核 spinlock，是全系統一把鎖 → 只放幾行，不可呼叫阻塞 API
+- `taskENTER_CRITICAL(); … taskEXIT_CRITICAL();`：遮本核 IRQ（Arm：BASEPRI 擋 ≥ 0x10；RISC-V：全關）+ 取 OS1/OS2 spinlock，是全系統一把鎖 → 只放幾行，不可呼叫阻塞 API
 - 較長操作（printf、走訪 list）用 mutex
-- 陷阱：scheduler 啟動前在 main() 建立物件後，IRQ 可能一直被遮罩到 scheduler 啟動 ⚠️未驗證（讀碼推論）→ 硬體初始化放在建立物件前；需要 IRQ 或 sleep_ms 的初始化放進 task
+- 陷阱：main() 裡第一次 xTaskCreate / xQueueCreate 後，IRQ 被遮罩到第一個 task 開始跑 → 硬體初始化放建立物件前；需要 IRQ 或 sleep_ms 的初始化放進 task
 裸機 → FreeRTOS：
 - `multicore_launch_core1` → affinity task
 - `multicore_fifo_*` → FreeRTOS queue / notification
 - `spin_lock_blocking` / `critical_section_*` → `taskENTER_CRITICAL`（極短）或 mutex
 - flag 輪詢 → `vTaskNotifyGiveFromISR` + `ulTaskNotifyTake`
 - `add_repeating_timer_ms` → `xTaskDelayUntil` 週期 task 或軟體 timer
-- pico `queue_t` / `mutex_t` 在 SYNC_INTEROP 下仍可用（FreeRTOS ↔ 非 FreeRTOS 時）
+- pico `queue_t` / `mutex_t` 在 SYNC_INTEROP 下仍可用
 
 ---
 
@@ -197,17 +196,17 @@ run-time stats（RP2350 port 沒提供計數器）：
 | vTaskStartScheduler 之後的程式被執行 | heap 不足以建 idle/timer task |
 | assert 在 vPortValidateInterruptPriority | 0x00 IRQ 呼叫 FromISR → 改 ≥ 0x10 |
 | ISR 呼叫 xQueueSend 後當機 | 改 FromISR 版 + portYIELD_FROM_ISR |
-| 中斷後 task 很久才反應 | 忘 portYIELD_FROM_ISR 或處理 task 優先權太低 |
+| 中斷後 task 很久才反應 | 忘 portYIELD_FROM_ISR 或 task 優先權太低 |
 | 低優先權 task 永遠不跑 | 高優先權 task 忙等 → 必須阻塞 |
 | 週期漂移 | vTaskDelay → xTaskDelayUntil |
 | vTaskDelay(pdMS_TO_TICKS(1)) 沒延遲 | tick 太低換算為 0 |
 | 兩核計數偶爾少 | SMP 共享變數沒保護 → critical / mutex / 各自累加 |
 | 卡死在兩個 mutex | 取鎖順序相反 → 固定順序、有限逾時 |
-| scheduler 前呼叫 API 卡住 | main 中用了阻塞 API 或依賴 IRQ 的初始化 → 放進 task |
-| core 1 異常 | 自己 multicore_launch_core1 或動 FIFO/OS spinlock |
+| scheduler 前呼叫 API 卡住 | main 中用阻塞 API 或依賴 IRQ 的初始化 → 放進 task |
+| core 1 異常 | 自己 multicore_launch_core1 或動 OS spinlock / doorbell |
 | 在 core 1 啟動 scheduler 就 assert | 改 core 0 |
-| assert 沒作用 | Release 帶 -DNDEBUG → Debug build 或改用 panic |
+| assert 沒作用 | 預設 Release 帶 -DNDEBUG → Debug build 或 panic |
 | 浮點偶爾錯 | 沒開 configENABLE_FPU |
 | pvPortMalloc undefined | link FreeRTOS-Kernel-Heap4 |
 | FreeRTOSConfig.h: No such file | target_include_directories 加目錄 |
-| 多 task 寫同一 stream buffer 錯亂 | 只支援單寫入者 → 包 critical 或改 queue |
+| 多 task 寫同一 stream buffer | 只支援單寫入者 → 包 critical 且 block 0，或改 queue |
