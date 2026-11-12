@@ -246,7 +246,7 @@ li x6, 0x12345fff → lui x6,0x12346 ; addi x6,x6,-1        (0x12346000 - 1)
 
 ### 6.2.10 呼叫慣例（ABI）一頁版
 
-- **ABI**：大家約好「參數放哪、回傳值放哪、哪些暫存器呼叫後還要在」。C 和組語要互相呼叫，就要照它（`rv32_asm_cheatsheet.md:3-17`）。
+- **ABI**：大家說好「參數放哪、回傳值放哪、哪些暫存器呼叫後還要在」。C 和組語要互相呼叫，就要照它（`rv32_asm_cheatsheet.md:3-17`）。
 
 | 暫存器 | ABI 名 | 用途 | 呼叫別人之後還在嗎 |
 |---|---|---|---|
@@ -363,7 +363,7 @@ endian、rotate、2 的次方（`bitops.h:53-72`）：
 | `rotl32(x, n)` / `rotr32(x, n)` | n 任意整數 | 循環左移 / 右移 | 先 `n &= 31`，所以 n = 36 等於 4、n = −4 等於 28（實測 `rotl32(0x12345678,-4)` = `0x81234567`）；n = 0 特判避免 `>> 32`；Zbb 下編成 `andi + rol` |
 | `is_pow2(x)` | x | 是 2 的次方回 1 | 0 → 0 |
 | `round_up_pow2(x)` | x | 往上取到 2 的次方；0 → 0 | x > 0x80000000 會溢位成 0（實測 `0x80000001` → 0） |
-| `ALIGN_UP(x, a)` | a 必須是 2 的次方 | 對齊到 a 的倍數 | a 不是 2 的次方會算錯：`ALIGN_UP(13, 6)` = 18（實測，正確答案應該是 18？不是，13 往上對齊 6 是 18，碰巧對；`ALIGN_UP(7, 6)` = 7 & ~5 系列一般不對）→ 一律只用 2 的次方 |
+| `ALIGN_UP(x, a)` | a 必須是 2 的次方 | 對齊到 a 的倍數：`ALIGN_UP(13, 4)` = 16 | a 不是 2 的次方會算錯：`ALIGN_UP(7, 6)` 實測 = 8（應該是 12）；巨集參數會被算兩次 |
 
 位元反轉（`bitops.h:76-85`）：
 
@@ -371,11 +371,11 @@ endian、rotate、2 的次方（`bitops.h:53-72`）：
 |---|---|---|---|
 | `bitrev32(x)` | x | 32 位左右顛倒：`0x1` → `0x80000000`、`0x12345678` → `0x1E6A2C48` | 先相鄰 1、2、4 位互換，最後 `bswap32` |
 | `bitrev_n(x, n)` | n：1～32 | 只反轉低 n 位：`bitrev_n(0b0011, 4)` = `0b1100` | x 高於 n 的位元不影響結果（實測 `bitrev_n(0xFF03, 4)` = `0xC`）；**n = 0 → 位移 32，UB（已知問題 7）** |
-| `brev8(x)` | x | 每個 byte 內部反轉、byte 順序不變：`0x01020380` → `0x8040C001` | 等於 Zbkb 的 `brev8`；但 gcc 不會自動認出，C 版編成約 30 條指令；要一條指令請用 `__builtin_riscv_brev8(x)`（本章實測可用，編成 `brev8 a0,a0`） |
+| `brev8(x)` | x | 每個 byte 內部反轉、byte 順序不變：`0x01020380` → `0x8040C001` | 等於 Zbkb 的 `brev8`；但 gcc 不會自動認出，C 版編成 28 條指令（含 `ret`，實測）；要一條指令請用 `__builtin_riscv_brev8(x)`（本章實測可用，編成 `brev8 a0,a0`） |
 
 小技巧速查（`bitops.h:87-94`，只是註解）：`x & -x` 只留最低的 1（`0b10110` → `0b00010`，實測）、`x & (x-1)` 清掉最低的 1、`popcount(a ^ b)` 是漢明距離、`~(a ^ b)` 是 XNOR。
 
-> 更正上表 `ALIGN_UP` 那一列：不要拿非 2 的次方去試，結果沒有保證。`ALIGN_UP(13, 6)` 實測輸出 18，只是碰巧；公式 `(x + a-1) & ~(a-1)` 只有在 a-1 是「低位全 1」時才代表「清掉低位」。
+`ALIGN_UP` 的公式 `(x + a-1) & ~(a-1)` 只有在 a−1 是「低位全 1」（也就是 a 是 2 的次方）時，`& ~(a-1)` 才等於「清掉低位」。
 
 #### 程式流程
 
@@ -1241,7 +1241,7 @@ uint32_t gather_bits(uint32_t x, const int src[], int n) {
 }
 ```
 
-怎麼驗證：左右顛倒時兩種寫法結果一樣（`{3,2,1,0}`：`0x3` → `0xC`，`packet_fields.c:106-107`）；不對稱的排列要手算一組。RISC-V 的 B / J 立即值就是這種重排（6.2.8）。
+怎麼驗證：左右顛倒時兩種寫法結果一樣（`{3,2,1,0}`：`0x3` → `0xC`，`packet_fields.c:106-107`）。不對稱的排列兩者就不同，本章實測表 `{1,2,3,0}`、輸入 `0x1`：`permute_bits` = `0x2`（bit0 搬到 bit1），`gather_bits` = `0x8`（輸出 bit3 取自輸入 bit0）。一定要拿題目的範例手算一組，確定方向。RISC-V 的 B / J 立即值就是這種重排（6.2.8）。
 
 ### 6.4.5 反組譯器加指令
 
@@ -1368,7 +1368,7 @@ my_test: PASS
 
 題目長這樣：「Pico 上跑二值神經網路內積，要更快。」
 
-- C 寫法（任何平台）：`2 * __builtin_popcount(~(w ^ x)) - 32`，配合 Hazard3 的 `-march` 會編成 `xnor`/`cpop`（`bitops.h:42`、速查表 `:90`）。演算法本身見第 5 章 `algo/bnn.c`。
+- C 寫法（任何平台）：`2 * __builtin_popcount(~(w ^ x)) - 32`，配合 Hazard3 的 `-march` 編成 `xnor` + `cpop` + `addi` + `slli` 4 條（本章實測；`bitops.h:42`、速查表 `:93`）。演算法本身見第 5 章 `algo/bnn.c`。
 - 組語寫法：直接用 `asm_bnn_dot`（`asm_examples.S:80-107`）。
 - 怎麼驗證：`asm_test.c:67-70` 的 3 個 CHECK（一般、全同 = +32n、全反 = −32n）。
 - 在 Cortex-M33 上沒有 `cpop`；`__builtin_popcount` 會變成軟體實作。RISC-V 和 ARM 誰快，本章沒有在板子上量 ⚠️未驗證。
@@ -1381,10 +1381,10 @@ my_test: PASS
 
 | 寫法 | 每個 word 的指令數 | 來源 |
 |---|---|---|
-| `asm_popcount_array_base` | 外層 5 條 + 每個 1 位元 4 條（`beqz/addi/and/addi` + `j`，實際 5 條含 `j`） | `-march=rv32i` 的 objdump |
+| `asm_popcount_array_base` | 每個 word 5 條（`lw`、最後一次 `beqz`、`addi`、`addi`、`bnez`）+ 每個 1 位元 5 條（`beqz/addi/and/addi/j`） | `-march=rv32i` 的 objdump（0x5c～0x8c） |
 | `asm_popcount_array_fast`（Zbb） | 6 條（`lw/cpop/add/addi/addi/bnez`），和 1 的個數無關 | 6.3.5 的 objdump |
 | `POPCOUNT(x)`（Zbb） | 1 條 `cpop` | 6.3.7 |
-| `brev8()` C 版 | 約 30 條（objdump 實數：`f_brev8` 從 0x34 到 0x88，共 34 條） | 本章 `zbbcheck.c` |
+| `brev8()` C 版 | 28 條（含 `ret`） | 本章 `zbbcheck.c` 的 objdump |
 | `__builtin_riscv_brev8()` | 1 條 | 本章 `b8.c` |
 
 要在 Pico 上量：用 `pico/timing.h`（見第 3 章 3.3），重複呼叫上萬次取平均。

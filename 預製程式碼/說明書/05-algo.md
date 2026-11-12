@@ -336,3 +336,694 @@ Adler 和 Fletcher 的加速技巧（`checksum_misc.c:19-20`、`:35`）：除法
 | `adler32`、`fletcher16`、`xor8`、`sum8` | 一次一個 byte | 整數 | 無關 |
 | `sum32` | `uint32_t` 陣列 | 整數 | 資料若是 byte 流，結果取決於你怎麼組成 word |
 | `inet_csum` | 每 2 byte 當**大端**（`checksum_misc.c:66`） | 整數；放回封包時高 byte 先 | 無關 |
+
+## 5.3 逐檔說明
+
+所有指令都在 `預製程式碼/algo/` 資料夾執行（考場上換成你 clone 下來的路徑）。執行檔一律輸出到 repo 外面，**不要**留在 `algo/` 裡，交卷 commit 時也不要加進去：
+
+```bash
+cd ~/ncku-exam-prep/預製程式碼/algo     # 換成你的路徑
+B=/tmp/algo_build; mkdir -p $B
+```
+
+### 5.3.1 `README.md`
+
+#### 用途
+`algo/` 的入口：題目關鍵字 → 檔案 → 函式（`README.md:7-18`）、API 速查（`:20-50`）、編譯指令（`:52-63`）、作者機器上的實測數字（`:65-102`，AMD Ryzen 5 5600）、考場上要改哪裡（`:104-111`）。
+
+#### 怎麼編譯 / 執行
+`README.md:54-63` 的指令本次照跑，全部通過（輸出見各檔）。README 用 `B=/tmp/t`，本章用 `B=/tmp/algo_build`，兩者都在 repo 外，效果一樣。
+
+#### 對外介面
+無（文件）。
+
+#### 程式流程
+不適用。
+
+#### 要改的地方
+無 `TODO(改這裡)`（`README.md:5` 只是說明）。
+
+#### 實際執行輸出
+README 的數字是另一台機器（Ryzen 5 5600）。本次（Xeon 2.30GHz）重量的數字和 README 對照：
+
+| 項目 | README（Ryzen） | 本次實測（Xeon） |
+|---|---|---|
+| crc32_bitwise / table / slice4 | 134 / 554 / 1663 MB/s | 115.0 / 484.8 / 1445.4 MB/s |
+| SHA-1 / SHA-0 / SHA-256 | 485 / 485 / 120 MB/s | 423.1 / 415.8 / 122.6 MB/s |
+| qsort / merge / radix（n = 2^20） | 95.9 / 55.6 / 10.7 ms | 106.25 / 77.68 / 6.88 ms |
+| BNN 784×256：`-O2` / SWAR / 硬體 popcnt | 13.2 / 9.1 / 4.2 µs | 12.09 / 8.12 / 3.47 µs |
+
+結論一樣：slice4 最快、radix 遠快於 qsort、有硬體 popcount 的 BNN 快 3 倍以上。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| `algo/` 裡多了執行檔，被 commit 進去 | 編譯時 `-o` 沒指到 repo 外 | 用 `-o $B/xxx`；`git status` 檢查 |
+| 數字跟 README 不一樣 | 不同 CPU | 正常；看倍數關係就好 |
+
+### 5.3.2 `crc32.h`、`crc32.c`
+
+#### 用途
+CRC 家族：zlib 相容 CRC-32（三種速度的實作）、CRC-32C、CRC-16/CCITT-FALSE、任意參數的 `crc_generic`。核心檔，可以直接放進 Pico 專案。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 crc32.c crc32_test.c -o $B/crc && $B/crc
+```
+預期最後一行 `結果：全部通過`（完整輸出見 5.3.3）。只編核心檔（MCU）：
+```bash
+arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c -o $B/crc32.o
+```
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
+|---|---|---|---|---|
+| `void crc32_init(void)` | 無 | 建 `T[4][256]`、`TC[256]`、`T16[256]` 三組表，設 `inited = 1` | 一次約 256×(8+8+8) 步；表在 `.bss` 共 5636 byte（M33 `size` 實測） | 不呼叫也會在第一次查表時自動呼叫；**雙核心時要在 `multicore_launch_core1` 前呼叫**（見 5.6） |
+| `uint32_t crc32_bitwise(uint32_t crc, const uint8_t *p, size_t n)` | `crc`：第一段傳 0，之後傳上次結果；`p`、`n`：資料 | zlib CRC-32 | O(8n)；不用表；M33 stack 4 byte | 最慢但最不容易錯，適合當對照組 |
+| `uint32_t crc32_table(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上 | O(n)；用 `T[0]` 1 KB | 第一次呼叫會建表 |
+| `uint32_t crc32_slice4(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上 | O(n)，每 4 byte 一次迴圈；用 `T[0..3]` 4 KB | `p` 不用對齊 |
+| `uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上（= `crc32_slice4`） | 同 slice4 | **跟 `pico/serial_proto.c:25` 同名**，兩個檔放同一個執行檔會連結失敗（見 5.6、食譜 5.4.6） |
+| `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | CRC-32C（check `0xE3069283`） | O(n)；`TC` 1 KB | 只有查表版 |
+| `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | `crc`：**第一段傳 `0xFFFF`**，之後傳上次結果 | CRC-16/IBM-3740（check `0x29B1`） | O(n)；`T16` 512 byte | 傳 0 開始 = CRC-16/XMODEM（沒有 xorout，所以 init 0 就是 XMODEM） |
+| `crc_param_t` | `width`、`poly`、`init`、`refin`、`refout`、`xorout` | 結構（M33 上 20 byte） | — | 欄位順序固定，照 5.2.4 表格填 |
+| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | 參數、資料 | 照參數算出的 CRC | O(16n)（每 byte 8 次位移 + 8 次反轉）；不用表；M33 stack 32 byte | **width 只能 8..32**；**不能分段**（每次呼叫都重新套 init、xorout） |
+
+`crc32_bitwise` / `table` / `slice4` / `update` / `crc32c_update` 的分段規則跟 zlib 一樣：`c = f(0, a, na); c = f(c, b, nb);` 等於 `f(0, a+b, na+nb)`。原理：函式開頭 `crc = ~crc`、結尾 `return ~crc`（`crc32.c:44,50`），把 init 和 xorout 都藏在裡面，所以傳 0 進去 = 從 `0xFFFFFFFF` 開始。
+
+#### 程式流程
+
+1. `crc32.c:10-12` 三個多項式常數：`POLY32R = 0xEDB88320`（CRC-32 反轉寫法）、`POLY32CR = 0x82F63B78`（CRC-32C 反轉寫法）、`POLY16 = 0x1021`（CRC-16 不反轉）。
+2. `crc32.c:14-17` 表格與 `inited` 旗標，全部是 `static`（放 `.bss`，不佔 stack）。
+3. `make_entry_r`（`crc32.c:20-24`）：對一個 byte 做 8 次「右移，最低位是 1 就 XOR 多項式」。`polyr & (0u - (c & 1u))` 是無分支寫法：最低位是 1 時 `0u - 1 = 0xFFFFFFFF`，AND 後就是 `polyr`；是 0 時結果 0。
+4. `crc32_init`（`crc32.c:26-40`）：
+   - `:28-29` 建 `T[0]` 和 `TC`。
+   - `:30-33` 建 `T16`：不反轉的 CRC 從最高位開始，`i << 8` 放到 16 位的高 8 位，左移 8 次。
+   - `:36-38` 建 slice-by-4 延伸表：`T[t][i] = (T[t-1][i] >> 8) ^ T[0][T[t-1][i] & 0xFF]`，等於「再多吃一個 0 byte」。
+5. `crc32_bitwise`（`crc32.c:43-51`）：`crc = ~crc` → 每 byte `crc ^= *p++` 後做 8 次右移步驟 → `return ~crc`。
+6. `crc32_table`（`crc32.c:54-59`）：沒建表就先建（`:55`），每 byte 一次查表（`:57`）。
+7. `crc32_slice4`（`crc32.c:62-75`）：每次取 4 byte 組成小端 word XOR 進 `crc`（`:67-68`），查 4 張表（`:69-70`）；剩下 0~3 byte 用一般查表（`:73`）。
+8. `crc32_update`（`crc32.c:77-79`）：直接呼叫 `crc32_slice4`。
+9. `crc32c_update`（`crc32.c:82-87`）：跟 `crc32_table` 一樣，只是查 `TC`。
+10. `crc16_ccitt_false`（`crc32.c:90-94`）：不反轉 → 左移，用「高 8 位 XOR 輸入 byte」查表：`crc = (crc << 8) ^ T16[((crc >> 8) ^ *p++) & 0xFF]`。沒有 `~`，所以 init 由呼叫者傳。
+11. `reflect`（`crc32.c:97-101`）：把 `v` 的低 `bits` 位反轉。
+12. `crc_generic`（`crc32.c:103-117`）：
+    - `:104-105` `top` = 最高位遮罩、`mask` = width 位全 1（width = 32 時特別處理，避免 `1u << 32`）。
+    - `:106` `crc = init & mask`。
+    - `:109` refin 時先反轉輸入 byte。
+    - `:110` `crc ^= b << (c->width - 8)` 把 byte 放到最高 8 位（**width < 8 時位移量是負數 → 未定義行為**）。
+    - `:111-112` 8 次左移步驟、`:113` 遮罩。
+    - `:115-116` refout 時反轉整個 width 位，再 XOR `xorout`。
+
+#### 要改的地方
+
+| 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
+|---|---|---|---|
+| `crc32.c:10` | `#define POLY32R 0xEDB88320u` | `crc32_bitwise/table/slice4/update` 用的反轉多項式 | 題目要別種「refin=refout=1、init=xorout=0xFFFFFFFF」的 32-bit CRC 而且要快：換成新多項式的 32 位反轉值，例如 CRC-32/AUTOSAR `0xF4ACFB13` 反轉 = `0xC8DF352F`、CRC-32D `0xA833982B` 反轉 = `0xD419CC15`。改完 `crc32_test.c` 的 CRC-32 斷言會 FAIL（正常），改用 `crc_generic` 對照。init 或 xorout 不同時不要改這行，用食譜 5.4.1 的 `crcf` |
+| `crc32.c:11` | `#define POLY32CR 0x82F63B78u` | CRC-32C 反轉多項式 | 一般不改 |
+| `crc32.c:12` | `#define POLY16 0x1021u` | `crc16_ccitt_false` 的多項式（不反轉） | 要別的「不反轉、無 xorout」的 16-bit CRC，例如 CRC-16/UMTS 換 `0x8005`（init 傳 0）、CRC-16/T10-DIF 換 `0x8BB7` |
+
+`POLY32R` 的反轉值可以用 `crc32.c:97` 的 `reflect(poly, 32)` 算，或在 Python：`int(f"{0xF4ACFB13:032b}"[::-1], 2)`。本次用 Python 算出 `0xC8DF352F`、`0xD419CC15`。
+
+#### 實際執行輸出
+見 5.3.3（`crc32_test`）與 5.3.3 的「CRC 規格表」輸出。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 結果是正確值的 `~`（例如 `0x340BC6D9`） | 多做或少做最後的 XOR | 對照 5.2.4：`0x340BC6D9` 是 JAMCRC = zlib 少 XOR |
+| 分段算的結果跟一次算不同 | 第二段又傳 0 | 第二段要傳第一段的回傳值 |
+| `crc16_ccitt_false` 結果是 `0x31C3` | 第一段傳了 0 | CCITT-FALSE 要傳 `0xFFFF`；`0x31C3` 是 XMODEM |
+| `crc_generic` 回傳 0 或亂數（width 5、7） | width < 8 未定義行為（本次 UBSan：`crc32.c:110:18: runtime error: shift exponent -1 is negative`，回傳 0） | 改用食譜 5.4.1 的 `crc_bits` |
+| 用 `crc_generic` 分兩段算錯 | `crc_generic` 每次都重套 init/xorout | 整份一次算，或用食譜 5.4.1 的 `crcf_start/feed/finish` |
+| 連結錯誤 `multiple definition of 'crc32_update'` | 同一個執行檔也有 `pico/serial_proto.c` | 見食譜 5.4.6 |
+| 題目說 poly = `0xEDB88320`，填進 `crc_generic` 結果錯 | 那是反轉寫法 | 填 `0x04C11DB7` + refin=refout=1 |
+
+### 5.3.3 `crc32_test.c`
+
+#### 用途
+電腦上的 CRC 測試與測速。只在 host 用。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 crc32.c crc32_test.c -o $B/crc && $B/crc
+```
+
+#### 對外介面
+無（`main` 回傳失敗數，0 = 全過）。
+
+#### 程式流程
+1. `crc32_test.c:7-8` 4 MB 測速用的靜態陣列 `big`。
+2. `:12` `crc32_init()`。
+3. `:13-19` 標準向量：三種 CRC-32 實作、CRC-32C、CRC-16、空字串 = 0。
+4. `:21-35` 規格表 10 列，每列 `crc_generic` 對 `"123456789"`。
+5. `:37-51` 隨機資料：200 組隨機起點（0~63，故意不對齊）、隨機長度（0~2999），比對 bitwise / table / slice4 / 切兩段的 update / `crc_generic`，以及 CRC-32C 切兩段 vs `crc_generic`。
+6. `:53-64` 每個版本跑 5 次取最快，印 ms 與 MB/s。
+7. `:66` `return test_end()`。
+
+#### 要改的地方
+
+| 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
+|---|---|---|---|
+| `crc32_test.c:7` | `#define BIG (4u << 20)` | 測速資料 4 MB | 想測題目的實際資料量就改（例如 `(64u << 10)` = 64 KB）；只影響測速 |
+
+#### 實際執行輸出
+本次實測（host gcc 13.3、x86_64 Xeon 2.30GHz、`-O2`）：
+
+```text
+[CRC 標準向量]
+  PASS  crc32_bitwise("123456789")
+  PASS  crc32_table
+  PASS  crc32_slice4
+  PASS  crc32c = 0xE3069283
+  PASS  crc16_ccitt_false = 0x29B1
+  PASS  空字串 CRC-32 = 0
+[通用 CRC 對照參數表]
+  PASS  CRC-32
+  PASS  CRC-32/BZIP2
+  PASS  CRC-32/MPEG-2
+  PASS  CRC-32C
+  PASS  CRC-16/CCITT-FALSE
+  PASS  CRC-16/XMODEM
+  PASS  CRC-16/KERMIT
+  PASS  CRC-16/MODBUS
+  PASS  CRC-16/ARC
+  PASS  CRC-8
+[隨機資料：各版本一致 + 增量 API]
+  PASS  200 組隨機長度：bitwise/table/slice4/分段/generic 全相同
+[Benchmark：4 MB，取 5 次最快]
+  crc32_bitwise      36.47 ms    115.0 MB/s
+  crc32_table         8.65 ms    484.8 MB/s
+  crc32_slice4        2.90 ms   1445.4 MB/s
+  crc32c(table)       8.58 ms    488.6 MB/s
+  crc16(table)       11.85 ms    353.9 MB/s
+結果：全部通過
+```
+
+ch05 自寫 `crcspec.c`（34 種規格，見 5.2.4；編譯 `gcc -O2 -Wall -Wextra -std=c11 -I<algo> crcspec.c <algo>/crc32.c`）本次輸出節錄（每列格式相同，全部 34 列 PASS）：
+
+```text
+CRC-32/ISO-HDLC (zlib)           w=32 poly=0x04C11DB7 init=0xFFFFFFFF refin=1 refout=1 xorout=0xFFFFFFFF -> 0xCBF43926 PASS
+CRC-32/CKSUM (POSIX)             w=32 poly=0x04C11DB7 init=0x00000000 refin=0 refout=0 xorout=0xFFFFFFFF -> 0x765E7680 PASS
+CRC-24/OPENPGP                   w=24 poly=0x00864CFB init=0x00B704CE refin=0 refout=0 xorout=0x00000000 -> 0x0021CF02 PASS
+CRC-16/IBM-SDLC (X-25)           w=16 poly=0x00001021 init=0x0000FFFF refin=1 refout=1 xorout=0x0000FFFF -> 0x0000906E PASS
+CRC-12/UMTS (refin!=refout)      w=12 poly=0x0000080F init=0x00000000 refin=0 refout=1 xorout=0x00000000 -> 0x00000DAF PASS
+CRC-8/MAXIM-DOW (1-Wire)         w= 8 poly=0x00000031 init=0x00000000 refin=1 refout=1 xorout=0x00000000 -> 0x000000A1 PASS
+34 個規格，0 個失敗
+```
+
+同一支 `crc32_test.c` 在 qemu-riscv32（rv32imac + Zbb、picolibc，見 5.5.5）也是 17 項全 PASS。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 改了 `POLY32R` 之後 4 項 FAIL | 斷言寫死 zlib 的 check 值 | 預期內；用 `crc_generic` 的結果比 |
+| `undefined reference to clock_gettime`（交叉編譯） | `test_util.h` 用 POSIX 計時，MCU 沒有 | `*_test.c` 只在電腦上編 |
+
+### 5.3.4 `sha1_sha0.h`、`sha1_sha0.c`
+
+#### 用途
+SHA-1 和 SHA-0 共用一份程式，用 `is_sha0` 旗標切換。輸出 20 byte。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 sha1_sha0.c sha256.c sha_test.c -o $B/sha && $B/sha
+```
+（輸出見 5.3.6）
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
+|---|---|---|---|---|
+| `sha1_ctx` | `h[5]` 狀態、`total` 已餵 byte 數（`uint64_t`）、`buf[64]` 尾巴、`used`、`is_sha0` | 結構，M33 上 104 byte | — | 放 `static` 或全域；一個 ctx 同時只能算一份資料 |
+| `void sha1_init(sha1_ctx *c, int is_sha0)` | `is_sha0`：**1 = SHA-0、0 = SHA-1** | 設初值 | O(1) | 參數意思容易記反，`sha1_sha0.h:9` 有註解 |
+| `void sha1_update(sha1_ctx *c, const uint8_t *p, size_t n)` | 資料 | 吃進資料；滿 64 byte 就壓縮一次 | O(n)；M33 stack：本函式 24 byte + `compress` 128 byte | 整塊 64 byte 直接從 `p` 算，不複製（`sha1_sha0.c:53`） |
+| `void sha1_final(sha1_ctx *c, uint8_t out[20])` | 輸出緩衝 | 補 padding、寫 20 byte 結果（大端） | 1~2 次壓縮 | 呼叫後 ctx 不能再 `update`，要重新 `init` |
+| `void sha1(const uint8_t *p, size_t n, uint8_t out[20])` | 資料、輸出 | 一次算完 SHA-1 | M33 stack 128 byte（含 ctx）+ 下層 | — |
+| `void sha0(const uint8_t *p, size_t n, uint8_t out[20])` | 同上 | 一次算完 SHA-0 | 同上 | — |
+
+所有函式都不用 `malloc`。`total` 是 `uint64_t`，資料長度上限遠超過 Pico 的記憶體。
+
+#### 程式流程
+1. `sha1_sha0.c:9` `ROTL` 巨集；rv32 Zbb 會編成 `rori`/`rol` 指令（本次 objdump：`sha1_sha0.o` 有 5 個旋轉指令）。
+2. `load_be32`（`:11-14`）：大端序讀 4 byte。
+3. `compress`（`:16-38`）：
+   - `:18` 讀 16 個大端 word 到 `w[16]`。
+   - `:19` 取出 a..e。
+   - `:20-36` 80 回合：`t < 16` 直接用 `w[t]`；之後用 16 格循環陣列 `w[(t-3)&15] ^ w[(t-8)&15] ^ w[(t-14)&15] ^ w[t&15]`（`w[t&15]` 此時存的是 W[t-16]），SHA-1 再左旋 1（`:26`），寫回 `w[t&15]`（`:27`）。
+   - `:30-33` 四段回合函式與常數 `0x5A827999`、`0x6ED9EBA1`、`0x8F1BBCDC`、`0xCA62C1D6`。
+   - `:34-35` `tmp = ROTL(a,5) + f + e + k + wt`，狀態往後挪。
+   - `:37` 加回 `h[]`。
+4. `sha1_init`（`:40-44`）：五個初值 `0x67452301 0xEFCDAB89 0x98BADCFE 0x10325476 0xC3D2E1F0`，`total = used = 0`。
+5. `sha1_update`（`:46-55`）：`total += n`；`buf` 有上次的尾巴就先補滿 64（不滿就 return，`:48-52`）；然後整塊直接壓縮（`:53`）；剩下的存進 `buf`（`:54`）。
+6. `sha1_final`（`:57-71`）：`bits = total*8`；補 `0x80`；`used > 56` 就補 0 到 64 先壓一次（`:60-63`）；補 0 到 56；寫 8 byte 大端長度（`:65`）；壓縮；輸出 5 個 word 大端（`:67-70`）。
+7. `sha1` / `sha0`（`:73-78`）：在 stack 上開 ctx，init → update → final。
+
+#### 要改的地方
+沒有 `TODO(改這裡)`。要「SHA-1 改成 SHA-0」不用改程式，呼叫 `sha0()` 或 `sha1_init(&c, 1)` 即可。
+
+#### 實際執行輸出
+見 5.3.6。另外 ch05 自寫 Python 對照：200 組隨機資料（0~299 byte），C 的 `sha0` 和 Python 獨立實作（食譜 5.4.7）、C 的 `sha1` 和 `hashlib.sha1`，本次全部一致。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 「SHA-0」結果跟 `hashlib.sha1` 一樣 | `sha1_init(&c, 0)`，0 是 SHA-1 | SHA-0 傳 1 |
+| 每包分開算出來的值不對 | 每包都 `init`/`final` | 整份資料只 `init` 一次、最後 `final` 一次 |
+| 印出來的 hex 順序怪 | 把 `out` 當 `uint32_t` 印 | 逐 byte `%02x` 印（`test_util.h:35-37` 的 `to_hex`） |
+| `final` 後再 `update` 結果亂掉 | ctx 已經補過 padding | 重新 `sha1_init` |
+
+### 5.3.5 `sha256.h`、`sha256.c`
+
+#### 用途
+SHA-256，API 風格跟 SHA-1 一樣。輸出 32 byte。
+
+#### 怎麼編譯 / 執行
+同 5.3.4（`sha_test.c` 一起測）。
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
+|---|---|---|---|---|
+| `sha256_ctx` | `h[8]`、`total`、`buf[64]`、`used` | 結構，M33 上 112 byte | — | 沒有演算法旗標 |
+| `void sha256_init(sha256_ctx *c)` | — | 設 8 個初值 | O(1) | — |
+| `void sha256_update(sha256_ctx *c, const uint8_t *p, size_t n)` | 資料 | 吃進資料 | O(n)，**逐 byte 複製進 `buf`**；M33 stack 24 + `compress` 336 byte | 比 SHA-1 的 update 多一次複製 |
+| `void sha256_final(sha256_ctx *c, uint8_t out[32])` | 輸出 | 補 padding、寫 32 byte（大端） | 1~2 次壓縮 | — |
+| `void sha256(const uint8_t *p, size_t n, uint8_t out[32])` | 資料、輸出 | 一次算完 | M33 stack 136 byte + 下層 | — |
+
+#### 程式流程
+1. `sha256.c:6` `ROTR`；`:8-16` 64 個常數 `K`（前 64 個質數立方根的小數部分）。
+2. `compress`（`:18-40`）：讀 16 個大端 word（`:20-22`）；擴展到 64 個（`:23-27`，`s0`、`s1`）；8 個狀態 `s[0..7]` = a..h（`:28`）；64 回合（`:29-38`）；加回（`:39`）。`w[64]` 在 stack 上 256 byte，是 M33 上 `compress` 用 336 byte stack 的主因。
+3. `sha256_init`（`:42-47`）：8 個初值。
+4. `sha256_update`（`:49-55`）：逐 byte 放進 `buf`，滿 64 就壓縮。
+5. `sha256_final`（`:57-66`）：同 SHA-1 的 padding，輸出 8 個 word 大端。
+6. `sha256`（`:68-70`）：一次算完。
+
+#### 要改的地方
+沒有 `TODO(改這裡)`。
+
+#### 實際執行輸出
+見 5.3.6。另 200 組隨機資料和 `hashlib.sha256` 比對本次全部一致。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| Pico 上 hard fault / 亂跳 | stack 不夠（壓縮函式要 336 byte，加上呼叫者） | ctx 放 `static`；在 core1 上算時確認 `PICO_CORE1_STACK_SIZE`（預設 0x800 = 2 KB，`pico/multicore.h:32`） |
+| 輸出長度 20 | 用了 SHA-1 的緩衝或 `to_hex(d, 20, ...)` | SHA-256 是 32 byte |
+
+### 5.3.6 `sha_test.c`
+
+#### 用途
+SHA-1、SHA-0、SHA-256 的測試與測速。只在 host 用。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 sha1_sha0.c sha256.c sha_test.c -o $B/sha && $B/sha
+```
+
+#### 對外介面
+`check_hex(algo, msg, n, want)`（`sha_test.c:12-20`）：`algo` 1 = SHA-1、0 = SHA-0、2 = SHA-256；不一致時印出「得到 / 應為」。
+
+#### 程式流程
+1. `sha_test.c:24-34` 7 組標準向量（5.2.6 表格）。
+2. `:36-49` 一百萬個 `'a'`：用串流 API 每次餵 1000 byte、餵 1000 次。
+3. `:51-71` 300 組隨機長度（0~999），每段長度 0~99 隨機切，三種演算法都比「串流」和「一次算」。
+4. `:73-80` 4 MB 測速。
+
+#### 要改的地方
+無 `TODO(改這裡)`。`sha_test.c:8` 的 `BIG` 可改測速資料量。
+
+#### 實際執行輸出
+本次實測（host gcc 13.3、x86_64、`-O2`）：
+
+```text
+[標準向量]
+  PASS  SHA-1("abc")
+  PASS  SHA-0("abc")
+  PASS  SHA-1("")
+  PASS  SHA-1(56 字元，需 2 塊 padding)
+  PASS  SHA-256("abc")
+  PASS  SHA-256("")
+  PASS  SHA-256(56 字元)
+[一百萬個 'a'，用串流 API 每次餵 1000 byte]
+  PASS  SHA-1(1e6 x 'a')
+  PASS  SHA-256(1e6 x 'a')
+[隨機切段：串流結果 == 一次算]
+  PASS  300 組 x 3 種演算法
+[Benchmark：4 MB，取 5 次最快]
+  sha1         9.91 ms    423.1 MB/s
+  sha0        10.09 ms    415.8 MB/s
+  sha256      34.20 ms    122.6 MB/s
+結果：全部通過
+```
+
+qemu-riscv32（Zbb）本次也全部 PASS。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 印出「得到 … 應為 …」 | 改壞了 `compress` 或 padding | 先跑 `"abc"` 和 56 字元那組，56 字元是「多一塊 padding」的邊界 |
+
+### 5.3.7 `sort.h`、`sort.c`
+
+#### 用途
+`uint32_t` 排序與合併。暫存區由呼叫者提供（不用 `malloc`）。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
+```
+（輸出見 5.3.8）
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
+|---|---|---|---|---|
+| `void insertion_sort_u32(uint32_t *a, size_t n)` | 陣列、個數 | 原地遞增排序 | O(n²)；0 額外；M33 stack 16 byte | n=10000 本次 6.69 ms，比 radix 慢 141 倍 |
+| `void merge_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | `tmp` 至少 n 個 | 原地遞增排序（結果回到 `a`），穩定 | O(n log n)；n 個 `tmp`；M33 stack 64 byte | 迭代式，不遞迴 |
+| `void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | `tmp` 至少 n 個 | 原地遞增排序（結果回到 `a`），穩定 | O(n)，4 趟；n 個 `tmp`；**M33 stack 1064 byte**（`cnt[256]`） | 有號數 / 遞減見 5.2.7 |
+| `void merge_two_sorted(const uint32_t *a, size_t na, const uint32_t *b, size_t nb, uint32_t *out)` | 兩個已排序陣列、輸出 | `out[na+nb]` 有序 | O(na+nb)；M33 stack 28 byte | `out` **不能**跟 `a`、`b` 重疊 |
+| `KWAY_MAX` | — | 16 | — | `kway_merge` 最多段數 |
+| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k 個已排序陣列的指標與長度 | `out` 有序（長度 = Σlens） | O(n×k)；M33 stack 88 byte | **k > 16 會被截成 16，多的段直接不見，沒有錯誤訊息** |
+
+#### 程式流程
+1. `sort.c:4` `copy_u32`：自己寫的複製迴圈（不依賴 `string.h`）。
+2. `sort.c:6` `RUN 32`：merge sort 先用 insertion sort 排好每 32 個。
+3. `insertion_sort_u32`（`:8-15`）：每個新元素往左找位置，比它大的往右挪（`:12`）。
+4. `merge_run`（`:18-23`）：合併兩段，`src[i] <= src[j]` 先拿左邊（穩定）。
+5. `merge_sort_u32`（`:26-39`）：`:27-28` 每 RUN 個先排好；`:30-36` 寬度 32、64、128…每次把相鄰兩段合併到另一個陣列，然後交換 `src`/`dst`（ping-pong）；`:38` 結果若停在 `tmp` 就抄回 `a`。
+6. `radix_sort_u32`（`:44-57`）：`n < 2` 直接返回（`:46`）；`shift = 0, 8, 16, 24` 四趟（`:47`）；每趟計數（`:49`）、全同就跳過（`:50`）、前綴和（`:52`）、穩定搬移（`:53`）、交換（`:54`）；跳過奇數趟時結果可能在 `tmp`，`:56` 抄回。
+7. `merge_two_sorted`（`:59-65`）：標準雙指標合併，`<=` 穩定。
+8. `kway_merge`（`:67-78`）：`pos[16]` 記每段走到哪（`:68`）；`:69` k 截到 `KWAY_MAX`；每次掃 k 個頭找最小（`:72-74`，`<` 所以相等取編號小的）；全部用完就結束（`:75`）。
+
+#### 要改的地方
+
+| 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
+|---|---|---|---|
+| `sort.c:6` | `#define RUN 32` | merge sort 第一步每組多大 | 16~64 都可（註解）；一般不用改 |
+| `sort.c:69` | `if (k > KWAY_MAX) k = KWAY_MAX;` | 段數上限 | 段數超過 16 → 改 `sort.h:31` 的 `KWAY_MAX`（`pos[]` 會跟著變大）；或改用兩兩合併（食譜 5.4.3）。**不要依賴這行默默截斷** |
+| `sort.h:31` | `#define KWAY_MAX 16` | 同上 | 同上 |
+
+#### 實際執行輸出
+見 5.3.8。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 負數排在最後面 | 把 `int32_t` 當 `uint32_t` 排 | 前後各 `^= 0x80000000u` |
+| 合併結果少了一大段 | `kway_merge` 的 k > 16 | 加大 `KWAY_MAX` 或兩兩合併 |
+| `merge_two_sorted` 結果亂 | `out` 跟輸入重疊 | 另外開一個輸出陣列 |
+| Pico 上 hard fault | `a`、`tmp` 放 stack（例如 `uint32_t a[4096];` 寫在函式裡 = 16 KB） | 改成 `static`（`sort.h:11` 的建議） |
+| 結果「幾乎有序」 | `tmp` 比 n 小，寫出界 | `tmp` 至少 n 個 |
+
+### 5.3.8 `sort_test.c`
+
+#### 用途
+跟 `qsort` 比對正確性、合併測試、測速。只在 host 用。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
+```
+這支程式用 5 個 4 MB 的靜態陣列（`sort_test.c:8`，共 20 MB）。
+
+#### 對外介面
+`cmp_u32`（`sort_test.c:10-13`）：給 `qsort` 用的比較函式，寫成 `(p > q) - (p < q)`，不會像 `p - q` 那樣溢位。`fill(n, mask)`（`:15-17`）：`mask` 小時很多重複值。
+
+#### 程式流程
+1. `sort_test.c:20-36` 正確性：n ∈ {0, 1, 2, 3, 31, 32, 33, 100, 1000, 4097, 100000} × mask ∈ {全部、0xFF、0x3、0xFFFF0000}，三種排序都跟 `qsort` 比（insertion 只測 n ≤ 4097）。
+2. `:38-53` 合併：故意 1/3 : 2/3 不平均切兩段 → `merge_two_sorted`；不等長切 4 段 → `kway_merge`。
+3. `:55-72` 測速：qsort、merge、radix、兩半 radix + merge、memcpy 本身、n=10000 的 insertion 和 radix。
+
+#### 要改的地方
+
+| 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
+|---|---|---|---|
+| `sort_test.c:7` | `#define N (1u << 20)` | 測速筆數 | 想模擬題目的資料量就改；RAM 不夠時改小 |
+
+#### 實際執行輸出
+本次實測（host gcc 13.3、x86_64、`-O2`）：
+
+```text
+[正確性：各種 n 與資料分布，結果需與 qsort 相同]
+  PASS  insertion_sort_u32
+  PASS  merge_sort_u32
+  PASS  radix_sort_u32（含大量重複、高位相同的資料）
+[合併：模擬 2 塊板子 / 4 個核心各排一段]
+  PASS  merge_two_sorted
+  PASS  kway_merge (k=4)
+[Benchmark：n = 1048576 個隨機 uint32，取 3 次最快]
+  qsort (libc)         106.25 ms
+  merge_sort_u32        77.68 ms
+  radix_sort_u32         6.88 ms
+  2x radix(半) + merge  11.01 ms（單核模擬；真的分兩核/兩板時只算一半+合併）
+  （memcpy 本身          0.28 ms，以上都含這一次複製）
+  insertion n=10000      6.98 ms（O(n^2)，大 n 千萬別用）
+  radix     n=10000      0.08 ms
+結果：全部通過
+```
+
+各種 n 的比較見 5.5.3。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 交叉編譯時 RAM 爆掉 | 20 MB 靜態陣列 | 這支只在電腦上跑 |
+
+### 5.3.9 `bnn.h`、`bnn.c`
+
+#### 用途
+BNN / eBNN 推論零件：打包、XNOR-popcount 內積、隱藏層（二值輸出）、輸出層（整數分數）、argmax、BN 折門檻。推論路徑沒有浮點、沒有 `malloc`。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 bnn.c bnn_test.c -o $B/bnn && $B/bnn
+gcc -O2 -Wall -Wextra -std=c11 -DBNN_SWAR_POPCOUNT bnn.c bnn_test.c -o $B/bnn_swar && $B/bnn_swar
+gcc -O2 -march=native -Wall -Wextra -std=c11 bnn.c bnn_test.c -o $B/bnn_nat && $B/bnn_nat
+```
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
+|---|---|---|---|---|
+| `BNN_WORDS(n)` | bit 數 | `(n + 31) / 32` 個 word | — | 宣告陣列用 |
+| `static inline int bnn_popcount(uint32_t x)` | 32-bit 值 | 1 的個數 | GCC 預設用 `__builtin_popcount`；定義 `BNN_SWAR_POPCOUNT` 改用純 C SWAR | M33 沒有 popcount 指令，`__builtin_popcount` 變成呼叫 `__popcountsi2`（本次 objdump 確認），建議加 `-DBNN_SWAR_POPCOUNT`；rv32 Zbb 變成 1 條 `cpop` |
+| `bnn_layer_t` | `n_in`、`n_out`、`W`、`thr`、`flip` | 一層的描述（M33 上 20 byte） | — | `W` 有 `n_out` 列，每列 `BNN_WORDS(n_in)` 個 word |
+| `void bnn_pack(const int8_t *v, int n, uint32_t *out)` | ±1（或任何整數）向量 | `v[i] > 0` → bit 1，否則 0 | O(n)；`out` 要 `BNN_WORDS(n)` 個 | 0 當 -1 |
+| `int bnn_get_bit(const uint32_t *bits, int i)` | bits、索引 | 第 i 個 bit（0/1） | O(1) | 除錯用 |
+| `int32_t bnn_dot(const uint32_t *a, const uint32_t *w, int n)` | 兩個打包向量、長度 | ±1 內積，範圍 -n..n，和 n 同奇偶 | O(n/32)；M33 stack 40 byte | `n <= 0` 回 0；尾巴自動 mask |
+| `void bnn_dense_sign(const bnn_layer_t *L, const uint32_t *in, uint32_t *out_bits)` | 層、輸入 bits | `out_bits` 第 j 位 = `(flip[j] ? -dot : dot) >= thr[j]` | O(n_out × n_in/32)；`out_bits` 要 `BNN_WORDS(n_out)` 個 | **`thr` 不能是 NULL**（`bnn.c:31` 直接讀）；`flip` 可 NULL |
+| `void bnn_dense_score(const bnn_layer_t *L, const uint32_t *in, int32_t *score)` | 層、輸入 bits | `score[j] = dot_j + thr[j]`（`thr` 當 bias，可 NULL） | 同上 | 最後一層用 |
+| `int bnn_argmax(const int32_t *s, int n)` | 分數 | 最大值的索引，平手取小的 | O(n) | — |
+| `void bnn_fold_bn(float gamma, float beta, float mean, float std, float bias, int32_t *thr, uint8_t *flip)` | BN 參數（`std = sqrt(var + eps)`，自己先算好）、前一步的 bias | 輸出整數門檻與 flip | O(1)；用 float | 離線或開機時每個神經元算一次 |
+
+#### 程式流程
+1. `bnn_pack`（`bnn.c:4-8`）：先把 `out` 清 0（尾巴自然是 0），再對 `v[i] > 0` 的位置 `out[i >> 5] |= 1u << (i & 31)`。
+2. `bnn_get_bit`（`:10-12`）。
+3. `bnn_dot`（`:14-23`）：完整的 word 做 `popcount(~(a ^ w))` 累加（`:17-18`）；最後一個 word 只看低 `n & 31` 位（`:19-21`，`n` 是 32 的倍數時 mask 全 1）；回傳 `2*match - n`（`:22`）。
+4. `bnn_dense_sign`（`:25-33`）：`stride = BNN_WORDS(n_in)`；清 `out_bits`；對每個 j：`d = bnn_dot(in, W + j*stride, n_in)`（`:29`），`flip[j]` 就取負（`:30`），`d >= thr[j]` 設 bit（`:31`）。
+5. `bnn_dense_score`（`:35-39`）：`dot + (thr ? thr[j] : 0)`。
+6. `bnn_argmax`（`:41-45`）。
+7. `ceil_f`（`:48-51`）：不用 `<math.h>` 的無條件進位（往 0 截斷後，若小於原值就 +1）。
+8. `bnn_fold_bn`（`:53-63`）：gamma = 0 特判（`:55-59`）；`t = mean - bias - beta*std/gamma`（`:60`）；gamma > 0 → `thr = ceil(t)`、flip 0；否則 `thr = ceil(-t)`、flip 1（`:61-62`）。
+
+#### 要改的地方
+`bnn.c`、`bnn.h` 沒有 `TODO(改這裡)`；要改的是 `bnn_test.c` 的範例網路（5.3.10）和編譯旗標：
+
+| 位置 | 現在 | 意思 | 什麼情況要改 |
+|---|---|---|---|
+| `bnn.h:35` | `#if defined(__GNUC__) && !defined(BNN_SWAR_POPCOUNT)` | 選 popcount 實作 | Pico ARM（M33）編譯時加 `-DBNN_SWAR_POPCOUNT`；Pico RISC-V 不用加（SDK 預設 `-march` 含 `zbb`，見 5.5.4） |
+
+#### 實際執行輸出
+見 5.3.10。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| dot 差一點點、n 不是 32 的倍數時才錯 | 自己寫的內積沒 mask 尾巴 | 用 `bnn_dot`，或照 `bnn.c:19-21` 加 mask |
+| 分類全錯但 dot 對 | 權重 bit 順序不同（題目是 MSB 先） | 食譜 5.4.5 的 `bnn_from_packbits` 轉換 |
+| 隱藏層全 0 或全 1 | `flip` 沒給（gamma < 0 的神經元方向反了），或 thr 用了浮點門檻直接截斷 | 用 `bnn_fold_bn` 算 thr、flip |
+| 輸入為 0 的位置結果不同 | `bnn_pack` 把 0 當 -1；題目的 sign(0) 可能是 +1 | 打包前自己決定：`v[i] = (x[i] >= 0) ? 1 : -1` |
+| `bnn_dense_sign` 當掉 | `thr` 傳 NULL | 隱藏層一定要給 `thr` |
+
+### 5.3.10 `bnn_test.c`
+
+#### 用途
+① 和笨方法比對 ② 2 層範例網路（換權重時的範本）③ 784×256 測速。只在 host 用。
+
+#### 怎麼編譯 / 執行
+見 5.3.9。
+
+#### 對外介面
+`predict(x)`（`bnn_test.c:24-32`）：輸入 40 bit → `bnn_dense_sign(L1)` → `bnn_dense_score(L2)` → `bnn_argmax`。這就是一個完整推論的寫法，可以直接抄去 Pico。
+
+#### 程式流程
+1. `bnn_test.c:10-14` 範例網路說明：隱藏神經元 c 的權重 = 原型 P_c；BN（gamma=1, beta=0, mean=20, std=1）→ 門檻 20；dot = 40 - 2×漢明距離 ≥ 20 ⇔ 跟原型差 ≤ 10 bit 才亮；輸出層第 c 列只有 bit c = 1。
+2. `:15-22` 尺寸、`W1`（4 列 × 2 word）、`W2`（4 列 × 1 word）、`thr1`、`flip1`。
+3. `:38-50` 12 種 n（1~1024）× 50 組，`bnn_dot` vs 逐元素乘加；`bnn_get_bit` vs 原值；尾巴塞垃圾（`:46`）。
+4. `:52-70` 20000 組隨機 n（1~200）與 BN 參數（gamma 含 0 與負數），`bnn_dense_sign` vs 浮點 BN 再取 sign。
+5. `:72-82` 用 `bnn_fold_bn(1,0,20,1,0)` 算門檻（`:73`），確認 thr = 20（`:74`）；1000 個原型加 0~3 bit 雜訊的樣本都要分對。
+6. `:84-92` 隨機權重 784×256，跑 1000 次取平均、5 輪取最快。
+
+#### 要改的地方
+
+| 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
+|---|---|---|---|
+| `bnn_test.c:14`（TODO）、`:15-17` | `N_IN 40`、`N_HID 4`、`N_OUT 4` | 網路尺寸 | 改成題目的尺寸（例如 784、256、10） |
+| `bnn_test.c:18-19` | `W1` 4 列 | 第一層權重 bits | 換成題目的權重（每列 `BNN_WORDS(N_IN)` 個 word，順序見 5.2.8） |
+| `bnn_test.c:20` | `W2 = {1},{2},{4},{8}` | 輸出層權重 | 同上 |
+| `bnn_test.c:73` | `bnn_fold_bn(1.0f, 0.0f, 20.0f, 1.0f, 0.0f, ...)` | 每個隱藏神經元的 BN 參數 | 換成題目的 gamma、beta、mean、`sqrtf(var+eps)`、bias（每個 j 不同）；若題目直接給整數門檻，跳過這行直接填 `thr1` |
+| `bnn_test.c:75-81` | 原型加 0~3 bit 雜訊的自我測試（`:77` 選類別、`:78` 取原型、`:79` 加雜訊、`:80` 比對） | 範例網路專用的檢查 | 換成題目的測試資料與答案。**`:78` 的 `uint32_t x[2]` 是寫死 2 個 word**，改 `N_IN` 後要改成 `x[BNN_WORDS(N_IN)]` 並複製整列 |
+
+#### 實際執行輸出
+本次實測（host gcc 13.3、x86_64）：
+
+```text
+[① bnn_dot 與笨方法一致（含 n 不是 32 倍數的尾巴）]
+  PASS  bnn_dot / bnn_pack 600 組
+[① BN 折成整數門檻 == 浮點 BN 再取 sign（gamma 有正有負）]
+  PASS  20000 組隨機 BN 參數
+[② 範例 2 層網路：原型加 0~3 bit 雜訊，要分對]
+  PASS  fold_bn(1,0,20,1,0) → thr=20
+  PASS  1000 個加雜訊樣本全部分對
+[③ Benchmark：784 輸入 x 256 神經元 dense，取 5 次最快]
+  每層 12.09 us（16599 M 個 binary MAC / 秒）
+結果：全部通過
+```
+
+`-DBNN_SWAR_POPCOUNT`：`每層 8.12 us（24721 M 個 binary MAC / 秒）`；`-march=native`（硬體 popcnt）：`每層 3.47 us（57871 M 個 binary MAC / 秒）`。三種都 `結果：全部通過`。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 換權重後 `1000 個加雜訊樣本` FAIL | 這項只對範例網路成立 | 換成題目自己的測試資料 |
+
+### 5.3.11 `checksum_misc.c`
+
+#### 用途
+簡單校驗碼合集，單一 `.c`、沒有 `.h`。要用就整段複製需要的函式（`checksum_misc.c:3`）。檔尾 `#ifdef TEST_MAIN` 內是測試。
+
+#### 怎麼編譯 / 執行
+```bash
+gcc -O2 -Wall -Wextra -std=c11 -DTEST_MAIN checksum_misc.c -o $B/ck && $B/ck
+```
+
+#### 對外介面
+
+| 名稱 | 參數 | 回傳 | 複雜度 / M33 stack | 注意 |
+|---|---|---|---|---|
+| `uint32_t adler32(uint32_t adler, const uint8_t *p, size_t n)` | 第一次傳 **1**，之後傳上次結果 | Adler-32 | O(n)；20 byte | 跟 Python `zlib.adler32(data)` 相同（本次 200 組一致） |
+| `uint16_t fletcher16(const uint8_t *p, size_t n)` | 資料 | Fletcher-16 | O(n)；16 byte | 不能分段 |
+| `uint8_t xor8(const uint8_t *p, size_t n)` | 資料 | 全部 XOR | O(n)；0 | NMEA 只算 `$` 和 `*` 之間 |
+| `uint8_t sum8(const uint8_t *p, size_t n)` | 資料 | 加總低 8 位 | O(n)；0 | — |
+| `uint8_t lrc8(const uint8_t *p, size_t n)` | 資料 | `0 - sum8` | O(n)；0 | — |
+| `uint32_t sum32(const uint32_t *w, size_t nwords)` | `uint32_t` 陣列、**word 數** | 加總 mod 2^32 | O(n)；0 | 參數是 word 數不是 byte 數；跟 `pico/app_serial.c` 的 `CMD_SUM_U32` 同一種算法 |
+| `uint16_t inet_csum(const uint8_t *p, size_t n)` | 資料（奇數長度補 0） | RFC 1071 checksum | O(n)；0 | 大端 16-bit；驗證時把 checksum 欄位一起算，結果應為 0 |
+
+**Fletcher-32（檔案裡沒有，ch05 自寫，本次實測 PASS）**：
+
+```c
+/* Fletcher-32：16-bit 字（小端組字，奇數長度補 0），兩個累加器 mod 65535 */
+uint32_t fletcher32(const uint8_t *p, size_t n) {
+    uint32_t s1 = 0, s2 = 0;
+    size_t words = (n + 1) / 2;
+    while (words) {
+        size_t k = words < 359 ? words : 359;     /* 359 個字內不會溢位 */
+        words -= k;
+        while (k--) {
+            uint32_t w = p[0] | ((n > 1 ? (uint32_t)p[1] : 0u) << 8);
+            s1 += w; s2 += s1;
+            p += 2; n = n > 1 ? n - 2 : 0;
+        }
+        s1 %= 65535; s2 %= 65535;
+    }
+    return (s2 << 16) | s1;
+}
+```
+
+本次：`"abcde"` → `0xF04FC729`、`"abcdef"` → `0x56502D2A`、`"abcdefgh"` → `0xEBE19591`，100,001 個 0xFF 和逐字取 mod 的笨方法一致（UBSan 下無錯誤）。題目若規定「大端組字」，把 `w` 那行改成 `((uint32_t)p[0] << 8) | (n > 1 ? p[1] : 0)`（⚠️ 這個變體本次沒有對照標準向量）。
+
+#### 程式流程
+1. `adler32`（`checksum_misc.c:21-30`）：拆出 a（低 16）、b（高 16）；每次最多處理 5552 byte（`ADLER_NMAX`）再取 mod。
+2. `fletcher16`（`:32-41`）：每 5802 byte 取一次 mod 255。
+3. `xor8`、`sum8`、`lrc8`、`sum32`（`:43-61`）：一行迴圈。
+4. `inet_csum`（`:64-70`）：每 2 byte 大端相加（`:66`）；奇數長度最後一 byte 放高位（`:67`）；進位折回直到沒有進位（`:68`）；取反（`:69`）。
+5. `main`（`:79-105`，`TEST_MAIN` 才編）：13 項測試。
+
+#### 要改的地方
+沒有 `TODO(改這裡)`。
+
+#### 實際執行輸出
+本次實測（host gcc 13.3）：
+
+```text
+  PASS  adler32("Wikipedia") = 0x11E60398
+  PASS  adler32("") = 1
+  PASS  adler32 10 萬個 0xFF == 笨方法
+  PASS  adler32 增量（切兩段）
+  PASS  fletcher16("abcde") = 0xC8F0
+  PASS  fletcher16("abcdef") = 0x2057
+  PASS  fletcher16("abcdefgh") = 0x0627
+  PASS  fletcher16 10 萬個 0xFF == 笨方法
+  PASS  xor8 (NMEA) = 0x28
+  PASS  sum8("123456789") = 0xDD
+  PASS  sum8 + lrc8 = 0
+  PASS  sum32 溢位捨去
+  PASS  inet_csum(RFC1071 範例) = 0x220D
+結果：全部通過
+```
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| `adler32` 結果差很多 | 第一次傳 0 | 第一次傳 1 |
+| NMEA 校驗不對 | 把 `$` 或 `*hh` 也算進去 | 只算兩者之間 |
+| `inet_csum` 高低 byte 相反 | 放回封包時用了小端 | 高 byte 先寫 |
+| 複製到 Pico 專案後 `multiple definition of 'main'` | 連 `TEST_MAIN` 那段也複製了 | 只複製需要的函式 |
+
+### 5.3.12 `test_util.h`
+
+#### 用途
+只給 `*_test.c` 用的小工具。**必須是第一個 `#include`**，因為它要先定義 `_POSIX_C_SOURCE` 才能用 `clock_gettime`（`test_util.h:2`、`:6-8`）。
+
+#### 怎麼編譯 / 執行
+不單獨編譯，被 `*_test.c` include。
+
+#### 對外介面
+
+| 名稱 | 參數 | 效果 | 注意 |
+|---|---|---|---|
+| `CHECK(cond, msg)` | 條件、說明 | 印 `PASS`/`FAIL`，失敗時 `g_fail++` 並印檔名行號 | 不中斷 |
+| `now_ns()` | — | `CLOCK_MONOTONIC` 奈秒 | POSIX；picolibc / pico-sdk 沒有 |
+| `rnd32()` | — | xorshift32 亂數，種子固定 `2463534242`（`:28`） | 每次跑結果一樣，方便重現 |
+| `to_hex(d, n, out)` | byte 陣列、長度、輸出字串（至少 2n+1） | 轉小寫 hex | — |
+| `SINK(x)` | 值 | 加進 `volatile g_sink`，避免編譯器把要測速的程式優化掉 | — |
+| `test_end()` | — | 印總結，回傳失敗數 | `main` 最後 `return test_end();` |
+| `BENCH_MIN(best, reps, code)` | 輸出變數、次數、程式碼 | 跑 reps 次取最快的奈秒數 | `code` 裡有逗號時用 `{ }` 包起來（`sha_test.c:75` 的寫法） |
+
+#### 程式流程
+`test_util.h:15` 失敗計數 → `:18-19` `CHECK` → `:21-25` 計時 → `:28-32` 亂數 → `:35-37` hex → `:40-41` sink → `:44-47` 結束 → `:50-52` 測速巨集。
+
+#### 要改的地方
+無。
+
+#### 實際執行輸出
+不適用（所有 `*_test.c` 的輸出都用到它）。
+
+#### 常見錯誤
+
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| `implicit declaration of function 'clock_gettime'` | `test_util.h` 不是第一個 include | 放第一行 |
+| 測出來 0 ns | 結果沒用到被優化掉 | 用 `SINK()` |
