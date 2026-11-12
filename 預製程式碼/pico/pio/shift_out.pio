@@ -1,0 +1,34 @@
+; shift_out.pio — 把 32-bit 資料一個 bit 一個 bit 送到 DATA 腳，CLK 腳用 side-set 產生時脈
+; （就是最簡單的 SPI 輸出 / 移位暫存器）
+;
+; 時序（每個 bit 4 個 PIO cycle）：
+;   DATA 換新值、CLK=0 (2 cycles) → CLK=1 (2 cycles，接收端在上升沿取樣)
+; 位元速率 = clk_sys / clkdiv / 4，例如 150MHz / 10 / 4 = 3.75 Mbit/s
+
+.program shift_out
+.side_set 1                    ; 每條指令可順便設 1 支腳（CLK）
+.wrap_target
+    out pins, 1   side 0 [1]   ; OSR 拿 1 bit 到 DATA，CLK=0，再多等 1 cycle
+    nop           side 1 [1]   ; CLK=1，多等 1 cycle
+.wrap
+; TX FIFO 空的時候會停在 out（autopull 等資料），停住時 side-set 仍生效 → CLK 保持 0，不會亂送
+; 編碼：.side_set 1（非 opt）→ 5-bit 欄位中 1 bit 給 side、4 bit 給 delay，[n] 最大 15
+
+% c-sdk {
+static inline void shift_out_program_init(PIO pio, uint sm, uint offset,
+                                          uint data_pin, uint clk_pin, float clkdiv) {
+    pio_sm_config c = shift_out_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, data_pin, 1);        // out pins 的起點、幾支
+    sm_config_set_sideset_pins(&c, clk_pin);        // side-set 的起點
+    sm_config_set_out_shift(&c, false, true, 32);   // 左移 = MSB 先送；autopull 每 32 bits
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);  // 不用 RX → 把 RX FIFO 併給 TX（深度 4→8）
+    sm_config_set_clkdiv(&c, clkdiv);               // TODO(改這裡) 速度
+    uint32_t mask = (1u << data_pin) | (1u << clk_pin);
+    pio_sm_set_pins_with_mask(pio, sm, 0, mask);    // 先把 DATA/CLK 設成 0（同 pico-examples pio/spi 的作法）
+    pio_sm_set_pindirs_with_mask(pio, sm, mask, mask);  // 兩支都設為輸出（腳位不必相鄰）
+    pio_gpio_init(pio, data_pin);                   // 腳位交給 PIO（RP2350 也會解除 pad 隔離 ISO）
+    pio_gpio_init(pio, clk_pin);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

@@ -1,0 +1,5 @@
+# Build context = this folder; everything else here is copied to /demo.
+Dockerfile
+.dockerignore
+# host-built binaries from the 2-3 practice; candidates build them in the container
+section2-3/bin

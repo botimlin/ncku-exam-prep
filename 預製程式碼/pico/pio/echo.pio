@@ -1,0 +1,26 @@
+; echo.pio — 官方 demo 那個：TX FIFO 進來的 32-bit 原樣（或做位元運算後）推回 RX FIFO
+;
+; 資料路徑：CPU/DMA → TX FIFO → (autopull) OSR → X → ISR → push → RX FIFO → CPU/DMA
+; autopull：OSR 空了自動從 TX FIFO 拿下一個字（out 才不會讀到空的）
+; 這裡 push 用「手動」，所以 in 的 autopush 要關掉（否則會 push 兩次）
+
+.program echo
+.wrap_target
+    out x, 32          ; OSR 的 32 bits → X（autopull：沒資料就停在這裡等）
+    ; TODO(改這裡) 想在 PIO 裡做位元運算就加一行，例如：
+    ; mov x, ~x        ; 每個 bit 反相 (NOT)
+    ; mov x, ::x       ; 位元順序反轉 (bit31 ↔ bit0)
+    in  x, 32          ; X → ISR
+    push               ; ISR → RX FIFO（RX 滿了就停在這裡等 = 自動流量控制）
+.wrap
+
+% c-sdk {
+// 初始化 echo：不碰任何 GPIO
+static inline void echo_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = echo_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, false, true, 32);   // (左移, autopull=開, 門檻 32 bits)
+    sm_config_set_in_shift(&c, false, false, 32);   // (左移, autopush=關, 門檻 32)
+    pio_sm_init(pio, sm, offset, &c);               // 載入設定、PC 指到程式開頭
+    pio_sm_set_enabled(pio, sm, true);              // 開始跑
+}
+%}

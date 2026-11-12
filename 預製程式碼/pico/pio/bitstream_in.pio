@@ -1,0 +1,35 @@
+; bitstream_in.pio — 接收位元流：在 CLK 上升沿取樣 DATA，每 32 bits 自動 push 一個字到 RX FIFO
+; 腳位規定：in_base = DATA，CLK 必須是 DATA+1（wait 1 pin 1 的 1 是「相對 in_base」的編號；
+;          想用絕對 GPIO 編號要寫 wait 1 gpio N）。同 pico-examples 的 pio/clocked_input
+; 可以直接接收 shift_out.pio 送出的資料（同一顆晶片甚至不用接線，PIO 讀得到自己輸出的腳）
+
+.program bitstream_in
+.wrap_target
+    wait 0 pin 1       ; 等 CLK = 0
+    wait 1 pin 1       ; 等 CLK 上升沿
+    in pins, 1         ; 取樣 DATA 1 bit 進 ISR；滿 32 bits 自動 push（autopush）
+.wrap
+
+; TODO(改這裡) 其他常見變化：
+;   不需要 CLK、固定速率取樣：整個迴圈只留「in pins, 1」，取樣率 = clk_sys / clkdiv
+;   一次讀 8 支腳（平行匯流排）：in pins, 8，門檻設 32 → 每 4 次取樣 push 一次
+;   算 pulse 長度：用 jmp x-- 做計數器（參考 pico-examples 的 pio/ 資料夾）
+
+% c-sdk {
+static inline void bitstream_in_program_init(PIO pio, uint sm, uint offset, uint data_pin) {
+    pio_sm_config c = bitstream_in_program_get_default_config(offset);
+    sm_config_set_in_pins(&c, data_pin);            // in pins / wait pin 的基準腳
+    sm_config_set_in_shift(&c, false, true, 32);    // 左移（先收到的 bit 最後在 MSB）、autopush、32
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);  // 不用 TX → RX FIFO 深度 4→8
+    sm_config_set_clkdiv(&c, 1.0f);                 // 全速取樣，才跟得上送端
+    // 速度上限：這個迴圈每 bit 至少要 3 個 cycle，送端 CLK 高/低各要 >= 2 個 cycle
+    //   → 配 shift_out 時送端 clkdiv 建議 >= 2（=1 理論上剛好可以，但沒有餘裕）
+    // 腳位方向：SM 預設全部是輸入，這裡「不要」設 pindirs，
+    // 否則會跟送端（shift_out）搶同一支腳。外部訊號輸入時要確保有呼叫 pio_gpio_init，
+    // RP2350 的 pad 開機時是「隔離」狀態，沒設 function 讀不到東西。
+    pio_gpio_init(pio, data_pin);
+    pio_gpio_init(pio, data_pin + 1);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
