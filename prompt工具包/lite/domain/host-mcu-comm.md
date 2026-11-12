@@ -55,7 +55,7 @@ while (z:=buf.find(0))>=0: enc=bytes(buf[:z]); del buf[:z+1]  # cobs_decode→�
 ## ROS 2
 - serial 讀不可在 callback 阻塞：`timeout=0`+`create_timer(0.002,poll)` 讀 in_waiting；或 reader thread→Queue→timer publish
 - `msg.data=array.array('h',pl)`（Int16MultiArray）；多 frame 合併成一則發布
-- micro-ROS：client(MCU)+agent(主機)；Pico repo 有 jazzy 分支，預編譯庫為 cortex-m0plus，RP2350 ARM⚠️未驗證、RISC-V 需自行重新編譯（⚠️）；考場不能裝 agent→自訂協定
+- micro-ROS：client(MCU)+agent(主機)；Pico repo 有 jazzy 分支，預編譯庫為 cortex-m0plus，RP2350 ARM 實測可編譯連結（SDK 2.2.0）、板上執行⚠️未驗證、RISC-V 需自行重新編譯（⚠️）；考場不能裝 agent→自訂協定
 
 ## 除錯順序
 port 對嗎→stdio_usb 有開→等 DTR 連線→CRLF→主機 raw→baud/接線(UART)→read 迴圈累積→位元組序/padding→seq 遺失(主機太慢/兩個讀者)

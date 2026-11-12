@@ -18,6 +18,10 @@
 #include "pico/stdlib.h"
 #include "pico/stdio_usb.h"
 #include "hardware/dma.h"
+// pico-sdk 2.0 / 2.1 沒有 dma_encode_transfer_count()（2.2.0 才加）→ 舊版補一個，直接回傳筆數
+#if PICO_SDK_VERSION_MAJOR == 2 && PICO_SDK_VERSION_MINOR < 2
+static inline uint32_t dma_encode_transfer_count(uint n) { return n; }
+#endif
 #include "timing.h"
 
 #define N_WORDS 4096                     // TODO(改這裡) 測試資料大小（u32 個數）

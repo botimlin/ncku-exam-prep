@@ -59,7 +59,7 @@
 
 | | Cortex-M33（`rp2350-arm-s`） | Hazard3（`rp2350-riscv`） |
 |---|---|---|
-| ISA | Armv8-M Mainline（Thumb-2），含 DSP、FPU（單精度）、TrustZone | RV32IMAC + Zicsr、Zifencei、Zba、Zbb、Zbs、Zbkb（SDK 預設 `-march`）；硬體另有 Zcb、Zcmp（`PICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才用） |
+| ISA | Armv8-M Mainline（Thumb-2），含 DSP、FPU（單精度）、TrustZone | RV32IMAC + Zicsr、Zifencei、Zba、Zbb、Zbs、Zbkb（SDK 2.2.0 預設 `-march`）；硬體另有 Zcb、Zcmp（2.2.0 要 `PICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才用；2.3.x 若 gcc 支援會自動用） |
 | 編譯器 | `arm-none-eabi-gcc`（`-mcpu=cortex-m33 -mthumb -march=armv8-m.main+fp+dsp -mcmse`，預設 `-mfloat-abi=softfp`；`PICO_NO_CMSE=1` 可拿掉 `-mcmse`） | `riscv32-*-elf-gcc`（SDK 依序找 `riscv32-pico-elf`、`riscv32-unknown-elf`、`riscv32-corev-elf`、`riscv-none-elf`），`-mabi=ilp32` |
 | float | 硬體 FPU（快） | 軟體模擬（慢很多），SDK 有提供優化過的 add/sub/mul |
 | double | DCP coprocessor 加速（`pico_double` 預設） | 軟體（compiler 內建函式庫） |

@@ -1,5 +1,6 @@
 // pico_dualcore_micro_ros.c — 雙核心：core0 跑 micro-ROS，core1 幫忙算一半
-// ⚠ 未經編譯驗證（not compile-verified）。CMake 要多連 pico_multicore（見 CMakeLists.txt）。
+// ✅ 編譯、連結通過（pico-sdk 2.2.0、PICO_BOARD=pico2、官方 jazzy libmicroros.a、arm-none-eabi-gcc 13.2）；沒燒錄、沒在板子上跑過。
+//   CMake 要多連 pico_multicore（見 CMakeLists.txt）。
 // 規則：所有 rcl/rclc/rmw 呼叫「只能在 core0」！core1 只做純運算，不碰 micro-ROS、不 printf。
 //   （libmicroros 編譯時 RCUTILS_NO_THREAD_SUPPORT=ON、沒開 UCLIENT_PROFILE_MULTITHREAD → 非執行緒安全）
 // 流程：core0 收到陣列 → 切兩半 → 後半丟給 core1（queue）→ core0 自己算前半

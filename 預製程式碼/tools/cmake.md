@@ -207,6 +207,7 @@ rm -rf build install log                  # 完全清除 (CMake 快取問題時)
 | 19 | `fatal error: bitstream_in.pio.h: No such file or directory` | 少了 `pico_generate_pio_header` | 補上那一行 |
 | 20 | `Unable to find definition of board 'pico3' (specified by PICO_BOARD)` | 板子名稱錯 | `-DPICO_BOARD=pico2`，`rm -rf build` |
 | 21 | `Compiler 'riscv32-unknown-elf-gcc / riscv32-corev-elf-gcc' not found` | 指定 `rp2350-riscv` 但容器沒有 riscv32 工具鏈 | 改用 ARM，或 `-DPICO_TOOLCHAIN_PATH=...` 指到考場提供的工具鏈 |
+| 22 | `warning: implicit declaration of function 'dma_encode_transfer_count'` + `undefined reference to 'dma_encode_transfer_count'` | pico-sdk 2.0 / 2.1 沒有這個函式（2.2.0 才加）；版本看 `build/generated/pico_base/pico/version.h` | 直接填筆數；或照 `pico/app_dma.c` 的 `#if PICO_SDK_VERSION_MAJOR == 2 && PICO_SDK_VERSION_MINOR < 2` 那段，在 `#include "hardware/dma.h"` 後面補一個相容函式 |
 
 **看錯誤的順序**：
 1. 先分出是 **configure 錯**（`CMake Error at CMakeLists.txt:行號`）、**compile 錯**（`file.c:行:欄: error:`），還是 **link 錯**（`undefined reference`、`cannot find -l`、`ld returned`）。

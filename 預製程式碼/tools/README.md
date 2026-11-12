@@ -9,7 +9,7 @@
 
 | 情況 | 檔案 | 章節 |
 |---|---|---|
-| cmake / make 報錯、看不懂錯誤訊息 | [`cmake.md`](cmake.md) | §6 錯誤對照表（21 種，全部實際製造過） |
+| cmake / make 報錯、看不懂錯誤訊息 | [`cmake.md`](cmake.md) | §6 錯誤對照表（22 種，全部實際製造過） |
 | 看不懂題目的 CMakeLists.txt | [`cmake.md`](cmake.md) | §2 六個問題 |
 | 要加 .c 檔、加函式庫、改 -O、加執行檔 | [`cmake.md`](cmake.md) | §3 |
 | `#include "hardware/xxx.h"` 找不到、不知道要 link 什麼 | [`cmake.md`](cmake.md) | §4 函式庫名稱表 |

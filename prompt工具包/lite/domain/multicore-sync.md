@@ -54,7 +54,7 @@
 - 跨核 exclusive 靠 global monitor，只涵蓋 SRAM（不含 XIP/PSRAM）→ atomic 放 SRAM；granule 16B ⚠️未查證。
 
 ## DMA（對應 demo engine）
-`dma_claim_unused_channel(true)` → `dma_channel_get_default_config`（預設 write 不遞增！）→ `channel_config_set_transfer_data_size/_read_increment/_write_increment` → `dma_channel_configure(ch,&c,dst,src,dma_encode_transfer_count(n),true)`（n 是筆數不是 bytes）→ 做別的事 → `dma_channel_wait_for_finish_blocking` 後才讀 dst。
+`dma_claim_unused_channel(true)` → `dma_channel_get_default_config`（預設 write 不遞增！）→ `channel_config_set_transfer_data_size/_read_increment/_write_increment` → `dma_channel_configure(ch,&c,dst,src,dma_encode_transfer_count(n),true)`（n 是筆數不是 bytes；SDK < 2.2 沒有這函式 → 直接填 n）→ 做別的事 → `dma_channel_wait_for_finish_blocking` 後才讀 dst。
 
 ## ISR / 雙核共享
 - 同核 ISR↔主迴圈：單 word 旗標 volatile；多欄位或 64-bit 讀取時關中斷。

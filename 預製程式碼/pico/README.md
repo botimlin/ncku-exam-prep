@@ -50,7 +50,7 @@ RISC-V（Hazard3）：`cmake -DPICO_BOARD=pico2 -DPICO_PLATFORM=rp2350-riscv ..`
 | `dma_claim_unused_channel(false)` | 要 DMA 通道，沒有回 -1 |
 | `dma_channel_get_default_config(ch)` | 預設：32-bit、**讀遞增、寫不遞增**、DREQ_FORCE（全速）、chain_to=自己（不串接） |
 | `channel_config_set_transfer_data_size / _read_increment / _write_increment / _dreq` | 設定 |
-| `dma_channel_configure(ch,&c,dst,src,dma_encode_transfer_count(n),start)` | n = 次數不是 bytes；RP2350 n < 2^28 |
+| `dma_channel_configure(ch,&c,dst,src,dma_encode_transfer_count(n),start)` | n = 次數不是 bytes；RP2350 n < 2^28；SDK 2.2.0 起才有這函式（`app_dma*.c` 已替 2.0/2.1 補上） |
 | `dma_channel_wait_for_finish_blocking(ch)` / `dma_channel_unclaim(ch)` | 等完成 / 歸還 |
 | `dma_start_channel_mask(mask)` | 同時啟動多個通道 |
 | `dma_sniffer_enable(ch, DMA_SNIFF_CTRL_CALC_VALUE_CRC32R, false)` | 硬體 CRC（其他：`_CRC32`、`_CRC16`、`_CRC16R`、`_SUM`、`_EVEN`）；zlib crc32 = CRC32R + 初值 FFFFFFFF + `dma_sniffer_set_output_reverse_enabled(true)` + 讀出後 `^0xFFFFFFFF` |

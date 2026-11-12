@@ -20,8 +20,9 @@ from std_msgs.msg import Int32MultiArray
 N_BOARDS = 2          # TODO(改這裡) 板子數量（namespace 必須是 pico0 .. pico{N-1}）
 CHUNK = 300           # TODO(改這裡) 每塊資料個數；+1(job_id) 要 ≤ 板子的 MAX_LEN（預設 400）
                       # 且 reliable 傳輸上限 ≈ 505 個 int32（MTU 512 × history 4，見 README §4）
-MERGE = "concat"      # TODO(改這裡) "concat"：依 job_id 接起來；"sorted"：各塊已排序 → k-way merge
+MERGE = "sorted"      # TODO(改這裡) "concat"：依 job_id 接起來；"sorted"：各塊已排序 → k-way merge
 # 範例對應：pico_array_compute.c（排序）→ "sorted"；pico_dualcore_micro_ros.c（平方）→ "concat"
+# 預設 "sorted" = 配 CMakeLists.txt 預設的 APP_SRC（pico_array_compute.c）。換板子程式時兩邊一起改，否則 correct=False
 TIMEOUT_S = 10.0
 
 

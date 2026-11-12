@@ -74,6 +74,7 @@ PIO（第 11 章，3 個 PIO）：
 【參考卡｜官方文件導航 4/7｜pico-sdk 標頭檔與 API 網址】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 pico-sdk 最新版 2.3.1（master 分支內容相同）。晶片 RP2350（Pico 2）。
+考場的版本看 `build/generated/pico_base/pico/version.h`。
 標頭檔（最好的貼上來源，有函式簽名與註解）：
 前綴 https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.3.1/src/
 - rp2_common/hardware_dma/include/hardware/dma.h

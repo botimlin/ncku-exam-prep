@@ -906,7 +906,7 @@ dma_channel_config_t c = dma_channel_get_default_config(ch);  // 預設：32-bit
 channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
 channel_config_set_read_increment(&c, true);
 channel_config_set_write_increment(&c, true);
-dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(N), true);  // N 筆 word，立刻啟動
+dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(N), true);  // N 筆 word，立刻啟動（SDK < 2.2 沒有 dma_encode_transfer_count → 直接填 N）
 
 do_other_work();                              // CPU 同時做別的事（真的不佔 CPU 指令，只佔 bus 頻寬）
 dma_channel_wait_for_finish_blocking(ch);     // 等完成之後才能讀 dst

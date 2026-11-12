@@ -7,7 +7,7 @@
 【參考卡｜RISC-V Hazard3 1/8｜ISA 與暫存器 / 呼叫慣例】
 以下是正確的參考資料，若與你的記憶不同，以這張為準。
 平台：RP2350（Pico 2）的 Hazard3 RISC-V 核心，非 RP2040。
-- SDK 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`；`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才改用 `…_zca_zcb_zcmp`（硬體也支援 Zcb/Zcmp）
+- 編譯旗標依 SDK 版本（看 `build/generated/pico_base/pico/version.h`）：2.2.0 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`，`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才改用 `…_zca_zcb_zcmp`；2.3.x 自動依序試 `-mcpu=hazard3-rp2350` → `…_zca_zcb_zcmp` → rv32imac，gcc 支援哪個就用哪個（硬體支援 Zcb/Zcmp）
 - 無 F/D（無硬體浮點，float 軟體模擬很慢）、無 Zbc（無 clmul）、無 Zicond、無 V
 - 一律小端序；非自然對齊 load/store 直接例外（不是變慢）
 暫存器（ILP32）：
@@ -123,10 +123,10 @@ load-use 細節：
 分支預測：單一 entry，只記最後一個 taken 的向後分支，其他一律預測不跳。典型迴圈第一次與最後一次各錯一次。
 - 陷阱：迴圈本體只有一條 16-bit 指令時預測器失效 ⚠️未查證 → 用 `.option norvc` 強制 32-bit + `.p2align 2`
 其他：
-- 非對齊 load/store 直接 trap：mcause 4（load）/ 6（store/AMO）；pico-sdk **沒有**加 `-mstrict-align`，packed struct / 指標轉型要自己避免
+- 非對齊 load/store 直接 trap：mcause 4（load）/ 6（store/AMO）；`-mstrict-align` SDK 2.3.1 起才預設加（2.2.0、2.3.0 沒加）；packed struct / 指標轉型要自己避免（`(uint32_t *)` 轉型加了也會 trap）
 - 無 FPU：float/double 呼叫軟體函式（如 __mulsf3），極慢 → 改定點數
 - 表格假設無 bus stall；在 flash（XIP，0x10000000 起）執行或與 DMA/另一核搶同 SRAM bank 時會更慢
-- 用 zcb_zcmp 工具鏈時反組譯看到 cm.push/cm.popret（Zcmp）屬正常；SDK 預設不產生
+- 反組譯看到 cm.push/cm.popret（Zcmp）屬正常：zcb_zcmp 工具鏈，或 SDK 2.3.x + 支援 Zcmp 的 gcc
 
 ---
 

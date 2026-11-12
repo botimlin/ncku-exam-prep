@@ -184,7 +184,7 @@ def poll(self):
 方案 B：reader thread（延遲較低）：`timeout=0.05`，迴圈 `ser.read(max(1, ser.in_waiting))` 後 feed。從非 executor 執行緒 publish ⚠️未驗證執行緒安全；保守做法：thread 只放進 `queue.Queue`，timer 取出 publish。
 - 每秒上千個 frame 時 ROS 2 發布成本變瓶頸 → 多 frame 合併成一則訊息。
 - host→MCU：subscription callback 內 build_frame 後 `ser.write(...)`。
-micro-ROS：官方 Pico repo 的預編譯庫是 cortex-m0plus（RP2040）；RP2350 ARM 可否用 ⚠️未驗證，RISC-V 不能用。考場不能裝 agent → 自訂協定 + rclpy 橋接。
+micro-ROS：官方 Pico repo 的預編譯庫是 cortex-m0plus（RP2040）；RP2350 ARM 實測可編譯連結（SDK 2.2.0），板上執行 ⚠️未驗證；RISC-V 不能用。考場不能裝 agent → 自訂協定 + rclpy 橋接。
 
 ---
 

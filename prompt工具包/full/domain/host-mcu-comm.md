@@ -1087,7 +1087,7 @@ timer_ = create_wall_timer(std::chrono::milliseconds(2), [this] {
 |---|---|
 | 架構 | MCU 上跑 micro-ROS **client**（rclc API，底層 Micro XRCE-DDS）；主機跑 **micro-ROS agent**，把 client 代理成一般 ROS 2 node / topic |
 | Pico 官方 repo | `micro_ros_raspberrypi_pico_sdk`，有 `jazzy` 分支；`libmicroros/libmicroros.a` 是**預編譯**靜態庫 |
-| 編譯旗標 | 預編譯庫的 toolchain：`-march=armv6-m -mcpu=cortex-m0plus -mthumb`（RP2040 用）。RP2350 ARM（Cortex-M33，ARMv8-M Mainline 相容 ARMv6-M 指令）理論上可 link 執行 ⚠️未驗證；**RP2350 RISC-V 模式不能用**此庫（需自行用 docker builder 重編 ⚠️未驗證可行性） |
+| 編譯旗標 | 預編譯庫的 toolchain：`-march=armv6-m -mcpu=cortex-m0plus -mthumb`（RP2040 用）。RP2350 ARM（Cortex-M33，ARMv8-M Mainline 相容 ARMv6-M 指令）實測可以編譯、連結（2026-11-12，pico-sdk 2.2.0、pico2、`../預製程式碼/micro-ros/` 三支程式），板上執行 ⚠️未驗證；**RP2350 RISC-V 模式不能用**此庫（需自行用 docker builder 重編 ⚠️未驗證可行性） |
 | transport | `pico_uart_transport.c`：用 `stdio_init_all`、逐 byte `putchar` 寫、`getchar_timeout_us` 讀；在 `main` 中以 `rmw_uros_set_custom_transport(true, NULL, open, close, write, read)` 註冊 |
 | 連線流程 | `rmw_uros_ping_agent(timeout_ms, attempts)` → `rclc_support_init` → `rclc_node_init_default` → `rclc_publisher_init_default` → `rclc_executor_spin_some` 迴圈 |
 | agent 指令（README） | `micro-ros-agent serial --dev /dev/ttyACM0 -b 115200`（snap）或 docker `microros/micro-ros-agent:jazzy serial --dev /dev/ttyACM0 -b 115200`；ROS 2 套件形式 `ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200` ⚠️未驗證（同 `ros2.md` §10） |

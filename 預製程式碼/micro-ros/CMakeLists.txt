@@ -1,5 +1,5 @@
 # CMakeLists.txt — 照官方 micro_ros_raspberrypi_pico_sdk（jazzy 分支）的 CMakeLists.txt 改的
-# ⚠ 未經編譯驗證（not compile-verified）
+# ✅ 編譯、連結通過（pico-sdk 2.2.0、PICO_BOARD=pico2、官方 jazzy libmicroros.a、arm-none-eabi-gcc 13.2）；沒燒錄、沒在板子上跑過
 # 跟官方唯一的差別：多了 PICO_BOARD 預設、APP_SRC 選檔、pico_multicore、target 名稱 app。
 # 用法：把本檔 + 你的 .c 放進官方 repo 資料夾（要有 libmicroros/、pico_uart_transport.c、
 #       pico_uart_transports.h），然後：
@@ -24,6 +24,7 @@ pico_sdk_init()
 
 # TODO(改這裡) 要編哪支程式就改這行：
 #   pico_pingpong.c / pico_array_compute.c / pico_dualcore_micro_ros.c
+#   ⚠ 換檔時 host_driver.py 的 MERGE 也要跟著改：pico_array_compute.c → "sorted"、pico_dualcore_micro_ros.c → "concat"
 set(APP_SRC pico_array_compute.c)
 
 link_directories(libmicroros)            # 預編好的 libmicroros.a 在這（官方寫法）

@@ -155,7 +155,7 @@ python3 analyze.py out/x --rescore
 | gemma3:12b | 78% / 86% | 100% / 100% |
 - **貼了參考卡，模型幾乎不會亂編。** 考場上問硬體 / SDK / ROS 的事，一律先貼參考卡再用查詢 1/2。
 - 「用參考卡檢查我的程式」（查詢 2/2）比較難：gpt-oss 94～100%，其他 30～60%。卡上的「陷阱句」（例：count 填成 bytes）小模型容易把方向弄反 → 卡片已加「程式真的這樣寫 = 違反」。結果要自己核對。
-- 核對時修掉的錯誤事實（節錄）：PIO 用 pico2 建置不需要手寫 `.pio_version 1`；`queue_init` 回傳 void；共用 IRQ handler 上限 4（不是 6）；Hazard3 預設 `-march` 與 SDK 不加 `-mstrict-align`；ROS 2 型別不合通常沒有 WARN；跨容器要 `--ipc host`；FreeRTOS RP2350 port 用 doorbell 不是 FIFO、`sleep_ms` 讓出 CPU 是 SYNC_INTEROP。
+- 核對時修掉的錯誤事實（節錄）：PIO 用 pico2 建置不需要手寫 `.pio_version 1`；`queue_init` 回傳 void；共用 IRQ handler 上限 4（不是 6）；Hazard3 預設 `-march` 與 SDK 不加 `-mstrict-align`（這兩條是 SDK 2.2.0 的行為；2026-11-12 補上 2.3.x 的差異：自動選 `-march`、2.3.1 起預設加 `-mstrict-align`）；ROS 2 型別不合通常沒有 WARN；跨容器要 `--ipc host`；FreeRTOS RP2350 port 用 doorbell 不是 FIFO、`sleep_ms` 讓出 CPU 是 SYNC_INTEROP。
 
 ## D. 新卡片（12-implement 實作、13-verify-submit 驗證與提交）
 | 卡片組 | gemma3 | gpt-oss | qwen2.5:14b | qwen3 |

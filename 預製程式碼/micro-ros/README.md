@@ -1,10 +1,13 @@
 # micro-ROS on Pico 2 — 預製程式碼（ROS 2 Jazzy）
 
-> ## ⚠ 未驗證聲明
-> 這裡所有 **Pico 端 C 程式與 CMakeLists.txt 都沒有編譯、沒有燒錄測試過**（not compile-verified）。
-> API 已逐行對過官方 repo（`micro_ros_raspberrypi_pico_sdk` jazzy）內 `libmicroros/include` 的標頭檔（見文末審查紀錄）。
-> 只有 `host_driver.py` 用 `python3 -m py_compile` 檢查過語法（沒有實際連板子跑）。
+> ## 驗證狀態（2026-11-12）
+> - ✅ **編譯、連結通過**：3 支 Pico 端程式（`APP_SRC` 逐一切換）都用這份 `CMakeLists.txt` 產出 `app.uf2`。
+>   環境：pico-sdk 2.2.0、`-DPICO_BOARD=pico2`（rp2350-arm-s）、官方 `micro_ros_raspberrypi_pico_sdk` jazzy 分支的預編 `libmicroros.a`、arm-none-eabi-gcc 13.2。
+>   沒有出現 `__atomic_*_4` undefined reference（§6 的 shim 不需要）。
+> - ⚠ **沒燒錄、沒在板子上跑過、沒接 agent 測過**；`host_driver.py` 只檢查過語法（容器裡沒有 rclpy）。
+> - API 已逐行對過官方 repo 內 `libmicroros/include` 的標頭檔（見文末審查紀錄）。
 > **考場第一件事：用官方範例 build + flash 一次，確認環境能動，再換成這裡的程式。**
+> **換板子程式時**：`CMakeLists.txt` 的 `APP_SRC` 和 `host_driver.py` 的 `MERGE` 要一起改（`pico_array_compute.c` → `"sorted"`、`pico_dualcore_micro_ros.c` → `"concat"`），否則會顯示 `correct=False`。
 
 ## 檔案
 | 檔案 | 用途 |
@@ -83,7 +86,7 @@
 ## 6. Pico 2 / RP2350 支援狀態（2026-11 查原始碼結果）
 - 官方 README **只寫 Pico（RP2040）**；issue #1482「Request for RP2350 support」（2025-10）仍 **open**。
 - 預編 `libmicroros.a` 用 `-march=armv6-m -mcpu=cortex-m0plus` 編（toolchain.cmake）。
-  **結論：很可能可以直接用，但沒有官方保證、也沒實際驗證。**理由：
+  **結論：在 pico2（ARM）上編譯、連結都成功（2026-11-12 實測，見檔頭）；能不能在板子上正常跑還沒驗證，也沒有官方保證。**理由：
   1. ARMv8-M Mainline（M33）指令集包含 ARMv6-M → M0+ 程式碼能在 M33 上跑。
   2. ABI 相容：M0+ 是 soft-float，pico-sdk 對 RP2350 用 `-mfloat-abi=softfp`（同一種呼叫慣例）；
      自己寫的小測試（M0+ 物件連進 M33 softfp 執行檔）連結成功。
@@ -128,7 +131,7 @@ Linux：直接編譯執行、能 printf / gdb、transport 是 UDP。
 - github.com/ros2/rclc（jazzy：timer.h、executor.h）；github.com/micro-ROS/micro_ros_utilities（type_utilities.h）
 - micro_ros_arduino reconnection example；freertos_apps ping_pong app.c；micro.ros.org middleware 設定說明
 
-## 設計審查紀錄（2026-11-11，只讀原始碼，未編譯）
+## 設計審查紀錄（2026-11-11，只讀原始碼；2026-11-12 補上實際編譯、連結，見檔頭）
 來源縮寫：**PICO** = `https://raw.githubusercontent.com/micro-ROS/micro_ros_raspberrypi_pico_sdk/jazzy/`，
 **INC** = PICO + `libmicroros/include/`（= build 時實際用的標頭檔），**SDK** = pico-sdk 2.2.0（docker `pico-build:/opt/pico-sdk`）。
 

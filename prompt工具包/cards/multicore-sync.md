@@ -223,7 +223,7 @@ SRAM：
 - 不同 bank 可同週期並行；兩核 / DMA 搶同 bank 才互等
 - 單核熱資料 `__scratch_x("name")`；熱函式 `__not_in_flash_func(f)`
 DMA（RP2350 16 channel）：
-- `dma_claim_unused_channel(true)` → `dma_channel_get_default_config(ch)` → `channel_config_set_write_increment(&c, true)`（預設 write 不遞增！）→ `dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(N), true)`（N 是筆數不是 bytes）→ 做別的事 → `dma_channel_wait_for_finish_blocking(ch)` 後才讀 dst
+- `dma_claim_unused_channel(true)` → `dma_channel_get_default_config(ch)` → `channel_config_set_write_increment(&c, true)`（預設 write 不遞增！）→ `dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(N), true)`（N 是筆數不是 bytes；SDK < 2.2 沒有這函式 → 直接填 N）→ 做別的事 → `dma_channel_wait_for_finish_blocking(ch)` 後才讀 dst
 
 ---
 

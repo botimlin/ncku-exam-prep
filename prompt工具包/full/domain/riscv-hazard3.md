@@ -18,10 +18,12 @@
 
 ## 0. 三十秒重點
 
-1. pico-sdk 對 RP2350 Hazard3 的**預設** `-march`：`rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb`，`-mabi=ilp32`。硬體也支援 Zcb/Zcmp，但只有 `-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 時才改用 `rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp`。
+1. pico-sdk 對 RP2350 Hazard3 的編譯旗標**依 SDK 版本不同**（版本看 `build/generated/pico_base/pico/version.h` 的 `PICO_SDK_VERSION_STRING`）：
+   - **2.2.0**：預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`。硬體也支援 Zcb/Zcmp，但只有 `-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 時才改用 `rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp`。
+   - **2.3.0 / 2.3.1**：`cmake/preload/toolchains/pico_riscv_gcc.cmake` 依序試 `-mcpu=hazard3-rp2350` → `-march=rv32ima_…_zca_zcb_zcmp` → `-march=rv32imac_…_zbkb`，用第一個 gcc 編得過的。
 2. 沒有 F/D（沒有硬體浮點）、沒有 Zbc（無 clmul）、沒有 Zicond（無 czero）、沒有 V。`float`/`double` 全部是軟體模擬，很慢。
 3. 3 級管線 F/X/M。大多數 ALU、Zba/Zbb/Zbs/Zbkb、`mul`、`mulh*` 都是 1 cycle；`div/rem` 18～19 cycle；load 後緊接著使用結果會多 1 cycle；分支預測正確 1 cycle、錯誤 2 cycle；`jal/jalr` 2 cycle。
-4. Hazard3 遇到非自然對齊的 load/store 會產生例外（不是變慢，是直接 trap）。pico-sdk **沒有**加 `-mstrict-align` → packed struct、`(uint32_t *)` 指標轉型要自己避免（改用 `memcpy`）。
+4. Hazard3 遇到非自然對齊的 load/store 會產生例外（不是變慢，是直接 trap）。`-mstrict-align`：pico-sdk 2.2.0、2.3.0 **沒有**加；2.3.1 起預設加（`-DPICO_NO_STRICT_ALIGN=1` 可關）。不論版本，packed struct、`(uint32_t *)` 指標轉型都要自己避免（改用 `memcpy`）：指標轉型時編譯器假設位址已對齊，加了 `-mstrict-align` 也照樣 trap。
 5. `mcycle`/`minstret` 開機預設是停的（`mcountinhibit` 重置值 0x5）。量測前先 `csrci mcountinhibit, 1`（開 cycle）或 `csrci mcountinhibit, 5`（兩個都開）。
 6. 周邊暫存器原子別名：`+0x1000` XOR、`+0x2000` SET、`+0x3000` CLEAR（SIO 不適用）。pico-sdk：`hw_xor_bits` / `hw_set_bits` / `hw_clear_bits`。
 7. 熱點程式放 SRAM：`__not_in_flash_func(f)` / `__time_critical_func(f)`（section `.time_critical.*`），或整個程式 `pico_set_binary_type(target copy_to_ram)`。
@@ -262,7 +264,7 @@ add  a1, a1, t0
 
 - `cm.push {ra, s0-sN}, -frame`：存 ra 與 s0 起連續的 s 暫存器，並降 sp（16-byte 對齊）。`cm.popret` = pop + ret；`cm.popretz` = pop + `li a0,0` + ret。
 - 只能推 ra、s0…s11（s0-s10 這種 11 個不行，要推 12 個）。
-- 用 `pico_riscv_gcc_zcb_zcmp` 工具鏈（`-march` 含 zcmp）時，反組譯看到 `cm.push`/`cm.popret` 是正常的編譯器輸出；SDK 預設 `-march` 不含 zcmp，不會產生。週期：`cm.push/cm.pop` = 1 + n（n = 暫存器數）。
+- 用 `pico_riscv_gcc_zcb_zcmp` 工具鏈（`-march` 含 zcmp），或 SDK 2.3.x 搭配支援 Zcmp 的 gcc 時，反組譯看到 `cm.push`/`cm.popret` 是正常的編譯器輸出；SDK 2.2.0 預設 `-march` 不含 zcmp，不會產生。週期：`cm.push/cm.pop` = 1 + n（n = 暫存器數）。
 
 ---
 
@@ -553,7 +555,7 @@ f:
 | 選平台 | `cmake -DPICO_PLATFORM=rp2350-riscv -DPICO_BOARD=pico2 ..`（`rp2350-riscv` 預設板子為 pico2）；也可用環境變數 `PICO_PLATFORM` |
 | 工具鏈搜尋三元組 | 依序 `riscv32-pico-elf`、`riscv32-unknown-elf`、`riscv32-corev-elf`、`riscv-none-elf` |
 | 工具鏈路徑 | `PICO_TOOLCHAIN_PATH`（CMake 變數或環境變數），會在 `<path>/bin/` 下找 gcc |
-| 編譯旗標 | 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`（`cmake/preload/toolchains/pico_riscv_gcc.cmake`）；`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才改用 `rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp`；SDK **不加** `-mstrict-align` |
+| 編譯旗標 | 2.2.0：預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`（`cmake/preload/toolchains/pico_riscv_gcc.cmake`），`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才改用 `rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp`；2.3.x：依序試 `-mcpu=hazard3-rp2350` → zcb_zcmp → rv32imac。`-mstrict-align`：2.3.1 起預設加，2.2.0 / 2.3.0 不加 |
 | 預設 build type | `Release`（pico-sdk 加 `-g`；最佳化等級來自 CMake 的 GCC 預設，通常 `-O3 -DNDEBUG` ⚠️未驗證於考場版本） |
 | Debug | `-Og`（`PICO_DEOPTIMIZED_DEBUG=1` 時 `-O0`） |
 | 其他 | `MinSizeRel`（-Os）、`RelWithDebInfo`（-O2 -g） |
@@ -866,7 +868,7 @@ C 原始碼：
 範本 2：讀 objdump 找瓶頸
 
 ```
-以下是 {{函式名}} 在 -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb（SDK 預設）{{-O 等級}} 的 objdump 輸出，
+以下是 {{函式名}} 在 -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb（SDK 2.2.0 預設；2.3.x 看 build 實際旗標）{{-O 等級}} 的 objdump 輸出，
 以及我量到的 mcycle 為 {{數字}} cycle（輸入大小 {{n}}）。
 請逐條標出熱迴圈的指令、每條在 Hazard3 上的 cycle（含 load-use 與分支），指出可改善之處（未使用的 Zbb/Zba 指令、
 div/rem、軟體浮點呼叫、多餘的 zext、從 flash 執行等），並給出修改後的 C 或組語。

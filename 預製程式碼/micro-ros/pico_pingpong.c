@@ -1,5 +1,5 @@
 // pico_pingpong.c — micro-ROS Ping-Pong（Pico / Pico 2 + pico-sdk）
-// ⚠ 未經編譯驗證（not compile-verified）。API 已對過 jazzy libmicroros/include 標頭檔，考場請先 build。
+// ✅ 編譯、連結通過（pico-sdk 2.2.0、PICO_BOARD=pico2、官方 jazzy libmicroros.a、arm-none-eabi-gcc 13.2）；沒燒錄、沒在板子上跑過。考場請先 build。
 // 功能：timer 每 2 秒發 /microROS/ping；收到別人的 ping 就回 /microROS/pong；
 //       收到自己 ping 的 pong 就計數。含 agent 斷線重連狀態機（同官方 reconnection_example）。
 // 需搭配：pico_uart_transport.c + pico_uart_transports.h（官方 repo 內）

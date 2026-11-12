@@ -1,5 +1,5 @@
 // pico_array_compute.c — 收 Int32MultiArray → compute() → 發 Int32MultiArray
-// ⚠ 未經編譯驗證（not compile-verified）；API 已對過 jazzy libmicroros/include 標頭檔。
+// ✅ 編譯、連結通過（pico-sdk 2.2.0、PICO_BOARD=pico2、官方 jazzy libmicroros.a、arm-none-eabi-gcc 13.2）；沒燒錄、沒在板子上跑過。
 //   考場請先 build + 用 ros2 topic pub 測一次。
 // Topic（有 namespace）：訂閱 /<BOARD_NS>/input，發佈 /<BOARD_NS>/output
 // 協定（跟 host_driver.py 約好）：data[0] = job_id（區塊編號），data[1..] = 資料

@@ -738,7 +738,7 @@ ros2 run my_py_pkg relay
 
 | 方式 | 說明 | 備註 |
 |---|---|---|
-| micro-ROS | MCU 上跑 micro-ROS client（rclc API），經 serial / USB CDC 連到主機上的 **micro-ROS agent**，agent 把它轉成一般 ROS 2 node / topic | 官方 Pico 範例 repo `micro_ros_raspberrypi_pico_sdk` 有 jazzy 分支，但附的預編譯 `libmicroros.a` 是以 `-mcpu=cortex-m0plus`（RP2040）建置；用在 RP2350 ARM 是否可行 ⚠️未驗證，RISC-V 核心需重新編譯（詳見 `host-mcu-comm.md`） |
+| micro-ROS | MCU 上跑 micro-ROS client（rclc API），經 serial / USB CDC 連到主機上的 **micro-ROS agent**，agent 把它轉成一般 ROS 2 node / topic | 官方 Pico 範例 repo `micro_ros_raspberrypi_pico_sdk` 有 jazzy 分支，但附的預編譯 `libmicroros.a` 是以 `-mcpu=cortex-m0plus`（RP2040）建置；用在 RP2350 ARM 實測可編譯連結（pico-sdk 2.2.0），板上執行 ⚠️未驗證，RISC-V 核心需重新編譯（詳見 `host-mcu-comm.md`） |
 | 自寫 serial bridge | 主機寫一個 rclpy / rclcpp node：讀 `/dev/ttyACM0`（USB CDC）或 UART，解析位元組後 publish 到 topic；反向則 subscribe 後寫入 serial | 需要自訂封包格式（起始位元組、長度、checksum）；Python 需 `pyserial`（⚠️未驗證環境是否有） |
 
 micro-ROS agent 連線指令（官方 Pico repo README 的寫法）：`micro-ros-agent serial --dev /dev/ttyACM0 -b 115200`；以 ROS 2 套件形式安裝時常見寫法為 `ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200`（⚠️未驗證）。

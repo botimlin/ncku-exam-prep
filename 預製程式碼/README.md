@@ -34,7 +34,7 @@
 | 其他校驗碼（Adler、Fletcher、XOR） | `algo/checksum_misc.c` |
 | 量時間 | `pico/timing.h`、`linux-perf/bench.h` |
 | 優化清單、perf 用法 | `linux-perf/README.md` |
-| CMake 怎麼改、CMake 錯誤怎麼修 | `tools/cmake.md`（21 個真實錯誤的對照表） |
+| CMake 怎麼改、CMake 錯誤怎麼修 | `tools/cmake.md`（22 個真實錯誤的對照表） |
 | gdb、sanitizer、strace、Python 除錯 | `tools/debug-host.md` |
 | 板子沒反應、序列埠監看、看 .dis/.map | `tools/debug-pico.md` |
 | ROS 2 進階除錯（doctor、log、rosbag、跨容器） | `tools/debug-ros2.md` |
@@ -49,8 +49,8 @@
 | `algo/`、`linux-perf/` | ✅ 電腦上的測試全部通過（含標準測試向量）；ARM 和 RISC-V 都能編譯 |
 | `bits-riscv/` | ✅ 電腦上測試通過；RISC-V 版在 qemu 模擬器上跑過 |
 | `tools/` | ✅ CMake、gdb、sanitizer、ROS 2 指令都實際跑過；燒錄、實體序列埠、Debug Probe 只對照官方文件（標「沒有實測」） |
-| `pico/` | ✅ ARM 編譯通過（0 錯誤、0 警告），**已逐行對照 SDK 2.2.0 原始碼和 datasheet 暫存器說明審查**，修了 11 個問題（見 `pico/README.md` 的設計審查紀錄）。⚠️ 沒在實體板子上跑過 |
-| `micro-ros/` | ⚠️ 沒有完整編譯過，但**已逐行對照官方 jazzy 標頭檔審查**，函式名稱和參數都正確，修了 8 個問題。官方的 lib 還沒正式支援 Pico 2，判斷「很可能可以用」，連結失敗時的處理方式寫在 `micro-ros/README.md` §6 |
+| `pico/` | ✅ ARM 編譯通過（0 錯誤、0 警告；SDK 2.2.0 和 2.1.1 都試過），**已逐行對照 SDK 2.2.0 原始碼和 datasheet 暫存器說明審查**，修了 11 個問題（見 `pico/README.md` 的設計審查紀錄）。⚠️ 沒在實體板子上跑過 |
+| `micro-ros/` | ✅ 3 支 Pico 端程式都**編譯、連結通過**（pico-sdk 2.2.0、pico2、官方 jazzy `libmicroros.a`），也已逐行對照官方 jazzy 標頭檔審查，修了 8 個問題。⚠️ 沒在板子上跑過、沒接 agent 測過。官方的 lib 還沒正式支援 Pico 2（能連結，但執行沒有保證），連結失敗時的處理方式寫在 `micro-ros/README.md` §6 |
 
 ## 考前要做
 - 把整個 `預製程式碼/` 放到考場打得開的地方：**私人** GitHub repo，或 Google Drive。不要公開，以免別的考生拿去用。

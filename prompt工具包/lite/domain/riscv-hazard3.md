@@ -6,9 +6,9 @@
 - 最後更新：2026-11
 
 ## ISA
-- SDK 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`；`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才用 `…_zca_zcb_zcmp`（硬體支援 Zcb/Zcmp）
+- 旗標依 SDK 版本（`build/generated/pico_base/pico/version.h`）：2.2.0 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`，`-DPICO_COMPILER=pico_riscv_gcc_zcb_zcmp` 才用 `…_zca_zcb_zcmp`；2.3.x 自動依序試 `-mcpu=hazard3-rp2350` → `…_zcb_zcmp` → rv32imac（硬體支援 Zcb/Zcmp）
 - 無 FPU（float 軟體模擬）、無 Zbc、無 Zicond。自訂：Xh3bextm、Xh3power、Xh3irq、Xh3pmpm
-- 非對齊 load/store 直接例外（mcause 4/6）；pico-sdk **沒有**加 `-mstrict-align` → packed struct/指標轉型自己避免
+- 非對齊 load/store 直接例外（mcause 4/6）；`-mstrict-align` SDK 2.3.1 起才預設加（2.2.0、2.3.0 沒加）→ packed struct/指標轉型自己避免（轉型加了也會 trap）
 
 ## ABI
 - a0–a7 參數，a0（/a1）回傳；uint64 用 a0 低 a1 高
@@ -28,7 +28,7 @@
 - 預測：只記最後一個 taken 的向後分支，其他預測不跳
 - 3 級管線 F/X/M，完整 bypass
 - 迴圈本體只有 1 條 16-bit 指令時預測器失效 ⚠️未查證 → `.option norvc` + `.p2align 2`
-- 用 zcb_zcmp 工具鏈時反組譯看到 cm.push/cm.popret（Zcmp）屬正常；SDK 預設不產生
+- 反組譯看到 cm.push/cm.popret（Zcmp）屬正常：zcb_zcmp 工具鏈，或 SDK 2.3.x + 支援 Zcmp 的 gcc
 
 ## 位元指令（1 cycle）
 | 指令 | 語意 / 取代 |
