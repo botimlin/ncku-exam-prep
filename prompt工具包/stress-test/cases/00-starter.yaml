@@ -1,0 +1,68 @@
+# 開場卡：只回「了解」、規則在後續對話是否仍被遵守、狀態卡格式
+- id: starter-ack
+  tags: [starter, format]
+  desc: 開場 1/3 讀完只能回「了解」
+  dummy_ok: true
+  card: {file: "00-starter.md", title: "開場｜1/3"}
+  fills:
+    - {match: "熟：$|熟：\\s*\\|", value: "C、Python、Linux 指令、git"}
+    - {match: "不熟", value: "ROS 2、PIO、CMake、RISC-V 組語"}
+  checks:
+    - {type: contains_any, items: ["了解"], category: format}
+    - {type: max_chars, max: 20}
+  golden: "了解"
+
+- id: starter-rule-absent
+  tags: [starter, spec, grounding]
+  desc: 貼開場卡後，下一則問資料沒寫的事 → 規則 1 要求回「資料中沒有」
+  turns:
+    - card: {file: "00-starter.md", title: "開場｜1/3"}
+      fills: ["C、Python", "ROS 2、PIO"]
+      assistant: "了解"
+  card: null
+  user: |
+    <<<資料 開始>>>
+    1. count 的單位是「幾筆傳輸」，不是「幾個位元組」。這是最常見的錯誤。
+    2. 位址要不要遞增，是描述的一部分。「複製」和「填值」用的是同一個引擎、同樣的筆數，差別只在來源位址走不走。
+    3. 每筆的大小只能是 1、2 或 4 個位元組，而且位址要對齊。
+    4. 通道是有限資源，用之前要取得、用完要歸還。
+    <<<資料 結束>>>
+    問題：這個引擎一次最多可以傳幾筆（count 的上限是多少）？只根據資料回答。
+  checks:
+    - {type: absent}
+    - {type: not_regex, pattern: "2\\s*\\^\\s*28|268435455|0x0?FFFFFFF|65535|4096\\s*筆", name: no_invented_limit, category: grounding}
+    - {type: evidence_grounded, min_quotes: 0}
+    - {type: max_chars, max: 400}
+  golden: |
+    資料中沒有：資料只說 count 是「幾筆傳輸」，沒寫上限。
+    證據：「count 的單位是「幾筆傳輸」」
+    去查：engine.h 的 count 型別與註解，或 datasheet 的 TRANS_COUNT 欄位。
+
+- id: state-card
+  tags: [starter, format]
+  desc: 對話後用開場 3/3 輸出狀態卡；欄位齊全、≤800 字、不編造
+  turns:
+    - user: |
+        進度：題目是把 Pico 2 上 4096 個 u32 從 src 複製到 dst，並回傳 CRC32。baseline CPU 迴圈 820 us。
+        我已經把 copy 改成 DMA（app_dma.c:127 加了 channel_config_set_write_increment(&c, true)），結果正確，時間 95 us，已 commit。
+        試過 DMA_SIZE_8：慢了 4 倍，已回復。
+        現在正在做：CRC 改用 DMA sniffer。還不確定 sniffer 的 OUT_REV 要不要開。
+      assistant: "收到。"
+  card: {file: "00-starter.md", title: "開場｜3/3"}
+  checks:
+    - {type: card_slots, min_fraction: 0.9}
+    - {type: max_chars, max: 800}
+    - {type: contains_all, items: ["95", "820"], name: keeps_numbers}
+    - {type: contains_any, items: ["OUT_REV", "sniffer"], name: open_question_kept}
+    - {type: not_regex, pattern: "分數[^\\n]{0,10}\\d+\\s*分", name: no_invented_score, category: grounding}
+  golden: |
+    【狀態卡】時間：（未提供）
+    題目（一句話）：Pico 2 上把 4096 個 u32 從 src 複製到 dst 並回傳 CRC32
+    分數與提交紀錄：資料中沒有
+    已確認事實（附出處）：baseline CPU 迴圈 820 us（使用者量測）；DMA copy 95 us 結果正確
+    架構重點：src → DMA → dst；CRC 目前用 CPU
+    已完成修改（檔案：內容，效果）：app_dma.c:127 加 channel_config_set_write_increment(&c, true)，820 → 95 us，已 commit
+    試過但失敗的做法（原因）：DMA_SIZE_8（慢 4 倍，已回復）
+    正在做：CRC 改用 DMA sniffer
+    下一步：確認 sniffer 結果等於軟體 CRC
+    未解疑問：sniffer 的 OUT_REV 要不要開

@@ -1,0 +1,183 @@
+# 第三批：建置 3（colcon）、工具 4（一次問一項）、開考 1（repo 地圖）、除錯 2、優化 2、讀題 5
+
+- id: c3-colcon-link
+  tags: [build, colcon, choice]
+  desc: ament_cmake 套件 undefined reference rclcpp → 類別 D（ament_target_dependencies 沒寫）
+  card: {file: "05-cmake-build.md", title: "建置 3/7"}
+  fills:
+    - {match: "pwd 與 ls", value: "/work/ws\nsrc/"}
+    - {match: "套件類型", value: "ament_cmake"}
+    - match: "第一個 error"
+      value: |
+        --- stderr: my_pkg
+        /usr/bin/ld: CMakeFiles/talker.dir/src/talker.cpp.o: in function `main':
+        talker.cpp:(.text+0x3c): undefined reference to `rclcpp::init(int, char const* const*, rclcpp::InitOptions const&, rclcpp::SignalHandlerOptions)'
+        collect2: error: ld returned 1 exit status
+        gmake[2]: *** [CMakeFiles/talker.dir/build.make:97: talker] Error 1
+    - {match: "depend 段", value: "<depend>rclcpp</depend>\n<depend>std_msgs</depend>"}
+    - {match: "entry_points", value: "find_package(rclcpp REQUIRED)\nfind_package(std_msgs REQUIRED)\nadd_executable(talker src/talker.cpp)\ninstall(TARGETS talker DESTINATION lib/${PROJECT_NAME})"}
+    - {match: "已 source", value: "/opt/ros/jazzy/setup.bash"}
+  checks:
+    - {type: choice, option: "ament_target_dependencies", field_in_answer: "類別"}
+    - {type: contains_any, items: ["ament_target_dependencies(talker", "ament_target_dependencies"], name: names_fix}
+    - {type: evidence_grounded, min_quotes: 1}
+  golden: |
+    證據：「undefined reference to `rclcpp::init(int, char const* const*, rclcpp::InitOptions const&, rclcpp::SignalHandlerOptions)'」
+    原因（1 句）：talker 沒有連到 rclcpp
+    類別（照抄選項）：D 連結錯（ament_target_dependencies 沒寫）
+    要修的檔案與位置：CMakeLists.txt 在 add_executable(talker …) 後加 ament_target_dependencies(talker rclcpp std_msgs)
+
+- id: t4-board-one-step
+  tags: [tools, pico, interactive]
+  desc: 板子沒反應 → 只問第 1 項（picotool），不能一次列完 8 項
+  card: {file: "06-tools-debug.md", title: "工具 4/9"}
+  fills:
+    - {match: "程式做什麼", value: "app_serial：收封包回傳 SUM"}
+    - {match: "現象", value: "有 port 沒字"}
+    - {match: "已試過", value: "重新插拔 USB"}
+  checks:
+    - {type: regex, pattern: "檢查\\s*1", name: starts_at_1}
+    - {type: not_regex, pattern: "檢查\\s*[3-8]", name: one_at_a_time}
+    - {type: contains_any, items: ["picotool"], name: check1_picotool}
+    - {type: max_lines, max: 8}
+  golden: |
+    檢查 1：確認燒錄的是新程式，執行 picotool info -a
+    正常的樣子：program name 是 app_serial，build date 是剛剛
+    不正常就代表：燒到舊的 .uf2，重新 cmake --build 後再燒
+
+- id: exam1-repo
+  tags: [exam, choice]
+  desc: repo 地圖：.gitlab-ci.yml → B；judge/ → F；技術判斷 ROS 2 是、pico-sdk 是
+  card: {file: "10-exam-day-flow.md", title: "開考 1/5"}
+  fills:
+    - value: |
+        .
+        ./.gitlab-ci.yml
+        ./README.md
+        ./docs
+        ./docs/q2-spec.pdf
+        ./host
+        ./host/package.xml
+        ./host/setup.py
+        ./host/host/bridge_node.py
+        ./host/launch/bridge.launch.py
+        ./judge
+        ./judge/expected_q21.txt
+        ./judge/run_q21.sh
+        ./pico
+        ./pico/CMakeLists.txt
+        ./pico/pico_sdk_import.cmake
+        ./pico/main.c
+        ./pico/capture.pio
+    - value: |
+        a1b2c3d (HEAD -> main) Initial exam repo
+  checks:
+    - {type: table_cell, key: "gitlab-ci", col: 1, regex: "^\\**B"}
+    - {type: table_cell, key: "expected_q21", col: 1, regex: "^\\**F"}
+    - {type: regex, pattern: "ROS ?2[^\\n]{0,20}是", name: ros2_yes}
+    - {type: regex, pattern: "pico-sdk[^\\n]{0,20}是", name: pico_yes}
+    - {type: regex, pattern: "micro-ROS[^\\n]{0,20}否", name: microros_no}
+  golden: |
+    | 路徑 | 類別 | 理由（≤ 10 字） |
+    | ./.gitlab-ci.yml | B | CI 評分 |
+    | ./README.md | A | 題目說明 |
+    | ./docs/q2-spec.pdf | A | 題目說明 |
+    | ./host/package.xml | C | ROS 2 建置 |
+    | ./host/host/bridge_node.py | D | 主要程式 |
+    | ./judge/expected_q21.txt | F | 預期輸出 |
+    | ./judge/run_q21.sh | F | 評分腳本 |
+    | ./pico/CMakeLists.txt | C | Pico 建置 |
+    | ./pico/main.c | D | 主要程式 |
+    | ./pico/capture.pio | D | PIO 程式 |
+    技術判斷：ROS 2 是（host/package.xml）、pico-sdk 是（pico/pico_sdk_import.cmake）、micro-ROS 否（沒有 libmicroros）、純 Linux C 否、Python 是（bridge_node.py）
+    先打開的 5 個檔：README.md、.gitlab-ci.yml、judge/run_q21.sh、pico/main.c、host/host/bridge_node.py
+
+- id: dbg2-experiment
+  tags: [debug]
+  desc: A=count 填成 bytes、B=dst 太小 → 印出 count 與 sizeof(dst) 的實驗
+  card: {file: "04-debug.md", title: "除錯 2/6"}
+  fills:
+    - {match: "假設 A", value: "dma_channel_configure 的 count 填成了 bytes（4096）而不是筆數（1024）"}
+    - {match: "假設 B", value: "count 是對的，但 dst 陣列只宣告 256 格"}
+    - {match: "症狀", value: "dst 後面的 log_buf 被覆蓋"}
+    - match: "相關程式碼"
+      value: |2
+            40	static uint32_t src[1024], dst[N_DST];
+            41	static char log_buf[8192];
+            57	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(n_xfer), true);
+  checks:
+    - {type: regex, pattern: "(printf|print|LED)[^\\n]*(n_xfer|count)", name: prints_count}
+    - {type: regex, pattern: "→\\s*是\\s*A", name: a_branch}
+    - {type: regex, pattern: "→\\s*是\\s*B", name: b_branch}
+    - {type: not_regex, pattern: "修改後|改成 1024", name: no_fix, category: format}
+  golden: |
+    實驗步驟（≤ 3 步，每步 1 行，附檔名:行號）：
+    1. main.c:57 前加 printf("n_xfer=%u N_DST=%u\n", n_xfer, (unsigned)(sizeof(dst)/4))
+    如果看到 n_xfer=4096 → 是 A
+    如果看到 n_xfer=1024、N_DST=256 → 是 B
+    都不是 → 下一個要懷疑的：log_buf 被別的程式寫到
+
+- id: opt2-rank
+  tags: [optimize]
+  desc: 瓶頸是逐筆文字傳送 → 先做批次；每列有驗證方式；不列改評分介面的方案
+  card: {file: "03-optimize.md", title: "優化 2/6"}
+  fills:
+    - match: "瓶頸"
+      value: |
+        瓶頸在哪一段：send_text
+        證據：「send_text    690 ms」「total        710 ms」
+        類型：C I/O 或通訊等待
+        這段佔總時間比例 p：0.97
+    - {match: "限制", value: "不能改 checker.py 與封包格式；Pico 端可以改"}
+    - {match: "熱點程式碼", value: "for v in data:\n    ser.write(f\"{v}\\n\".encode())\n    total = int(ser.readline())"}
+    - {match: "剩餘時間", value: "2 小時"}
+  checks:
+    - {type: table_rows, min: 2, max: 7}
+    - {type: regex, pattern: "先做\\s*[:：][^\\n]*(批次|batch|一次送|打包)", name: first_batch}
+    - {type: not_regex, pattern: "^\\|[^\\n]*(改 checker|修改 checker|改封包格式)", name: respects_limits, category: correctness}
+  golden: |
+    | 方案 | 收益 高/中/低 | 依據（量測 / 推測） | 風險 高/中/低 | 分鐘 | 驗證方式 |
+    | 改成二進位批次傳送 | 高 | 量測：send_text 佔 97% | 低 | 20 | 結果比對 + 計時 |
+    | 拿掉每筆 readline 等待 | 中 | 推測 | 中 | 15 | 結果比對 |
+    先做：改成二進位批次傳送，收益最高、風險低
+
+- id: read5-walk
+  tags: [read, grounding]
+  desc: 程式走讀：L14 迴圈內 printf 是熱點；process() 看不到定義
+  card: {file: "02-read-spec.md", title: "讀題 5/6"}
+  fills:
+    - {match: "檔名", value: "main.c"}
+    - value: |2
+             1	#include "pico/stdlib.h"
+             2	#include "hardware/dma.h"
+             3	static uint32_t buf[4096];
+             4
+             5	int main(void) {
+             6	    stdio_init_all();
+             7	    int ch = dma_claim_unused_channel(true);
+             8	    while (true) {
+             9	        int n = read_frame(buf, 4096);
+            10	        if (n <= 0) continue;
+            11	        uint32_t sum = 0;
+            12	        for (int i = 0; i < n; i++) {
+            13	            sum += process(buf[i]);
+            14	            printf("i=%d sum=%u\n", i, sum);
+            15	        }
+            16	        send_reply(sum);
+            17	    }
+            18	}
+  checks:
+    - {type: regex, pattern: "(L|行|:)\\s*14|14\\s*行", name: hotspot_printf}
+    - {type: regex, pattern: "process[^\\n]*看不到定義|看不到定義[\\s\\S]{0,150}process", name: process_undefined}
+    - {type: contains_any, items: ["dma_claim_unused_channel"], name: lists_api}
+    - {type: not_regex, pattern: "建議|改成|應該改", name: no_suggestion, category: format}
+  golden: |
+    1. 呼叫結構：
+      初始化：stdio_init_all()、dma_claim_unused_channel(true)（L6–7）
+      主流程：read_frame → 迴圈 process → send_reply（L9–16）
+    2. 熱點：L14 迴圈內每筆 printf → USB I/O 很慢
+    3. 可疑處：L7 claim 了 DMA 通道但沒用到；L13 process 看不到定義
+    4. | API | 作用 | 行號 |
+    | dma_claim_unused_channel | 取得 DMA 通道 | L7 |
+    | stdio_init_all | 初始化 stdio | L6 |
+    read_frame、process、send_reply：看不到定義

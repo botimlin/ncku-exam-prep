@@ -1,0 +1,259 @@
+# 除錯 1/6、優化 1/6 與 3/6、讀題 1/6、速學 4/6
+
+- id: dbg1-count-bytes
+  tags: [debug, dma, rank]
+  desc: DMA count 填成 bytes（DMA_SIZE_32）→ 第一個原因要是 count
+  card: {file: "04-debug.md", title: "除錯 1/6"}
+  fills:
+    - {match: "指令與目的", value: "燒錄 app_dma 後看 USB 輸出，目的是用 DMA 複製 1024 個 u32"}
+    - {match: "預期", value: "dst 前 1024 個 word 等於 src，dst[1024] 之後維持 0"}
+    - {match: "實際", value: "前 1024 個正確，但 dst[1024]~dst[4095] 也被寫了東西，另一個陣列 log_buf 內容被蓋掉"}
+    - {match: "錯誤訊息", value: "（沒有錯誤訊息）"}
+    - match: "相關程式碼"
+      value: |2
+            40	static uint32_t src[1024], dst[1024];
+            41	static char log_buf[8192];
+            ...
+            55	    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            56	    channel_config_set_write_increment(&c, true);
+            57	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(sizeof(src)), true);
+            58	    dma_channel_wait_for_finish_blocking(ch);
+    - {match: "上次能用之後改了", value: "把 count 從 1024 改成 sizeof(src)，想說比較不會寫錯"}
+    - {match: "已經試過", value: "重新燒錄，一樣"}
+    - {match: "環境", value: "Pico 2（RP2350）ARM；cmake --build build"}
+  checks:
+    - {type: rank_first, items: ["count", "sizeof", "bytes", "位元組", "4096"], name: first_cause_count}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+    - {type: table_rows, min: 2, max: 5}
+  golden: |
+    | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
+    | 1 | count 用 sizeof(src) 是 bytes（4096），DMA_SIZE_32 一次 4 bytes → 搬了 4096 次 | 高 | 「dma_encode_transfer_count(sizeof(src))」 | 印出 sizeof(src) | 4096 而非 1024 → 確認 |
+    | 2 | dst 只有 1024 格，多搬的寫到後面的 log_buf | 高 | 「static uint32_t src[1024], dst[1024];」 | 看 log_buf 是否被蓋 | 被蓋 → 確認越界 |
+
+- id: dbg1-write-incr
+  tags: [debug, dma, rank]
+  desc: 只有 dst[0] 變 → 第一個原因要是 write_increment
+  card: {file: "04-debug.md", title: "除錯 1/6"}
+  fills:
+    - {match: "指令與目的", value: "用 DMA 把 src 複製到 dst（1024 個 u32）"}
+    - {match: "預期", value: "dst 全部等於 src"}
+    - {match: "實際", value: "dst[0] = src[1023]，dst[1]~dst[1023] 全是 0"}
+    - {match: "錯誤訊息", value: "（沒有錯誤訊息）"}
+    - match: "相關程式碼"
+      value: |2
+            52	    int ch = dma_claim_unused_channel(true);
+            53	    dma_channel_config c = dma_channel_get_default_config(ch);
+            54	    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            55	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), true);
+            56	    dma_channel_wait_for_finish_blocking(ch);
+    - {match: "上次能用之後改了", value: "把設定改成用 dma_channel_get_default_config 的預設值"}
+    - {match: "已經試過", value: "把 1024 改成 512，dst[0] 變成 src[511]"}
+    - {match: "環境", value: "Pico 2（RP2350）ARM"}
+  checks:
+    - {type: rank_first, items: ["write_increment", "寫入位址", "寫遞增", "寫入遞增", "write increment", "dst 沒有遞增", "目的位址"], name: first_cause_write_incr}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+  golden: |
+    | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
+    | 1 | 預設 write_increment 是 false，每次都寫到 dst[0] | 高 | 「dst[0] = src[1023]」 | 加 channel_config_set_write_increment(&c, true) 再跑 | dst 全對 → 確認 |
+
+- id: opt1-text-io
+  tags: [optimize, choice]
+  desc: send_text 佔 690/710 ms → 類型 C、p≈0.97
+  card: {file: "03-optimize.md", title: "優化 1/6"}
+  fills:
+    - {match: "目標", value: "降低處理 20000 筆的總時間"}
+    - {match: "baseline", value: "710 ms"}
+    - match: "各段耗時"
+      value: |
+        parse_input   12 ms
+        send_text    690 ms   (20000 次 ser.write + readline)
+        compute        3 ms
+        print_result   5 ms
+        total        710 ms
+    - match: "熱點程式碼"
+      value: |
+        for v in data:
+            ser.write(f"{v}\n".encode())
+            total = int(ser.readline())
+  checks:
+    - {type: choice, option: "通訊等待", field_in_answer: "類型"}
+    - {type: contains_any, items: ["send_text"], name: right_segment}
+    - {type: regex, pattern: "0\\.9[5-8]|9[5-8]\\s*%|97", name: p_value}
+    - {type: evidence_grounded, min_quotes: 1}
+    - {type: not_regex, pattern: "批次|batch|改成|建議", name: no_fix_yet, category: format}
+  golden: |
+    瓶頸在哪一段：send_text
+    類型：C
+    證據：「send_text    690 ms」「total        710 ms」
+    這段佔總時間比例 p：0.97（上限約 35 倍）
+    還缺的量測點（選 F 時必填）：無
+
+- id: opt1-insufficient
+  tags: [optimize, choice, hard]
+  desc: 只有總時間 → 類型 F（量測不足）
+  card: {file: "03-optimize.md", title: "優化 1/6"}
+  fills:
+    - {match: "目標", value: "降低整體執行時間"}
+    - {match: "baseline", value: "總共 2.4 s"}
+    - {match: "各段耗時", value: "$ time ./run.sh\nreal 0m2.413s\nuser 0m0.310s\nsys 0m0.122s"}
+    - match: "熱點程式碼"
+      value: |
+        read_all(); process(); send_all(); wait_reply();
+  checks:
+    - {type: choice, option: "量測不足", field_in_answer: "類型"}
+    - {type: regex, pattern: "還缺的量測點[^\\n]*[:：]\\s*\\S{2,}", name: lists_missing}
+  golden: |
+    瓶頸在哪一段：資料中沒有（只有總時間）
+    類型：F
+    證據：「real 0m2.413s」「user 0m0.310s」
+    這段佔總時間比例 p：無法判斷
+    還缺的量測點（選 F 時必填）：read_all、process、send_all、wait_reply 各自的時間
+
+- id: opt1-lock
+  tags: [optimize, choice]
+  desc: 4 執行緒比 1 執行緒慢、mutex 佔 78% → 類型 D
+  card: {file: "03-optimize.md", title: "優化 1/6"}
+  fills:
+    - {match: "目標", value: "4 執行緒加速陣列加總"}
+    - {match: "baseline", value: "1 thread 120 ms"}
+    - match: "各段耗時"
+      value: |
+        threads=1  120 ms
+        threads=4  410 ms
+        perf report: 78.2%  pthread_mutex_lock / 14.1%  __lll_unlock_wake / 6.0%  worker
+    - match: "熱點程式碼"
+      value: |
+        for (i = lo; i < hi; i++) { pthread_mutex_lock(&m); total += a[i]; pthread_mutex_unlock(&m); }
+  checks:
+    - {type: choice, option: "同步", field_in_answer: "類型"}
+    - {type: contains_any, items: ["78", "410"], name: cites_numbers}
+  golden: |
+    瓶頸在哪一段：worker 迴圈裡每筆都 lock
+    類型：D
+    證據：「78.2%  pthread_mutex_lock」「threads=4  410 ms」
+    這段佔總時間比例 p：0.78（上限約 4.5 倍）
+    還缺的量測點（選 F 時必填）：無
+
+- id: opt3-batch
+  tags: [optimize, patch]
+  desc: 實作批次：用 frame.py 的 pack_u32 + transact(CMD_SUM_U32)；最小修改
+  card: {file: "03-optimize.md", title: "優化 3/6"}
+  fills:
+    - {match: "方案描述", value: "把逐筆送文字改成：用 frame.py 的 pack_u32 打包，每包最多 1024 個數字，用 transact(ser, CMD_SUM_U32, payload) 送出，回覆用 unpack_u32 取總和再加總"}
+    - match: "要改的程式碼"
+      value: |2
+            30	def total_of(ser, data):
+            31	    total = 0
+            32	    for v in data:
+            33	        ser.write(f"{v}\n".encode())
+            34	        total = int(ser.readline())
+            35	    return total
+    - {match: "不能改", value: "函式名稱 total_of 與回傳值"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: contains_all, items: ["pack_u32", "CMD_SUM_U32"], name: uses_frame_api}
+    - {type: regex, pattern: "1024", name: chunking}
+    - {type: not_contains, items: ["def sum_of", "def total(", "totalOf"], name: keeps_name}
+  golden: |
+    main.py:32
+    修改前：    for v in data:
+            ser.write(f"{v}\n".encode())
+            total = int(ser.readline())
+    修改後：    for i in range(0, len(data), 1024):
+            reply = transact(ser, CMD_SUM_U32, pack_u32(data[i:i + 1024]))
+            total = (total + unpack_u32(reply)[0]) & 0xFFFFFFFF
+    可能的副作用（1 句）：總和改成 mod 2^32
+    正確性驗證指令（1 行）：python3 -c "..." 比對 sum(data) & 0xFFFFFFFF
+    成功的樣子：兩個數字相同
+
+- id: read1-absent
+  tags: [read, grounding, absent]
+  desc: 題目沒寫時間限制與硬體時脈 → 那兩格要「資料中沒有」；數字照抄
+  card: {file: "02-read-spec.md", title: "讀題 1/6"}
+  fills:
+    - value: |
+        第二題：資料校驗
+        電腦端的 checker.py 會透過 /dev/ttyACM0 送出 64 個封包，每個封包的 payload 是 4096 bytes。
+        請修改 pico/app_serial.c，讓 Pico 對每個封包回傳 payload 的 CRC32（zlib 相容，u32 little-endian）。
+        checker.py 比對回傳值，全部正確才進入計時；分數依 64 個封包的總處理時間排名。
+        只能修改 pico/ 資料夾內的檔案，不能修改 checker.py 與封包格式。
+        每 10 分鐘最多提交 1 次。
+  checks:
+    - {type: regex, pattern: "時間\\s*/?\\s*記憶體限制[^\\n]*資料中沒有", name: time_limit_absent}
+    - {type: regex, pattern: "硬體[^\\n]*(資料中沒有|Pico)", name: hw_slot}
+    - {type: contains_all, items: ["64", "4096"], name: keeps_numbers}
+    - {type: regex, pattern: "提交[^\\n]*10\\s*分鐘[^\\n]*1\\s*次", name: submit_rule}
+    - {type: regex, pattern: "不能改[^\\n]*checker\\.py", name: cant_change}
+    - {type: card_slots, min_fraction: 0.8}
+  golden: |
+    - 一句話目標：Pico 對每個封包回傳 payload 的 CRC32
+    - 輸入（來源、格式、範圍、大小）：checker.py 經 /dev/ttyACM0 送 64 個封包，payload 4096 bytes
+    - 輸出（目的地、格式，精確到空白與換行）：CRC32（zlib 相容，u32 little-endian）
+    - 正確性怎麼判：checker.py 比對回傳值，全部正確才計時
+    - 效能指標與單位：64 個封包的總處理時間
+    - 給分方式（門檻 / 排名 / 比例）：排名
+    - 提交方式與次數限制：每 10 分鐘最多提交 1 次
+    - 時間 / 記憶體限制：資料中沒有
+    - 硬體（板子、核心、時脈）：Pico（/dev/ttyACM0）；核心與時脈資料中沒有
+    - 不能改的檔案 / 介面：checker.py 與封包格式
+    - 不能用的方法：資料中沒有
+    - 可以改的地方：pico/ 資料夾內的檔案
+    - baseline：資料中沒有
+    - 最容易誤解的 3 點：要 zlib 相容；回傳是 little-endian；全部正確才計時
+
+- id: learn4-dma
+  tags: [learn, grounding, absent]
+  desc: 逐句檢查理解：第 4 句（count 是 bytes）錯；第 3 句 API 文件沒寫 → 資料中沒有
+  card: {file: "07-unknown-tech.md", title: "速學 4/6"}
+  fills:
+    - {match: "技術名稱", value: "transfer engine"}
+    - match: "文件段落"
+      value: |
+        1. count 的單位是「幾筆傳輸」，不是「幾個位元組」。這是最常見的錯誤。
+        2. 位址要不要遞增，是描述的一部分。「複製」和「填值」用的是同一個引擎、同樣的筆數，差別只在來源位址走不走。
+        3. 每筆的大小只能是 1、2 或 4 個位元組，而且位址要對齊。
+        4. 通道是有限資源，用之前要取得、用完要歸還。這個引擎只有四個。
+        使用的節奏固定是四拍：描述 (configure) → 啟動 (start) → 等待 (wait / busy) → 取用結果
+    - {match: "初始化", value: "claim → configure → start → wait → release"}
+    - {match: "關鍵 API", value: "engine_claim、engine_configure、engine_start、engine_wait、engine_release、engine_abort"}
+    - {match: "限制", value: "最多 4 個通道；每筆 1/2/4 bytes 要對齊；count 填總共幾個 bytes"}
+  checks:
+    - {type: table_rows, min: 4, max: 7}
+    - {type: table_cell, key: "^4$", col: 1, regex: "錯"}
+    - {type: regex, pattern: "(engine_abort|abort)[^\\n]*資料中沒有|資料中沒有[^\\n]*(engine_abort|abort)|^\\|\\s*3\\s*\\|\\s*資料中沒有", name: api3_absent}
+    - {type: evidence_grounded}
+  golden: |
+    | # | 對 / 錯 / 資料中沒有 | 證據：「原文」 | 正確說法（判錯時） |
+    | 1 | 對 | 「「複製」和「填值」用的是同一個引擎」 | |
+    | 2 | 對 | 「描述 (configure) → 啟動 (start) → 等待 (wait / busy) → 取用結果」 | |
+    | 3 | 資料中沒有 | 資料中沒有 engine_abort | |
+    | 4 | 錯 | 「count 的單位是「幾筆傳輸」，不是「幾個位元組」」 | count 填幾筆傳輸，不是 bytes |
+
+- id: dbg1-write-incr-ref
+  tags: [debug, dma, rank, reference]
+  desc: 同 dbg1-write-incr，但先貼 DMA 參考卡 2/8（考場實際用法）→ 第一個原因要是 write_increment
+  turns:
+    - card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}
+      assistant: "收到"
+  card: {file: "04-debug.md", title: "除錯 1/6"}
+  fills:
+    - {match: "指令與目的", value: "用 DMA 把 src 複製到 dst（1024 個 u32）"}
+    - {match: "預期", value: "dst 全部等於 src"}
+    - {match: "實際", value: "dst[0] = src[1023]，dst[1]~dst[1023] 全是 0"}
+    - {match: "錯誤訊息", value: "（沒有錯誤訊息）"}
+    - match: "相關程式碼"
+      value: |2
+            52	    int ch = dma_claim_unused_channel(true);
+            53	    dma_channel_config c = dma_channel_get_default_config(ch);
+            54	    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+            55	    dma_channel_configure(ch, &c, dst, src, dma_encode_transfer_count(1024), true);
+            56	    dma_channel_wait_for_finish_blocking(ch);
+    - {match: "上次能用之後改了", value: "把設定改成用 dma_channel_get_default_config 的預設值"}
+    - {match: "已經試過", value: "把 1024 改成 512，dst[0] 變成 src[511]"}
+    - {match: "環境", value: "Pico 2（RP2350）ARM"}
+  checks:
+    - {type: rank_first, items: ["write_increment", "寫入位址", "寫遞增", "寫入遞增", "write increment", "dst 沒有遞增", "目的位址"], name: first_cause_write_incr}
+    - {type: evidence_grounded, min_quotes: 1, max_bad: 1}
+  golden: |
+    | # | 原因 | 可能性 高/中/低 | 證據 | 驗證方法 | 結果代表什麼 |
+    | 1 | 預設 write_increment 是 false，每次都寫到 dst[0] | 高 | 「dst[0] = src[1023]」 | 加 channel_config_set_write_increment(&c, true) | dst 全對 → 確認 |

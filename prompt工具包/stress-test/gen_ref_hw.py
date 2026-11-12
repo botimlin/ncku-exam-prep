@@ -1,0 +1,906 @@
+# NOTE（2026-11-12）：ref-hw.yaml 產生後已依 GPU 結果手動修正檢查；之後請直接改 ref-hw.yaml，不要重新產生覆蓋。
+#!/usr/bin/env python3
+"""Generate stress-test/cases/ref-hw.yaml (hardware reference-card cases)."""
+import json, sys
+
+OUT = sys.argv[1]
+Q = lambda s: json.dumps(s, ensure_ascii=False)
+
+HEADER = """# 參考卡（硬體）：先貼一張參考卡、模型回「收到」，再用 11-ask-reference.md 的查詢 1/2（回答）或 2/2（檢查程式）。
+# 每張硬體參考卡至少 1 題「只有這張卡答得出來」（挑考場最常用、小模型最容易記錯成 RP2040 的事實）；
+# 每份檔案 ≥ 2 題「卡上沒有」（要回「資料中沒有」、不可編數字/函式名）與 1 題 check-code（只違反卡上一條規則）。
+# 卡片事實已對照 pico-sdk 2.2.0 原始碼（pico-build docker image）、RP2350 暫存器標頭、Hazard3 文件查證（2026-11-12）。
+"""
+
+cases = []
+
+
+def ask(cid, topic, file, title, desc, q, ctx, checks, golden, tags=()):
+    cases.append(dict(kind="ask", id=cid, topic=topic, file=file, title=title, desc=desc, q=q, ctx=ctx,
+                      checks=checks, golden=golden, tags=list(tags)))
+
+
+def absent(cid, topic, file, title, desc, q, bad, golden, ctx="（無）"):
+    checks = [{"type": "absent"}, {"type": "not_regex", "pattern": bad, "name": "no_invented", "category": "grounding"}]
+    cases.append(dict(kind="ask", id=cid, topic=topic, file=file, title=title, desc=desc, q=q, ctx=ctx,
+                      checks=checks, golden=golden, tags=["absent"]))
+
+
+def check(cid, topic, file, title, desc, code, kw, golden):
+    checks = [{"type": "regex", "pattern": f"違反[^\\n]*({kw})|({kw})[^\\n]*違反", "name": "violation_flagged"},
+              {"type": "not_regex", "pattern": "(違反[\\s\\S]*){4,}", "name": "few_false_alarms"}]
+    cases.append(dict(kind="check", id=cid, topic=topic, file=file, title=title, desc=desc, code=code,
+                      checks=checks, golden=golden, tags=["check-code"]))
+
+
+EV = {"type": "evidence_grounded", "min_quotes": 1, "max_bad": 1}
+def ca(items, name): return {"type": "contains_any", "items": items, "name": name}
+def rx(p, name): return {"type": "regex", "pattern": p, "name": name}
+def nrx(p, name): return {"type": "not_regex", "pattern": p, "name": name}
+def fm(field, p, name): return {"type": "field_matches", "field": field, "regex": p, "name": name}
+
+
+def G(ev, ans, note="無", unsure="無"):
+    return f"證據：「{ev}」\n答案：{ans}\n注意事項：{note}\n不確定的地方：{unsure}\n"
+
+
+def GA(ev, ans, unsure):
+    return f"證據：「{ev}」\n答案：資料中沒有；{ans}\n注意事項：無\n不確定的地方：{unsure}\n"
+
+
+# ============================================================ pico-sdk.md
+F, T = "pico-sdk.md", "pico-sdk"
+ask("ref-sdk-default-board", T, F, "RP2350 pico-sdk 1/8",
+    "沒設 PICO_BOARD → 預設 rp2040 + pico，Pico 2 不能跑；-DPICO_BOARD=pico2 並 rm -rf build",
+    "我的 CMakeLists 只有 include(pico_sdk_import.cmake)、project()、pico_sdk_init()，沒設任何 board。編出來的 uf2 在 Pico 2 上不會跑。為什麼？cmake 要怎麼下？",
+    "之前已經在 build/ 跑過一次 cmake",
+    [ca(["PICO_BOARD=pico2"], "board_pico2"), ca(["rp2040"], "default_rp2040"), EV,
+     nrx("PICO_BOARD=pico2_riscv|PICO_BOARD=rp2350\\b", "no_fake_board")],
+    G("沒設 board/platform → 預設 rp2040 + pico，Pico 2 不能跑",
+      "沒設時預設編成 rp2040 + pico；改用 cmake .. -DPICO_BOARD=pico2，而且要先 rm -rf build（cache 記住舊值）。",
+      "cmake 輸出應有 Target board (PICO_BOARD) is 'pico2'"))
+ask("ref-sdk-build-type", T, F, "RP2350 pico-sdk 2/8",
+    "沒指定 CMAKE_BUILD_TYPE → SDK 預設 Release（-O3 -DNDEBUG），assert 失效",
+    "我沒有指定 CMAKE_BUILD_TYPE，pico-sdk 預設用哪種 build type？我的 assert 還會生效嗎？",
+    "（無）",
+    [ca(["Release"], "release"), rx("NDEBUG|assert[^\\n]{0,12}(失效|無效|不會)", "assert_off"), EV,
+     nrx("答案[：:]\\s*(預設(是|為)?\\s*)?`?Debug", "not_debug")],
+    G("`Release`（**SDK 預設**）：`-O3 -DNDEBUG`，SDK 另加 `-g`。",
+      "預設是 Release（-O3 -DNDEBUG，SDK 另加 -g）；因為定義了 NDEBUG，assert 會失效。",
+      "量效能、交卷用 Release；與 judge 用相同 build 設定"))
+ask("ref-sdk-no-divider", T, F, "RP2350 pico-sdk 3/8",
+    "RP2350 沒有硬體除法器（hardware_divider 是軟體），不要照 RP2040 的 SIO divider 記憶",
+    "Pico 2 有沒有 RP2040 那種 SIO 硬體除法器？用 hardware_divider 能加速除法嗎？",
+    "（無）",
+    [rx("沒有[^\\n]{0,8}(硬體)?除法器|軟體", "no_divider"), EV,
+     nrx("答案[：:]\\s*(有|可以|能)[，,。 ]", "not_has_divider")],
+    G("**沒有硬體除法器**（`hardware_divider` 在 RP2350 是軟體）（RP2040 有 SIO divider）",
+      "沒有。RP2350 沒有硬體除法器，hardware_divider 在 RP2350 是軟體實作，不會比較快。",
+      "RP2040 才有 SIO divider"))
+ask("ref-sdk-pio-count", T, F, "RP2350 pico-sdk 3/8",
+    "RP2350 PIO 3 block × 4 SM = 12（RP2040 2×4）",
+    "RP2350 有幾個 PIO block？總共幾個 state machine？",
+    "（無）",
+    [rx("(?<!\\d)3\\s*(個)?\\s*(PIO\\s*)?(block|個 PIO)|3\\s*×\\s*4|3\\s*x\\s*4", "three_pio"), ca(["12"], "twelve_sm"), EV,
+     nrx("答案[：:][^\\n]{0,10}(?<!\\d)2\\s*(個)?\\s*(PIO|block)", "not_two_pio")],
+    G("PIO：3 block × 4 SM = 12 SM（2×4）", "3 個 PIO block，每個 4 個 SM，共 12 個 state machine。", "括號內 2×4 是 RP2040"))
+ask("ref-sdk-not-in-flash-data", T, F, "RP2350 pico-sdk 4/8",
+    "const 查表放 RAM：__not_in_flash(\"tbl\")（資料用，不是 __not_in_flash_func）",
+    "我有一個 static const uint32_t lut[256]，想放到 RAM 加速查表。宣告要怎麼寫？",
+    "（無）",
+    [ca(["__not_in_flash("], "not_in_flash_macro"), EV,
+     nrx("__not_in_flash_func\\s*\\(\\s*lut|__ram_func|__attribute__\\s*\\(\\(\\s*section\\s*\\(\\s*\"\\.ram", "not_func_macro")],
+    G("`static const uint32_t __not_in_flash(\"tbl\") lut[256] = {...};`：資料放 RAM（const 也行）",
+      "寫成 static const uint32_t __not_in_flash(\"tbl\") lut[256] = {...};，const 也能放 RAM。",
+      "const 全域陣列預設在 flash；用 .elf.map 確認位址是 0x20…"))
+ask("ref-sdk-time-us-32-wrap", T, F, "RP2350 pico-sdk 5/8",
+    "time_us_32 約 71.6 分鐘溢位 → 用 time_us_64",
+    "我用 time_us_32() 量很長的時間，多久會溢位？應該改用什麼？",
+    "要量 2 小時的運行時間",
+    [ca(["71.6"], "wrap_71min"), ca(["time_us_64"], "use_64"), EV,
+     nrx("49\\.7|約\\s*49\\s*天", "not_millis_wrap")],
+    G("`time_us_32` 約 71.6 分鐘溢位，用 `time_us_64`。",
+      "time_us_32 約 71.6 分鐘就溢位；量 2 小時要改用 time_us_64()。"))
+ask("ref-sdk-usb-early-printf", T, F, "RP2350 pico-sdk 6/8",
+    "USB CDC：主機開 port（DTR）前的 printf 被丟 → 等 stdio_usb_connected() 或 sleep_ms(2000)",
+    "我用 USB stdio，開機一開始 printf 的幾行在電腦上都看不到，之後印的才看得到。為什麼？怎麼修？",
+    "pico_enable_stdio_usb(app 1)，主機用 minicom 開 /dev/ttyACM0",
+    [ca(["stdio_usb_connected"], "wait_connected"), rx("DTR|丟", "dropped"), EV,
+     nrx("答案[：:][^\\n]*(鮑率|baud)", "not_baud")],
+    G("開機到主機開 port 之間的 printf 會消失 → 等 `stdio_usb_connected()` 或開頭 `sleep_ms(2000)`。",
+      "主機還沒開 port（DTR）之前，USB CDC 的輸出直接被丟掉；開頭加 while (!stdio_usb_connected()) sleep_ms(10);。",
+      "主機停止讀取 500 ms 後也會丟"))
+ask("ref-sdk-clock-then-uart", T, F, "RP2350 pico-sdk 7/8",
+    "set_sys_clock_khz 後 clk_peri 改接 48 MHz（PLL_USB）→ 先改時脈再 stdio_init_all/uart_init",
+    "我先呼叫 stdio_init_all()，再呼叫 set_sys_clock_khz(200000, true)，結果 UART 輸出變亂碼。為什麼？",
+    "printf 走 UART0，115200",
+    [ca(["48"], "peri_48mhz"), rx("先[^\\n]{0,10}(改|設)[^\\n]{0,6}時脈", "clock_first"), EV,
+     nrx("答案[^\\n]*clk_peri[^\\n]{0,10}(跟著|等於|=)\\s*clk_sys", "not_follow_sys")],
+    G("呼叫後 SDK 把 `clk_peri` 改接 48 MHz（PLL_USB）→ **先改時脈，再 `stdio_init_all()` / `uart_init`**，否則鮑率錯。",
+      "set_sys_clock_khz 之後 clk_peri 被改接 48 MHz，之前用舊時脈算的鮑率就錯了；要先改時脈再 stdio_init_all()。",
+      "超過額定 150 MHz 不保證穩定"))
+ask("ref-sdk-missing-link", T, F, "RP2350 pico-sdk 8/8",
+    "hardware/dma.h: No such file → 漏 link hardware_dma（pico_stdlib 不含）",
+    "編譯時出現 fatal error: hardware/dma.h: No such file or directory，要怎麼修？",
+    "CMake 只有 target_link_libraries(app pico_stdlib)",
+    [ca(["hardware_dma"], "link_dma"), ca(["target_link_libraries"], "where"), EV,
+     nrx("答案[^\\n]*(apt|安裝|重新下載)", "no_reinstall")],
+    G("`hardware/dma.h: No such file` 或 `undefined reference` → 漏 link `hardware_dma`（pio、multicore、clocks 同理）。",
+      "漏 link hardware_dma；改成 target_link_libraries(app pico_stdlib hardware_dma)。",
+      "pio、multicore、clocks 也要各自 link"))
+absent("ref-sdk-absent-usb-endpoints", T, F, "RP2350 pico-sdk 3/8",
+       "晶片總覽卡沒寫 USB endpoint 數 → 資料中沒有",
+       "RP2350 的 USB 控制器在 device 模式最多支援幾個 endpoint？",
+       "\\d+\\s*(個)?\\s*endpoint|endpoint[^\\n]{0,6}\\d+\\s*個",
+       GA("新增：HSTX、TRNG、SHA-256、8 KB OTP、TrustZone、POWMAN", "這張卡沒有寫 USB endpoint 的數量。", "要查 RP2350 datasheet 的 USB 章節"))
+absent("ref-sdk-absent-vco-range", T, F, "RP2350 pico-sdk 7/8",
+       "時脈卡只說「PLL 能精確產生的頻率」，沒寫 VCO 範圍 → 資料中沒有",
+       "RP2350 PLL 的 VCO 頻率允許範圍是多少 MHz？",
+       "750|1600|\\d{3,4}\\s*MHz\\s*(到|~|～|–|-)\\s*\\d{3,4}\\s*MHz",
+       GA("`set_sys_clock_khz(khz, required)`：只接受 PLL 能精確產生的頻率", "卡上只說只接受 PLL 能精確產生的頻率，沒有寫 VCO 範圍。", "查 hardware/clocks.h 或 datasheet 的 PLL 章節"))
+check("ref-sdk-check-repeating-timer-stack", T, F, "RP2350 pico-sdk 7/8",
+      "查詢 2/2：repeating_timer_t 放在函式區域變數 → 違反「repeating_timer_t 要 static」；時脈順序正確不亂報",
+      ["20\tint main(void) {", "21\t    set_sys_clock_khz(150000, true);", "22\t    stdio_init_all();",
+       "23\t    start_sampling();", "24\t    while (true) tight_loop_contents();", "25\t}",
+       "30\tvoid start_sampling(void) {", "31\t    repeating_timer_t timer;",
+       "32\t    add_repeating_timer_ms(-10, on_tick, NULL, &timer);", "33\t}"],
+      "repeating_timer_t timer|31\\s",
+      """參考卡上的規則：
+1. 先改時脈，再 stdio_init_all() / uart_init
+2. sleep_ms/sleep_us：ISR 內不可呼叫
+3. add_repeating_timer_ms：repeating_timer_t 要 static
+4. callback 在 IRQ context：不可 printf/sleep
+5. ISR：先清週邊旗標、要短、共享變數 volatile
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 21 set_sys_clock_khz 在 22 stdio_init_all 之前 |
+| 2 | 看不到 | 沒有 ISR |
+| 3 | 違反 | 31 repeating_timer_t timer; |
+| 4 | 看不到 | 沒有 on_tick 內容 |
+| 5 | 看不到 | 沒有 ISR |
+最該先修的 1 條：第 31 行改成 static repeating_timer_t timer;
+""")
+
+# ============================================================ pico-dma.md
+F, T = "pico-dma.md", "dma"
+ask("ref-dma-arg-order", T, F, "RP2350 DMA 1/8",
+    "dma_channel_configure 第 3 參數 = 目的地 write_addr，第 4 = 來源 read_addr",
+    "dma_channel_configure 的第 3 個和第 4 個參數，哪個是來源、哪個是目的地？",
+    "要從 src 複製到 dst",
+    [rx("第\\s*3[^\\n]{0,20}(目的|dst|write)", "third_is_dst"), EV,
+     nrx("第\\s*3\\s*(個)?\\s*(參數)?\\s*[=是：:]?\\s*(來源|src|read)", "third_not_src")],
+    G("`dma_channel_configure(ch, &c, write_addr, read_addr, count, trigger)`：**第 3 參數 = 目的地，第 4 = 來源**（同 memcpy）。",
+      "第 3 個是目的地 write_addr（dst），第 4 個是來源 read_addr（src），順序同 memcpy。",
+      "count 是傳輸筆數不是 bytes"))
+ask("ref-dma-default-write-incr", T, F, "RP2350 DMA 2/8",
+    "預設 write increment = false → memcpy 要 channel_config_set_write_increment(&c, true)",
+    "我用 dma_channel_get_default_config 做記憶體複製，結果 dst[0] 等於 src 最後一筆，其他都沒變。預設的 write increment 是 true 還是 false？要怎麼修？",
+    "（無）",
+    [ca(["channel_config_set_write_increment"], "fix_call"), rx("write[ _]?increment[^\\n]{0,12}false|false", "default_false"), EV,
+     nrx("答案[：:][^\\n]{0,30}write[ _]?increment[^\\n]{0,6}(預設)?\\s*(是|為|=)\\s*true", "not_default_true")],
+    G("read increment = **true**；write increment = **false**",
+      "預設 write increment 是 false，所以每筆都寫到 dst[0]；加 channel_config_set_write_increment(&c, true)。",
+      "count 填筆數，不是 bytes"))
+ask("ref-dma-size-enum", T, F, "RP2350 DMA 3/8",
+    "練習 XFER_32（值 4）→ DMA_SIZE_32（值 2）",
+    "考前練習的 transfer engine 用 .size = XFER_32（值是 4）。對應到 pico-sdk 要用什麼？它的值是多少？",
+    "（無）",
+    [ca(["DMA_SIZE_32"], "size_name"), rx("(?<![\\d.])2(?![\\d.])", "value_2"), EV,
+     nrx("DMA_SIZE_32\\s*[（(]?\\s*(=|是|值)\\s*(為)?\\s*(4|32)\\b", "not_4")],
+    G("`.size = XFER_8/16/32`（值 1/2/4）→ `DMA_SIZE_8/16/32`（值 **0/1/2**）",
+      "用 DMA_SIZE_32，值是 2（log2），不是 4。",
+      "count 在兩邊都是筆數"))
+ask("ref-dma-pio-rx", T, F, "RP2350 DMA 4/8",
+    "PIO RX FIFO → 記憶體：read_increment=false、write_increment=true、pio_get_dreq(pio, sm, false)",
+    "DMA 要把 PIO RX FIFO 的資料搬到記憶體 buffer，read/write increment 要怎麼設？DREQ 用什麼？",
+    "（無）",
+    [rx("pio_get_dreq\\(\\s*pio\\s*,\\s*sm\\s*,\\s*false\\s*\\)", "rx_dreq"),
+     rx("read[_ ]increment\\s*[=＝:：]?\\s*false|read[_ ]increment[^\\n]{0,6}false", "read_incr_false"), EV,
+     nrx("答案[^\\n]*pio_get_dreq\\([^)]*,\\s*true\\s*\\)", "not_tx_dreq")],
+    G("PIO RX FIFO → 記憶體：read_increment=false、write_increment=true、dreq=`pio_get_dreq(pio, sm, false)`",
+      "read_increment=false（FIFO 位址固定）、write_increment=true；DREQ 用 pio_get_dreq(pio, sm, false)，read 位址 &pio->rxf[sm]。",
+      "雙向時先啟動 RX 再 TX"))
+ask("ref-dma-self-trigger", T, F, "RP2350 DMA 5/8",
+    "ring + TRIGGER_SELF：count = dma_encode_transfer_count_with_self_trigger(128)",
+    "我要做 ring buffer：DMA 每 128 筆觸發一次 IRQ 並自動重啟。count 參數要怎麼填？（SDK 2.2）",
+    "寫端 ring 1024 bytes",
+    [ca(["dma_encode_transfer_count_with_self_trigger"], "self_trigger"), EV,
+     nrx("答案[^\\n]*dma_encode_endless_transfer_count", "not_endless")],
+    G("dma_encode_transfer_count_with_self_trigger(128)",
+      "count 填 dma_encode_transfer_count_with_self_trigger(128)；2.1 則寫 (1u<<28)|128。",
+      "buffer 要對齊 1<<bits，channel_config_set_ring(&c, true, 10)"))
+ask("ref-dma-irq2-api", T, F, "RP2350 DMA 6/8",
+    "DMA_IRQ_2/3 只能用通用版 dma_irqn_*（沒有 irq2 專用函式）",
+    "我想讓 DMA 完成時走 DMA_IRQ_2。有沒有像 dma_channel_set_irq0_enabled 那樣的函式？要怎麼寫？",
+    "（無）",
+    [ca(["dma_irqn_set_channel_enabled"], "irqn_enable"), EV,
+     nrx("dma_channel_set_irq2_enabled|dma_channel_acknowledge_irq2", "no_invented_irq2")],
+    G("DMA_IRQ_2/3 只能用通用版：`dma_irqn_set_channel_enabled(2, ch, true)`",
+      "DMA_IRQ_2 只能用通用版：dma_irqn_set_channel_enabled(2, ch, true)，handler 裝在 dma_get_irq_num(2)，ISR 內 dma_irqn_acknowledge_channel(2, ch)。",
+      "該 IRQ 已有 handler 時 exclusive 會出錯"))
+ask("ref-dma-busy-bit", T, F, "RP2350 DMA 7/8",
+    "RP2350 ctrl_trig BUSY = bit26（RP2040 是 bit24）",
+    "我用 dma_hw->ch[ch].ctrl_trig 看狀態，BUSY 是第幾個 bit？",
+    "（無）",
+    [rx("(bit\\s*)?26|第\\s*26", "bit26"), EV, nrx("答案[^\\n]*(bit\\s*24|第\\s*24)", "not_bit24")],
+    G("BUSY=bit26", "BUSY 是 bit26（dma_hw->ch[ch].ctrl_trig 的 RP2350 配置）。", "這是 RP2350 的位元配置"))
+ask("ref-dma-split-not-faster", T, F, "RP2350 DMA 8/8",
+    "整顆 DMA 每 clk_sys 最多 1 讀 + 1 寫，memcpy 拆多通道不會更快",
+    "把一個 64 KB 的 memcpy 拆成 4 個 DMA channel 同時搬，會比 1 個 channel 快嗎？",
+    "（無）",
+    [rx("不會", "not_faster"), EV, nrx("答案[：:]\\s*(會|可以|能)[^\\n]{0,6}(快|更快|4\\s*倍)", "not_4x")],
+    G("整顆 DMA 每 clk_sys 最多 1 讀 + 1 寫（≤32 bit），多通道 round-robin 平分 → 一份 memcpy 拆多通道**不會更快**",
+      "不會。整顆 DMA 每個 clk_sys 最多 1 讀 1 寫，多通道是 round-robin 平分頻寬。",
+      "CPU 與 DMA 搶同一 SRAM bank 也會變慢"))
+absent("ref-dma-absent-pause", T, F, "RP2350 DMA 2/8",
+       "預設值卡沒寫暫停/繼續 → 資料中沒有，不可編函式名",
+       "DMA 傳輸到一半可以先暫停、之後再繼續嗎？要呼叫哪個函式？",
+       "dma_channel_pause|dma_channel_resume|dma_channel_stop\\(",
+       GA("通道 BUSY 時再觸發被**靜默忽略**", "這張卡沒有寫暫停 / 繼續的方法。", "查 hardware/dma.h 與 datasheet 的 CTRL.EN 說明"))
+absent("ref-dma-absent-mpu", T, F, "RP2350 DMA 8/8",
+       "效能卡沒寫 DMA MPU region 數 → 資料中沒有",
+       "RP2350 的 DMA 有自己的 MPU（記憶體保護）嗎？有幾個 region？",
+       "\\d+\\s*(個)?\\s*(region|區域)",
+       GA("讀 flash（XIP）/ APB 週邊：受 QSPI / APB 速度限制。", "這張卡沒有寫 DMA MPU。", "查 RP2350 datasheet DMA 章節"))
+check("ref-dma-check-count-bytes", T, F, "RP2350 DMA 2/8",
+      "查詢 2/2：count 填 sizeof(src)（bytes）→ 違反陷阱 1；其他設定正確不亂報",
+      ["40\tstatic uint32_t src[256], dst[256];", "41\tint ch = dma_claim_unused_channel(true);",
+       "42\tdma_channel_config c = dma_channel_get_default_config(ch);",
+       "43\tchannel_config_set_transfer_data_size(&c, DMA_SIZE_32);",
+       "44\tchannel_config_set_write_increment(&c, true);",
+       "45\tdma_channel_configure(ch, &c, dst, src, sizeof(src), true);",
+       "46\tdma_channel_wait_for_finish_blocking(ch);"],
+      "sizeof",
+      """參考卡上的規則：
+1. count 填成 bytes → 搬 2/4 倍。用 count_of(arr)，不要 sizeof(arr)。
+2. 參數順序：dst 在前、src 在後。
+3. 忘開 write_increment → dst[0] = src 最後一筆。
+4. 位址須對齊 data size。
+5. buffer 是區域變數 → 用 static/全域。
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | 違反 | 45 dma_channel_configure(ch, &c, dst, src, sizeof(src), true); |
+| 2 | OK | 45 dst 在前 |
+| 3 | OK | 44 channel_config_set_write_increment(&c, true); |
+| 4 | OK | 40 uint32_t 陣列 |
+| 5 | OK | 40 static |
+最該先修的 1 條：第 45 行 sizeof(src) 改成 count_of(src)（256 筆）
+""")
+
+# ============================================================ pio.md
+F, T = "pio.md", "pio"
+ask("ref-pio-init-disabled", T, F, "RP2350 PIO 1/8",
+    "pio_sm_init 後 SM 為停用 → 要 pio_sm_set_enabled(pio, sm, true)",
+    "我呼叫完 pio_sm_init(pio, sm, offset, &c) 之後 SM 會自己開始跑嗎？",
+    "（無）",
+    [ca(["pio_sm_set_enabled"], "enable_call"), rx("停用|不會", "disabled"), EV,
+     nrx("答案[：:]\\s*(會|是的|對)[，,。 ]", "not_running")],
+    G("`pio_sm_init` 後 SM 為停用", "不會。pio_sm_init 之後 SM 是停用的，要再呼叫 pio_sm_set_enabled(pio, sm, true)。"))
+ask("ref-pio-jmp-xdec", T, F, "RP2350 PIO 2/8",
+    "jmp x-- ：X≠0 則跳，先判斷再減（一定減）",
+    "PIO 的 jmp x-- L 是先減再判斷，還是先判斷再減？X 原本是 0 的時候會跳嗎？",
+    "（無）",
+    [rx("先判斷再減", "check_then_dec"), rx("不(會)?跳", "no_jump_at_0"), EV, nrx("(?<!不是)先減再判斷", "not_dec_first")],
+    G("`x--`：X≠0 則跳，先判斷再減（一定減）",
+      "先判斷再減：X≠0 才跳，不管跳不跳 X 都會減 1；X 原本是 0 時不跳。",
+      "L 是絕對位址，SDK 自動加 offset"))
+ask("ref-pio-sideset-delay", T, F, "RP2350 PIO 3/8",
+    "side-set 與 delay 共用 5 bit：.side_set 2 opt 佔 3 bit → 最大 delay 3",
+    "我的 PIO 程式宣告 .side_set 2 opt，每條指令的 delay [n] 最大能填多少？",
+    "（無）",
+    [fm("答案", "(?<![\\d.])3(?![\\d.])", "max_delay_3"), EV,
+     nrx("答案[^\\n]*(最大|最多|上限)[^\\n]{0,6}(?<![\\d.])(7|15|31)(?![\\d.])", "not_7")],
+    G("RP2350 PIO（v1）：delay `[n]` 與 side-set 共用指令 bit 12–8，共 5 bit。",
+      "最大 delay 是 3：.side_set 2 opt 含 opt 位共佔 3 bit，5 bit 只剩 2 bit 給 delay。",
+      "opt 可省略 side，但多吃 1 bit"))
+ask("ref-pio-echo-autopush", T, F, "RP2350 PIO 4/8",
+    "echo：同時開 autopush 會多推一個 0（推論）；要 autopush 就刪掉 push",
+    "echo 程式是 out x, 32 / in x, 32 / push。如果我在 C 端同時把 autopush 打開，會發生什麼事？",
+    "autopull 也有開，門檻 32",
+    [rx("多推|推一個\\s*0|再推[^\\n]{0,4}0", "extra_zero"), rx("(刪|拿掉|移除|去掉)[^\\n]{0,4}`?push", "remove_push"), EV],
+    G("**不要同時開 autopush**：`in x, 32` 觸發 autopush 後 `push` 會再推一個 0（推論，未實測）。",
+      "in x, 32 觸發 autopush 後，push 會再推一個 0 進 RX FIFO；要用 autopush 就刪掉 push。",
+      "刪掉 push 後每 word 2 cycle", "卡上註明是推論、未實測"))
+ask("ref-pio-blink-count", T, F, "RP2350 PIO 5/8",
+    "pio_blink：C 端送 clock_get_hz(clk_sys) / (2 * freq) - 3",
+    "pico-examples 的 pio_blink 程式，C 端要往 TX FIFO 送多少，LED 才會以 freq Hz 閃爍？",
+    "（無）",
+    [rx("/\\s*\\(\\s*2\\s*\\*\\s*freq\\s*\\)\\s*\\)?\\s*-\\s*3", "minus_3"), EV,
+     nrx("答案[^\\n]*(125000000|125\\s*MHz)", "not_125mhz")],
+    G("C 端送 `clock_get_hz(clk_sys) / (2 * freq) - 3`。",
+      "送 clock_get_hz(clk_sys) / (2 * freq) - 3；半週期是 n + 3 cycle。",
+      "預設 clk_sys 150 MHz，不要寫死"))
+ask("ref-pio-uart-clkdiv", T, F, "RP2350 PIO 6/8",
+    "150 MHz、uart_tx 8 cycle/bit、115200 → div 162.76（RP2040 125 MHz 的 135.63 是錯的）",
+    "Pico 2 預設時脈下，用 PIO uart_tx（每 bit 8 個 cycle）做 115200 baud，clkdiv 要設多少？",
+    "（無）",
+    [ca(["162.76"], "div_16276"), EV, nrx("135\\.6", "not_125mhz_div")],
+    G("| UART 115200（uart_tx） | 8 | 162.76 |",
+      "div = 150 MHz / (115200 × 8) ≈ 162.76。",
+      "小數 div 會有最多 1 sysclk 的 jitter"))
+ask("ref-pio-dma-rx-first", T, F, "RP2350 PIO 7/8",
+    "PIO 雙向 DMA：先啟動 RX channel 再 TX",
+    "PIO 收發雙向都用 DMA（TX 一個 channel、RX 一個 channel），兩個 channel 要先啟動哪一個？",
+    "（無）",
+    [rx("先[^\\n]{0,8}RX", "rx_first"), EV, nrx("先[^\\n]{0,4}(啟動)?\\s*TX[^\\n]{0,6}再[^\\n]{0,6}RX", "not_tx_first")],
+    G("雙向：**先啟動 RX channel 再 TX**。", "先啟動 RX channel，再啟動 TX channel。", "DMA 跑時 CPU 不可 put/get 同一 FIFO"))
+ask("ref-pio-fdebug", T, F, "RP2350 PIO 8/8",
+    "pio->fdebug：TXSTALL 27:24，寫 1 清",
+    "PIO 的 fdebug 暫存器裡 TXSTALL 在哪幾個 bit？要怎麼清除？",
+    "（無）",
+    [ca(["27:24"], "txstall_bits"), rx("寫\\s*1", "w1c"), EV, nrx("讀(取)?(就|即|後)(會)?清", "not_read_clear")],
+    G("`pio->fdebug`（寫 1 清）：TXSTALL 27:24", "TXSTALL 在 bit 27:24（每個 SM 一個 bit），寫 1 清除。"))
+absent("ref-pio-absent-sync-bypass", T, F, "RP2350 PIO 6/8",
+       "時序卡只寫「輸入同步器 2 cycle 延遲」，沒寫怎麼關 → 資料中沒有",
+       "PIO 的 GPIO 輸入同步器可以關掉嗎？要寫哪個暫存器或呼叫哪個函式？",
+       "input_sync_bypass|pio_sm_set_input_sync|sync_bypass",
+       GA("輸入同步器 2 cycle 延遲。", "卡上只寫同步器有 2 cycle 延遲，沒寫怎麼關掉。", "查 hardware/pio.h 與 datasheet PIO 暫存器"))
+absent("ref-pio-absent-irq-route", T, F, "RP2350 PIO 3/8",
+       "side-set/directive 卡沒寫 PIO IRQ flag 怎麼接到 NVIC → 資料中沒有",
+       "PIO 程式裡 irq 0 設的 flag，要怎麼讓它觸發 CPU 的 PIO0_IRQ_0 中斷？要呼叫哪個函式？",
+       "pio_set_irq0_source_enabled|pio_set_irqn_source_enabled|pis_interrupt",
+       GA("每個 PIO 只有 32 格指令記憶體（4 SM 共用）。", "這張卡沒有寫 PIO IRQ 接到 NVIC 的方法。", "查 hardware/pio.h 的 IRQ 相關函式"))
+check("ref-pio-check-set-count", T, F, "RP2350 PIO 1/8",
+      "查詢 2/2：sm_config_set_set_pins 給 8 支 → 違反「SET count ≤5」；pio_gpio_init / enable 都有做不亂報",
+      ["30\tPIO pio; uint sm, offset;",
+       "31\thard_assert(pio_claim_free_sm_and_add_program(&bus_program, &pio, &sm, &offset));",
+       "32\tpio_sm_config c = bus_program_get_default_config(offset);",
+       "33\tsm_config_set_set_pins(&c, 2, 8);",
+       "34\tfor (uint i = 0; i < 8; i++) pio_gpio_init(pio, 2 + i);",
+       "35\tpio_sm_set_consecutive_pindirs(pio, sm, 2, 8, true);",
+       "36\tpio_sm_init(pio, sm, offset, &c);",
+       "37\tpio_sm_set_enabled(pio, sm, true);"],
+      "set_set_pins|SET count|≤\\s*5|33\\s",
+      """參考卡上的規則：
+1. default config 已含 wrap 與 side-set 位數。
+2. 每個輸出腳都要 pio_gpio_init
+3. SET count ≤5
+4. pio_sm_init 後 SM 為停用。
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 32 bus_program_get_default_config(offset) |
+| 2 | OK | 34 for 迴圈對 8 支腳 pio_gpio_init |
+| 3 | 違反 | 33 sm_config_set_set_pins(&c, 2, 8); |
+| 4 | OK | 37 pio_sm_set_enabled(pio, sm, true); |
+最該先修的 1 條：第 33 行 SET 最多 5 支，8 支腳改用 OUT（sm_config_set_out_pins）
+""")
+
+# ============================================================ multicore-sync.md
+F, T = "multicore-sync.md", "multicore"
+ask("ref-mc-local-accumulate", T, F, "多核同步 1/8",
+    "counter++ race：最快是每執行緒區域累加，最後合併一次（不是 volatile）",
+    "兩個 pthread 各做 counter++ 一百萬次，結果偏少而且每次不同。最快又正確的修法是什麼？",
+    "counter 是全域 long",
+    [rx("區域|local", "local_acc"), ca(["合併"], "merge_once"), EV,
+     nrx("答案[：:][^\\n]*(加|改成|用)\\s*volatile", "not_volatile")],
+    G("最快是不共享：每執行緒 / 每核累加區域變數，最後合併一次",
+      "每個執行緒先累加到區域變數，最後用 atomic_fetch_add 合併一次到 counter。",
+      "volatile 不是同步"))
+ask("ref-mc-trylock-ebusy", T, F, "多核同步 2/8",
+    "pthread_mutex_trylock 拿不到回 EBUSY；pthread 函式失敗回錯誤碼、不設 errno",
+    "pthread_mutex_trylock 拿不到鎖時回傳什麼？會設 errno 嗎？",
+    "（無）",
+    [ca(["EBUSY"], "ebusy"), rx("不設\\s*errno|不會設|不設定", "no_errno"), EV,
+     nrx("答案[^\\n]*回(傳)?\\s*-1", "not_minus1")],
+    G("pthread_mutex_trylock(&m);                 // 拿不到回傳 EBUSY",
+      "拿不到時回傳 EBUSY；pthread 函式失敗是直接回傳錯誤碼，不設 errno。",
+      "semaphore 才是回 -1 並設 errno"))
+ask("ref-mc-atomic64", T, F, "多核同步 3/8",
+    "RP2350：1/2/4 byte atomic lock-free；64-bit 由 pico_atomic 用 spinlock 保護",
+    "RP2350 上的 64-bit atomic（atomic_llong）是 lock-free 的嗎？",
+    "（無）",
+    [rx("spinlock|spin lock", "spinlock"), EV, nrx("答案[：:]\\s*(是|對|會)[，,。 ]", "not_lockfree")],
+    G("64-bit 由 pico_atomic 用 spinlock 保護",
+      "不是。RP2350 只有 1/2/4 byte 對齊的 atomic 是 lock-free，64-bit 由 pico_atomic 用 spinlock 保護。",
+      "RP2040 全部用 spinlock 模擬"))
+ask("ref-mc-fifo-depth", T, F, "多核同步 4/8",
+    "RP2350 跨核 FIFO 每方向 4 格 × 32 bit（RP2040 8 格）",
+    "RP2350 的跨核 FIFO（multicore_fifo_push_blocking 用的）每個方向有幾格？",
+    "（無）",
+    [rx("(?<!\\d)4\\s*(格|個|筆|entries|entry)", "four_entries"), EV,
+     nrx("答案[：:][^\\n]{0,10}(?<!\\d)8\\s*(格|個|筆)", "not_eight")],
+    G("RP2350 每方向只有 4 格 × 32 bit（RP2040 是 8 格）",
+      "每個方向 4 格 × 32 bit。",
+      "RP2040 是 8 格；資料傳遞優先用 queue_t"))
+ask("ref-mc-sw-spinlock", T, F, "多核同步 5/8",
+    "RP2350-E2 → SDK 預設 PICO_USE_SW_SPIN_LOCKS（RAM 中軟體 spinlock）",
+    "RP2350 上 spin_lock_blocking 用的是 SIO 的硬體 spinlock 嗎？為什麼？",
+    "（無）",
+    [ca(["PICO_USE_SW_SPIN_LOCKS"], "sw_spinlocks"), ca(["E2"], "erratum_e2"), EV,
+     nrx("答案[：:]\\s*(是|對)[，,。 ]", "not_hw")],
+    G("SDK 預設 `PICO_USE_SW_SPIN_LOCKS`（RAM 中軟體 spinlock），API 不變",
+      "不是。因為 RP2350-E2，SDK 預設 PICO_USE_SW_SPIN_LOCKS，用 RAM 中的軟體 spinlock，API 不變。",
+      "不要直接寫 sio_hw->spinlock[]"))
+ask("ref-mc-isr-64bit", T, F, "多核同步 6/8",
+    "64-bit 變數在 32-bit 核心上讀寫不是一條指令 → 一半新一半舊，要保護",
+    "ISR 每次更新一個 uint64_t 的時間戳，主迴圈直接讀它來用，會有什麼問題？",
+    "同一顆核，只有一個 ISR 會寫",
+    [rx("一半", "torn_read"), ca(["save_and_disable_interrupts", "關中斷"], "protect"), EV,
+     nrx("答案[：:][^\\n]{0,8}(沒問題|不會有問題|不會)", "not_safe")],
+    G("64-bit 變數在 32-bit 核心上讀寫不是一條指令 → 會讀到一半新一半舊，一定要保護",
+      "64-bit 讀寫不是一條指令，主迴圈可能讀到一半新一半舊；讀的那側用 save_and_disable_interrupts() 保護。",
+      "關中斷時間越短越好"))
+ask("ref-mc-fifo-dmb", T, F, "多核同步 7/8",
+    "FIFO 不是 C 層級 barrier → push 前、pop 後各 __dmb()",
+    "core1 算完把結果寫進全域變數，再用 multicore_fifo_push_blocking 通知 core0。需要加 memory barrier 嗎？",
+    "（無）",
+    [ca(["__dmb"], "dmb"), EV, nrx("答案[：:]\\s*(不需要|不用)", "not_unneeded")],
+    G("FIFO 本身不是 C 層級 barrier → push 前、pop 後各 `__dmb()`",
+      "需要。FIFO 本身不是 C 層級 barrier；core1 push 前、core0 pop 後各加 __dmb()。",
+      "或把結果放 queue_t"))
+ask("ref-mc-false-sharing", T, F, "多核同步 8/8",
+    "partial[id] 相鄰 → 加執行緒反而慢 → alignas(64) 或區域變數",
+    "我讓每個執行緒寫自己的 partial[id]，但加更多執行緒反而變慢。怎麼修？",
+    "Linux x86，partial 是 long 陣列",
+    [ca(["alignas(64)"], "alignas"), EV, nrx("答案[：:][^\\n]{0,12}(加鎖|mutex)", "not_lock")],
+    G("| partial[id] 相鄰 | 加執行緒反而慢 | alignas(64) 或區域變數 |",
+      "partial[id] 相鄰造成 false sharing；每格用 alignas(64) 分開，或先累加到區域變數。",
+      "RP2350 無 data cache，沒有這問題"))
+absent("ref-mc-absent-doorbell", T, F, "多核同步 4/8",
+       "多核 API 卡沒寫 doorbell → 資料中沒有",
+       "RP2350 的 multicore doorbell 要怎麼用？總共有幾個 doorbell？",
+       "multicore_doorbell_claim|\\d+\\s*(個)?\\s*doorbell",
+       GA("兩核 FIFO IRQ 共用 `SIO_IRQ_FIFO`", "這張卡沒有寫 doorbell。", "查 pico/multicore.h"))
+absent("ref-mc-absent-prio-inherit", T, F, "多核同步 2/8",
+       "pthread 卡沒寫 priority inheritance → 資料中沒有",
+       "pthread mutex 要怎麼設定 priority inheritance（PTHREAD_PRIO_INHERIT）？",
+       "pthread_mutexattr_setprotocol\\s*\\(\\s*&",
+       GA("其他：rwlock、`pthread_barrier_wait`、`pthread_once`", "這張卡沒有寫 priority inheritance 的設定。", "查 man pthread_mutexattr_setprotocol"))
+check("ref-mc-check-isr-blocking", T, F, "多核同步 5/8",
+      "查詢 2/2：GPIO callback（ISR）內 mutex_enter_blocking → 違反「ISR 不可阻塞，只能 try」",
+      ["10\tstatic mutex_t log_lock;", "11\tstatic critical_section_t cs;",
+       "12\tvoid gpio_cb(uint gpio, uint32_t events) {   // GPIO IRQ callback",
+       "13\t    mutex_enter_blocking(&log_lock);", "14\t    events_seen++;", "15\t    mutex_exit(&log_lock);",
+       "16\t}", "17\tvoid core1_main(void) {", "18\t    critical_section_enter_blocking(&cs);",
+       "19\t    shared_x++;", "20\t    critical_section_exit(&cs);", "21\t}"],
+      "mutex_enter_blocking|13\\s",
+      """參考卡上的規則：
+1. critical_section：關本核 IRQ + spinlock；極短；不可重入
+2. mutex：同核再 enter 會 deadlock；ISR 不可阻塞，只能 try
+3. spinlock：只能持有很短；持有時不拿別的 spinlock
+4. save_and_disable_interrupts() 只擋本核
+5. 不要直接寫 sio_hw->spinlock[]
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 18–20 critical_section_enter_blocking / exit |
+| 2 | 違反 | 13 mutex_enter_blocking(&log_lock);（在 GPIO callback 內） |
+| 3 | 看不到 | 沒用 spinlock |
+| 4 | 看不到 | 沒關中斷 |
+| 5 | 看不到 | 沒寫 sio_hw |
+最該先修的 1 條：第 13 行改 mutex_try_enter(&log_lock, NULL)，拿不到就跳過
+""")
+
+# ============================================================ pico-peripherals.md
+F, T = "pico-peripherals.md", "peripherals"
+ask("ref-per-i2c-pins", T, F, "RP2350 週邊 1/8",
+    "I2C 腳位：gpio % 4 = 0/1 → I2C0 SDA/SCL；GP8/GP9 是 I2C0",
+    "GP8 和 GP9 可以當哪一個 I2C 的 SDA / SCL？",
+    "（無）",
+    [ca(["I2C0"], "i2c0"), EV, nrx("答案[^\\n]*I2C1[^\\n]{0,6}SDA", "not_i2c1")],
+    G("I2C：`gpio % 4` = 0/1 → I2C0 SDA/SCL；2/3 → I2C1 SDA/SCL。",
+      "8 % 4 = 0、9 % 4 = 1，所以 GP8 = I2C0 SDA、GP9 = I2C0 SCL。",
+      "還要 gpio_set_function(pin, GPIO_FUNC_I2C)"))
+ask("ref-per-uart-throughput", T, F, "RP2350 週邊 2/8",
+    "115200 8N1 = 10 bit/byte → 11 520 B/s（不是 14 400）",
+    "UART 115200 baud、8N1，每秒最多能傳幾個 byte？",
+    "（無）",
+    [ca(["11520", "11 520", "11,520"], "bytes_per_s"), EV, nrx("14\\s?,?400", "not_div8")],
+    G("8N1 = 10 bit/byte：115200 → 11 520 B/s、每 byte 86.8 µs",
+      "8N1 每 byte 10 bit，115200 / 10 = 11 520 B/s（每 byte 86.8 µs）。"))
+ask("ref-per-spi-cs", T, F, "RP2350 週邊 3/8",
+    "硬體 CSn + CPHA=0：PL022 每個 frame 之間把 CSn 拉高 → CS 用 GPIO 手動",
+    "SPI 用硬體 CSn（把 GP17 設成 GPIO_FUNC_SPI），mode 0 連續送多個 byte，會有什麼問題？",
+    "對方晶片要求整筆傳輸期間 CS 保持低",
+    [rx("拉高", "cs_toggles"), ca(["GPIO", "SIO", "手動"], "manual_cs"), EV,
+     nrx("答案[：:][^\\n]{0,8}(沒問題|不會)", "not_fine")],
+    G("**CS 用 GPIO 手動控制**：硬體 CSn + CPHA=0 時，PL022 每個 frame 之間會把 CSn 拉高。",
+      "PL022 在 CPHA=0 時每個 frame 之間會把 CSn 拉高，整筆傳輸 CS 不會一直低；改用 GPIO 手動控制 CS。",
+      "spi_write_blocking 回傳後馬上拉高 CS 安全"))
+ask("ref-per-i2c-7bit", T, F, "RP2350 週邊 4/8",
+    "i2c addr 是 7-bit（0x68），不要傳 0xD0",
+    "MPU6050 的位址在 datasheet 寫 0xD0（寫）/0xD1（讀），i2c_write_timeout_us 的 addr 要傳多少？",
+    "（無）",
+    [fm("答案", "0x68", "addr_0x68"), EV, nrx("答案[：:]\\s*(傳|用|填)?\\s*0xD0", "not_0xd0")],
+    G("`addr` 是 **7-bit**（例如 0x68），不要傳左移過的 8-bit（0xD0）。",
+      "傳 7-bit 位址 0x68，不要傳左移過的 0xD0。"))
+ask("ref-per-pwm-wrap", T, F, "RP2350 週邊 5/8",
+    "PWM 週期 = TOP+1 → 要 N 個 count 用 pwm_set_wrap(slice, N - 1)",
+    "我要讓 PWM 一個週期剛好 1000 個 count，pwm_set_wrap 要填多少？",
+    "（無）",
+    [ca(["999"], "wrap_999"), EV, nrx("pwm_set_wrap\\([^)]*\\b1000\\s*\\)|答案[：:]\\s*(填)?\\s*1000\\b", "not_1000")],
+    G("**要 N 個 count 的週期：`pwm_set_wrap(slice, N - 1)`**",
+      "填 999：pwm_set_wrap(slice, 999)，因為週期 = TOP + 1。"))
+ask("ref-per-adc-channel", T, F, "RP2350 週邊 6/8",
+    "adc_select_input 傳通道號不是 GPIO 號：GPIO28 = ch2",
+    "我要讀 GPIO 28 的類比電壓，adc_select_input 要傳 28 還是別的數字？",
+    "Pico 2（RP2350A）",
+    [rx("adc_select_input\\(\\s*2\\s*\\)|通道\\s*2|傳\\s*2(?!\\d)|ch\\s*2(?!\\d)", "ch2"), EV,
+     nrx("adc_select_input\\(\\s*28\\s*\\)(?![^\\n]{0,6}(錯|不))", "not_gpio_num")],
+    G("`adc_select_input(0);                     // 通道號，不是 GPIO 號`",
+      "傳通道號：GPIO 26–29 = ch0–3，所以 GPIO 28 傳 adc_select_input(2)。",
+      "先 adc_gpio_init(28)"))
+ask("ref-per-watchdog-max", T, F, "RP2350 週邊 7/8",
+    "RP2350 watchdog 最大約 16777 ms（RP2040 8388）",
+    "RP2350 的 watchdog_enable 第一個參數最大可以設多少 ms？",
+    "（無）",
+    [ca(["16777"], "max_16777"), EV, nrx("答案[：:][^\\n]{0,15}8388", "not_rp2040")],
+    G("`watchdog_enable(ms, pause_on_debug)`（RP2350 最大約 16777 ms；RP2040 8388）",
+      "RP2350 最大約 16777 ms。", "餵狗用 watchdog_update()"))
+ask("ref-per-shared-order", T, F, "RP2350 週邊 8/8",
+    "irq_add_shared_handler 的 order_priority：數字大的先被呼叫（與 irq_set_priority 相反）",
+    "irq_add_shared_handler 的 order_priority，數字大的先被呼叫還是數字小的先？",
+    "（無）",
+    [rx("大的先|數字大[^\\n]{0,6}先|較大[^\\n]{0,4}先", "bigger_first"), EV,
+     nrx("答案[：:][^\\n]{0,8}(數字)?小的先", "not_smaller_first")],
+    G("shared 的 `order_priority`：**數字大的先被呼叫**（與 `irq_set_priority` 相反）",
+      "數字大的先被呼叫，和 irq_set_priority（數值越小越優先）相反。"))
+absent("ref-per-absent-i2c-slave", T, F, "RP2350 週邊 4/8",
+       "I2C 卡沒寫 slave 模式 → 資料中沒有",
+       "RP2350 的 I2C 可以當 slave 嗎？要用哪個函式設定 slave 位址？",
+       "i2c_set_slave_mode|pico_i2c_slave|i2c_slave_init",
+       GA("簽名：`int i2c_write_timeout_us(i2c, addr, src, len, nostop, timeout_us)`，read 同型。", "這張卡只寫 master 讀寫，沒有 slave 模式。", "查 hardware/i2c.h"))
+absent("ref-per-absent-pwm-deadtime", T, F, "RP2350 週邊 5/8",
+       "PWM 卡沒寫死區（dead-time）→ 資料中沒有",
+       "RP2350 的 PWM 可以設定 dead-time（死區時間）嗎？要怎麼設？",
+       "pwm_set_dead|DEADTIME|dead[_ -]?time\\s*[=＝]\\s*\\d",
+       GA("同 slice 的 A/B **共用頻率**（TOP、分頻），duty 各自。", "這張卡沒有寫 dead-time 的設定。", "查 RP2350 datasheet PWM 章節"))
+check("ref-per-check-i2c-8bit-addr", T, F, "RP2350 週邊 4/8",
+      "查詢 2/2：i2c 位址傳 0xD0（8-bit）→ 違反「addr 是 7-bit」；pull-up、timeout、nostop 都正確",
+      ["50\ti2c_init(i2c0, 400 * 1000);", "51\tgpio_set_function(4, GPIO_FUNC_I2C);",
+       "52\tgpio_set_function(5, GPIO_FUNC_I2C);", "53\tgpio_pull_up(4); gpio_pull_up(5);",
+       "54\tuint8_t reg = 0x75;", "55\tint r = i2c_write_timeout_us(i2c0, 0xD0, &reg, 1, true, 2000);",
+       "56\tif (r == 1) r = i2c_read_timeout_us(i2c0, 0xD0, buf, 1, false, 2100);"],
+      "0xD0",
+      """參考卡上的規則：
+1. 需要 pull-up
+2. addr 是 7-bit（例如 0x68），不要傳左移過的 8-bit（0xD0）
+3. 一律檢查 r < 0 或 r != len
+4. 考試用 _timeout_us
+5. 讀暫存器：寫 reg 時 nostop=true
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 53 gpio_pull_up(4); gpio_pull_up(5); |
+| 2 | 違反 | 55 i2c_write_timeout_us(i2c0, 0xD0, ...) |
+| 3 | OK | 56 if (r == 1) |
+| 4 | OK | 55 i2c_write_timeout_us |
+| 5 | OK | 55 nostop = true |
+最該先修的 1 條：第 55、56 行把 0xD0 改成 7-bit 的 0x68
+""")
+
+# ============================================================ riscv-hazard3.md
+F, T = "riscv-hazard3.md", "hazard3"
+ask("ref-rv-no-zbc", T, F, "RISC-V Hazard3 1/8",
+    "Hazard3 無 Zbc（無 clmul）、無 F/D",
+    "RP2350 的 Hazard3 有 clmul（Zbc 擴充）指令可以加速 CRC 嗎？",
+    "（無）",
+    [rx("沒有|無\\s*Zbc|不支援", "no_zbc"), EV, nrx("答案[：:]\\s*(有|支援|可以)[，,。 ]", "not_has_clmul")],
+    G("無 F/D（無硬體浮點，float 軟體模擬很慢）、無 Zbc（無 clmul）、無 Zicond、無 V",
+      "沒有。Hazard3 無 Zbc，所以沒有 clmul。"))
+ask("ref-rv-abi-u64-return", T, F, "RISC-V Hazard3 1/8",
+    "ILP32：64 位元回傳 a0 低、a1 高",
+    "RISC-V ILP32 的函式回傳 uint64_t 時，高 32 位放在哪個暫存器？",
+    "（無）",
+    [rx("a1", "hi_a1"), EV, nrx("高[^\\n]{0,6}(在|放|是)\\s*a0", "not_a0")],
+    G("a0–a7（x10–x17）參數；a0 回傳（64 位元回傳 a0 低、a1 高）",
+      "高 32 位在 a1，低 32 位在 a0。"))
+ask("ref-rv-li-split", T, F, "RISC-V Hazard3 2/8",
+    "li 0x12345fff → lui 0x12346 + addi -1（低 12 位 ≥0x800 時 lui +1）",
+    "li a0, 0x12345fff 會被拆成哪兩條指令？為什麼 lui 的值不是 0x12345？",
+    "（無）",
+    [ca(["0x12346"], "lui_plus1"), rx("addi\\s+a0\\s*,\\s*a0\\s*,\\s*-1", "addi_m1"), EV,
+     nrx("lui\\s+a0\\s*,\\s*0x12345\\b", "not_12345")],
+    G("例：li a0,0x12345fff → `lui a0,0x12346` + `addi a0,a0,-1`",
+      "拆成 lui a0,0x12346 + addi a0,a0,-1；addi 的 imm 會正負號擴展，0xfff 等於 -1，所以 lui 要 +1。"))
+ask("ref-rv-clz-zero", T, F, "RISC-V Hazard3 3/8",
+    "Zbb clz(0) = 32；C 的 __builtin_clz(0) 是 UB",
+    "Hazard3 的 clz 指令輸入 0 時回傳多少？C 的 __builtin_clz(0) 呢？",
+    "（無）",
+    [ca(["32"], "hw_32"), ca(["UB", "未定義"], "c_ub"), EV,
+     nrx("__builtin_clz\\(0\\)[^\\n]{0,4}(=|是|回傳)\\s*32", "not_c_32")],
+    G("| clz/ctz | 前導/尾端零數，a=0 回 32 | __builtin_clz/ctz（a=0 在 C 是 UB） |",
+      "硬體 clz 在 a=0 回 32；但 C 的 __builtin_clz(0) 是 UB，不能依賴。"))
+ask("ref-rv-bextm-range", T, F, "RISC-V Hazard3 4/8",
+    "h3.bextm 的 n=1～8；srli+andi 2 cycle vs h3.bextmi 1 cycle",
+    "Hazard3 的 h3.bextm 一次最多取幾個 bit？跟一般 srli + andi 比快多少？",
+    "（無）",
+    [rx("1\\s*[～~\\-–到]\\s*8|最多\\s*8", "n_1_8"), EV, nrx("1\\s*[～~\\-–到]\\s*(16|32)|最多\\s*(16|32)\\s*(個)?\\s*bit", "not_32")],
+    G("h3.bextm rd,a,b,n = (a>>b[4:0]) & ((1<<n)-1)，n=1～8",
+      "n 可填 1～8，最多 8 bit；srli+andi 要 2 cycle，h3.bextmi 1 cycle。",
+      "編譯器不會自動產生，要用 .insn；只在真的 Hazard3 上可用"))
+ask("ref-rv-div-cycles", T, F, "RISC-V Hazard3 5/8",
+    "Hazard3：div/rem 18～19、divu/remu 18；mul 1",
+    "Hazard3 上 div 指令要幾個 cycle？mul 呢？",
+    "（無）",
+    [ca(["18"], "div_18"), rx("mul[^\\n]{0,12}(?<![\\d.])1(?![\\d.])", "mul_1"), EV,
+     nrx("答案[^\\n]*(?<!\\d)(32|33|34|35)\\s*(個)?\\s*cycle", "not_32_cycles")],
+    G("| div/rem 18～19；divu/remu 18 | |",
+      "div 18～19 cycle（divu 18）；mul 1 cycle。",
+      "表格假設無 bus stall"))
+ask("ref-rv-mcountinhibit", T, F, "RISC-V Hazard3 6/8",
+    "mcountinhibit 重置值 0x5，SDK 不清 → csrci mcountinhibit, 5",
+    "在 Hazard3 上讀 mcycle 一直是 0，為什麼？要加哪一行？",
+    "用 pico-sdk，RISC-V build",
+    [rx("csrci\\s+mcountinhibit\\s*,\\s*5|riscv_clear_csr\\(\\s*mcountinhibit\\s*,\\s*5\\s*\\)", "enable_counter"), EV,
+     nrx("mcounteren", "not_mcounteren")],
+    G("`mcountinhibit` 重置值 0x5（bit0 CY、bit2 IR 為 1 = 停止）。pico-sdk 不會幫你清 → 不清就永遠讀到 0 或不變",
+      "mcountinhibit 重置值 0x5，計數器預設停止，pico-sdk 不會清；量測前加 csrci mcountinhibit, 5（或 riscv_clear_csr(mcountinhibit, 5)）。"))
+ask("ref-rv-time-critical-section", T, F, "RISC-V Hazard3 7/8",
+    ".S 函式放 SRAM：.section .time_critical.f, \"ax\"",
+    "我寫了一個 RISC-V .S 組語函式 f，要讓它放在 SRAM 執行，.section 要怎麼寫？",
+    "（無）",
+    [ca([".time_critical"], "time_critical"), EV, nrx("\\.ramfunc|\\.section\\s+\\.data", "not_data")],
+    G("`.time_critical.*` 放 SRAM；放 flash 用 `.text.f`",
+      "寫 .section .time_critical.f, \"ax\"；放 flash 才用 .text.f。",
+      "大寫 .S 才經前處理器"))
+ask("ref-rv-precedence", T, F, "RISC-V Hazard3 8/8",
+    "x & 0xF == 0 等於 x & (0xF == 0) → 加括號",
+    "我寫 if (x & 0xF == 0) 想判斷低 4 位是不是 0，這樣寫對嗎？",
+    "（無）",
+    [rx("括號", "parens"), EV, nrx("答案[：:]\\s*(對|正確|沒問題|可以)[，,。 ]", "not_ok")],
+    G("`x & 0xF == 0` 等於 `x & (0xF == 0)` → 加括號",
+      "不對。== 比 & 優先，會變成 x & (0xF == 0)；要寫 (x & 0xF) == 0，加括號。"))
+absent("ref-rv-absent-pmp", T, F, "RISC-V Hazard3 5/8",
+       "指令週期卡沒寫 PMP region 數 → 資料中沒有",
+       "Hazard3 的 PMP（physical memory protection）有幾個 region？",
+       "\\d+\\s*(個)?\\s*(PMP\\s*)?region|PMP[^\\n]{0,6}\\d+\\s*個",
+       GA("非對齊 load/store 直接 trap：mcause 4（load）/ 6（store/AMO）", "這張卡沒有寫 PMP。", "查 RP2350 datasheet Hazard3 章節"))
+absent("ref-rv-absent-mtimecmp", T, F, "RISC-V Hazard3 6/8",
+       "cycle 計數卡沒寫 mtime/mtimecmp 計時器中斷 → 資料中沒有",
+       "Hazard3 上要用 mtimecmp 做計時器中斷，暫存器位址和設定步驟是什麼？",
+       "0xd00001b|MTIMECMP_OFFSET|sio_hw->mtimecmp|0x0200[0-9a-f]{4}",
+       GA("沒有 `time` CSR（讀了 illegal instruction，mcause 2）；改用 `time_us_32()`", "這張卡只說沒有 time CSR，沒有寫 mtimecmp。", "查 RP2350 datasheet SIO 章節"))
+check("ref-rv-check-int-shift", T, F, "RISC-V Hazard3 8/8",
+      "查詢 2/2：1 << 31（int）→ 違反 UB 規則；整數提升與取欄位寫法正確",
+      ["5\tuint32_t pack(uint8_t hi, uint8_t lo) {", "6\t    return ((uint32_t)hi << 8) | lo;", "7\t}",
+       "8\tuint32_t top_bit(void) {", "9\t    return 1 << 31;", "10\t}",
+       "11\tuint32_t field(uint32_t x) {", "12\t    return (x >> 4) & 0xFu;", "13\t}"],
+      "1\\s*<<\\s*31|(^|\\|)\\s*9\\s",
+      """參考卡上的規則：
+1. 移位 ≥32 或負數 UB；1 << 31（int）UB → 1u << 31
+2. 有號溢位 UB → 用 uint32_t 運算
+3. 整數提升：b << 24（uint8_t b）要寫 (uint32_t)b << 24
+4. x & 0xF == 0 → 加括號
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | 違反 | 9 return 1 << 31; |
+| 2 | OK | 12 uint32_t 運算 |
+| 3 | OK | 6 ((uint32_t)hi << 8) |
+| 4 | 看不到 | 沒有比較 |
+最該先修的 1 條：第 9 行改成 return 1u << 31;
+""")
+
+# ============================================================ arm-cortex-m33.md
+F, T = "arm-cortex-m33.md", "m33"
+ask("ref-m33-u64-arg-regs", T, F, "Cortex-M33 1/8",
+    "AAPCS：f(uint32_t a, uint64_t b) → a 在 r0、r1 空、b 在 r2:r3",
+    "Cortex-M33 AAPCS 下，函式 f(uint32_t a, uint64_t b) 的 b 放在哪兩個暫存器？",
+    "（無）",
+    [ca(["r2"], "r2"), ca(["r3"], "r3"), EV, nrx("b\\s*(在|放在|是)?\\s*r1\\s*[:：/、和與]\\s*r2", "not_r1r2")],
+    G("f(uint32_t a, uint64_t b) → a 在 r0、r1 空、b 在 r2:r3",
+      "b 在 r2:r3；64 位元參數要用偶數號暫存器對，所以 r1 空著。"))
+ask("ref-m33-cbz-range", T, F, "Cortex-M33 2/8",
+    "CBZ/CBNZ 只能向前 0～126 bytes、只能 r0–r7、不能在 IT 內",
+    "Thumb-2 的 CBZ 可以往回（向後）跳嗎？可跳的範圍是多少？",
+    "（無）",
+    [ca(["126"], "range_126"), rx("向前|只能往前|不能[^\\n]{0,4}(向後|往回)", "forward_only"), EV,
+     nrx("答案[：:]\\s*(可以|能)[，,。 ]", "not_backward")],
+    G("CBZ/CBNZ 只能向前 0～126 bytes、只能 r0–r7、不能在 IT 內",
+      "不行，CBZ/CBNZ 只能向前跳 0～126 bytes，而且只能用 r0–r7、不能在 IT 區塊內。"))
+ask("ref-m33-no-popcount", T, F, "Cortex-M33 3/8",
+    "M33 沒有 popcount 指令 → libgcc 或 SWAR",
+    "Cortex-M33 有 popcount 指令嗎？__builtin_popcount 會變成什麼？",
+    "（無）",
+    [rx("沒有|無指令|無", "no_popcount"), ca(["libgcc", "SWAR"], "fallback"), EV,
+     nrx("\\bvcnt\\b|\\bcpop\\b|popcnt\\s+r\\d", "no_invented_insn")],
+    G("| __builtin_popcount | 無指令（libgcc 或 SWAR） |",
+      "沒有。__builtin_popcount 會呼叫 libgcc，或自己用 SWAR 寫。"))
+ask("ref-m33-acle-header", T, F, "Cortex-M33 4/8",
+    "__smlad 等 intrinsic 在 <arm_acle.h>，不需連結",
+    "要在 C 裡用 __smlad，要 include 哪個標頭？需要另外 link 函式庫嗎？",
+    "（無）",
+    [ca(["arm_acle.h"], "acle"), EV, nrx("答案[：:][^\\n]{0,20}(要|需要|必須)\\s*(link|連結)", "not_need_link")],
+    G("`<arm_acle.h>`（不需連結）：`__smlad __qadd __ssat(x,n) __usat __uqadd8 __usad8 __sadd16`",
+      "#include <arm_acle.h>，不需要連結任何函式庫。",
+      "__ssat(x,n) 的 n 必須是編譯期常數"))
+ask("ref-m33-sdiv-cycles", T, F, "Cortex-M33 5/8",
+    "SDIV/UDIV：n<0 → 2，否則 4+⌊n/4⌋；例 1000/10 → 5（卡上標 ⚠️ 未對照原文）",
+    "Cortex-M33 上 1000 / 10 的 SDIV 大約要幾個 cycle？",
+    "（無）",
+    [fm("答案", "(?<![\\d.])5(?![\\d.])", "five_cycles"), EV,
+     nrx("答案[^\\n]*(?<![\\d.])(12|2)\\s*(個)?\\s*cycle", "not_2_or_12")],
+    G("SDIV/UDIV：n = 兩數最高位 1 的位置差；n<0 → 2，否則 4+⌊n/4⌋（最多約 11）。例 1000/10 → 5",
+      "約 5 cycle：最高位差 n=6，4 + ⌊6/4⌋ = 5。",
+      "無", "卡上標示未逐條對照 datasheet 原文，以實測為準"))
+ask("ref-m33-cyccnt-zero", T, F, "Cortex-M33 6/8",
+    "CYCCNT 一直是 0：沒設 TRCENA 或 CYCCNTENA、在另一核設的、NOCYCCNT=1",
+    "我在 Cortex-M33 上讀 DWT CYCCNT 一直是 0，可能是什麼原因？",
+    "程式跑在 core1",
+    [ca(["TRCENA"], "trcena"), ca(["CYCCNTENA"], "cyccntena"), EV,
+     nrx("答案[：:][^\\n]{0,10}(硬體壞|不支援|M33 沒有)", "not_unsupported")],
+    G("一直是 0：沒設 TRCENA 或 CYCCNTENA、在另一核設的、NOCYCCNT=1",
+      "沒設 TRCENA 或 CYCCNTENA，或是在另一核設的（每顆核各有 DWT，core1 要在 core1 上設）。",
+      "150 MHz 約 28.6 秒回繞"))
+ask("ref-m33-thumb-func", T, F, "Cortex-M33 7/8",
+    ".S 漏 .thumb_func → 符號 bit0=0 → 呼叫即 INVSTATE fault",
+    "我的 Cortex-M33 .S 函式忘了寫 .thumb_func，會發生什麼事？",
+    "（無）",
+    [ca(["INVSTATE"], "invstate"), rx("bit\\s*0|bit0|奇數", "bit0"), EV,
+     nrx("答案[：:][^\\n]{0,8}(沒差|不影響|沒關係)", "not_harmless")],
+    G("符號 bit0 必須為 1（漏 .thumb_func → 呼叫即 INVSTATE fault）",
+      "符號 bit0 會是 0，一呼叫就 INVSTATE fault；用 nm 看位址是否奇數。"))
+ask("ref-m33-fault-escalate", T, F, "Cortex-M33 8/8",
+    "SDK 未開 MemManage/BusFault/UsageFault → 升級成 HardFault；讀 m33_hw->cfsr",
+    "用 pico-sdk 時，BusFault 或 UsageFault 會進它們自己的 handler 嗎？要看哪個暫存器分辨原因？",
+    "（無）",
+    [ca(["HardFault"], "hardfault"), ca(["cfsr", "CFSR"], "cfsr"), EV,
+     nrx("答案[：:]\\s*(會|是)[，,。 ]", "not_own_handler")],
+    G("SDK 未開 MemManage/BusFault/UsageFault → 都升級成 HardFault；讀 `m33_hw->cfsr` 分辨",
+      "不會，SDK 沒開這些 fault，全部升級成 HardFault；讀 m33_hw->cfsr 分辨原因。",
+      "出事 PC 在例外堆疊框 [sp+24]"))
+absent("ref-m33-absent-mpu", T, F, "Cortex-M33 2/8",
+       "立即值/條件碼卡沒寫 MPU → 資料中沒有",
+       "RP2350 的 Cortex-M33 MPU 有幾個 region？",
+       "\\d+\\s*(個)?\\s*(MPU\\s*)?region|MPU[^\\n]{0,6}\\d+\\s*個",
+       GA("屏障：DMB 順序、DSB 完成、ISB 清管線", "這張卡沒有寫 MPU。", "查 RP2350 datasheet 或 hardware/structs/m33.h"))
+absent("ref-m33-absent-itm", T, F, "Cortex-M33 6/8",
+       "cycle 計數卡沒寫 ITM/SWO → 資料中沒有",
+       "Cortex-M33 的 ITM / SWO trace 要怎麼開？SWO 的鮑率怎麼設？",
+       "ITM->|TPI->ACPR|TPIU|SWO[^\\n]{0,6}\\d+\\s*(baud|bps|Hz)",
+       GA("替代：SysTick 24 位元向下計數，150 MHz 約 0.11 秒回繞", "這張卡只寫 DWT CYCCNT 與 SysTick，沒有 ITM/SWO。", "查 Arm Cortex-M33 TRM"))
+check("ref-m33-check-type-function", T, F, "Cortex-M33 7/8",
+      "查詢 2/2：.type 用 @function → 違反「.type 用 %function 不是 @function」；.thumb_func 有寫",
+      ["1\t    .syntax unified", "2\t    .cpu    cortex-m33", "3\t    .thumb",
+       "4\t    .section .time_critical.add3, \"ax\"", "5\t    .global  add3", "6\t    .type    add3, @function",
+       "7\t    .thumb_func", "8\t    .p2align 2", "9\tadd3:", "10\t    push    {r4, lr}",
+       "11\t    adds    r0, r0, r1", "12\t    adds    r0, r0, r2", "13\t    pop     {r4, pc}",
+       "14\t    .size    add3, . - add3"],
+      "@function",
+      """參考卡上的規則：
+1. 符號 bit0 必須為 1（漏 .thumb_func → INVSTATE fault）
+2. Arm 註解用 @；.type 用 %function 不是 @function
+3. 用 s16–s31 要 vpush / vpop
+4. 放 SRAM：.time_critical.*
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 7 .thumb_func |
+| 2 | 違反 | 6 .type add3, @function |
+| 3 | 看不到 | 沒用 s16–s31 |
+| 4 | OK | 4 .section .time_critical.add3 |
+最該先修的 1 條：第 6 行改成 .type add3, %function
+""")
+
+# ============================================================ host-mcu-comm.md
+F, T = "host-mcu-comm.md", "host-comm"
+ask("ref-host-1200-baud", T, F, "主機↔MCU 1/8",
+    "主機把 baud 設成 1200 → Pico 進 BOOTSEL（變 USB 隨身碟）",
+    "我的主機程式一開 /dev/ttyACM0，Pico 2 就變成 USB 隨身碟（BOOTSEL）。我的程式可能把 baud 設成多少？",
+    "（無）",
+    [ca(["1200"], "baud_1200"), EV, nrx("答案[：:][^\\n]{0,10}(9600|115200)", "not_other_baud")],
+    G("板子變成 USB 隨身碟：主機把 baud 設成 1200 → 進 BOOTSEL。不要用 1200。",
+      "設成 1200；USB stdio 收到 1200 baud 會重開進 BOOTSEL，改用別的值（例如 115200）。"))
+ask("ref-host-crlf-off", T, F, "主機↔MCU 2/8",
+    "關 CRLF：stdio_set_translate_crlf(&stdio_usb, false) 或 PICO_STDIO_DEFAULT_CRLF=0",
+    "我用 USB stdio 送二進位資料，0x0A 前面都多了 0x0D。在 stdio_init_all() 之後要呼叫什麼關掉？",
+    "（無）",
+    [ca(["stdio_set_translate_crlf", "PICO_STDIO_DEFAULT_CRLF=0"], "crlf_off"), EV,
+     nrx("stdio_usb_set_crlf|stdio_set_crlf\\(|stdio_usb_crlf", "no_invented_api")],
+    G("stdio_set_translate_crlf(&stdio_usb, false); // stdio_init_all 之後；#include \"pico/stdio_usb.h\"",
+      "呼叫 stdio_set_translate_crlf(&stdio_usb, false)，要 #include \"pico/stdio_usb.h\"；或 CMake 加 PICO_STDIO_DEFAULT_CRLF=0。",
+      "編譯時 PICO_STDIO_ENABLE_CRLF_SUPPORT=0 的話呼叫會 panic"))
+ask("ref-host-stty-echo", T, F, "主機↔MCU 3/8",
+    "stty raw 不含 -echo → stty -F /dev/ttyACM0 raw -echo",
+    "Linux 上 stty -F /dev/ttyACM0 raw 已經包含 -echo 了嗎？",
+    "資料被回送給 Pico",
+    [rx("不含|不包含|沒有包含", "raw_no_echo"), ca(["-echo"], "add_echo"), EV,
+     nrx("答案[：:]\\s*(有|包含|是)[，,。 ]", "not_included")],
+    G("一定要 raw：`stty -F /dev/ttyACM0 raw -echo`（raw 不含 -echo）",
+      "不含。要寫 stty -F /dev/ttyACM0 raw -echo。",
+      "用 stty -F /dev/ttyACM0 -a 檢查"))
+ask("ref-host-cobs-example", T, F, "主機↔MCU 4/8",
+    "COBS：11 22 00 33 → 03 11 22 02 33 00",
+    "COBS 編碼 11 22 00 33（4 個 byte）的結果是什麼（含結尾分隔）？",
+    "（無）",
+    [ca(["03 11 22 02 33 00"], "cobs_ok"), EV, nrx("02 11 22 01 33|03 11 22 00 33", "not_wrong")],
+    G("`11 22 00 33` → `03 11 22 02 33 00`", "03 11 22 02 33 00。"))
+ask("ref-host-crc-hqx", T, F, "主機↔MCU 5/8",
+    "Python CRC-16/CCITT-FALSE：binascii.crc_hqx(data, 0xFFFF)",
+    "Python 要算 CRC-16/CCITT-FALSE（poly 0x1021、init 0xFFFF），用標準庫哪個函式？",
+    "（無）",
+    [ca(["crc_hqx"], "crc_hqx"), ca(["0xFFFF"], "init"), EV, nrx("答案[：:][^\\n]{0,10}(zlib|crcmod)", "not_zlib")],
+    G("Python：`binascii.crc_hqx(data, 0xFFFF)`（init 0 則是 CRC-16/XMODEM）。",
+      "用 binascii.crc_hqx(data, 0xFFFF)；init 給 0 會變成 CRC-16/XMODEM。",
+      "先用 \"123456789\" 互驗，check = 0x29B1"))
+ask("ref-host-uart-921600", T, F, "主機↔MCU 6/8",
+    "UART 921600 8N1 → 92,160 B/s",
+    "UART 921600 baud、8N1，理論上每秒最多幾個 byte？",
+    "（無）",
+    [ca(["92160", "92,160", "92 160"], "bps_92160"), EV, nrx("115\\s?,?200\\s*B/s|115,200\\s*bytes", "not_wrong")],
+    G("UART 8N1 = 10 bit/byte：115200 → 11,520 B/s（32 B RX FIFO 2.78 ms 填滿）；921600 → 92,160 B/s。",
+      "每 byte 10 bit，921600 / 10 = 92,160 B/s。"))
+ask("ref-host-ros-timeout0", T, F, "主機↔MCU 7/8",
+    "rclpy 橋接：serial 讀取不可在 callback 阻塞；方案 A timeout=0 + create_timer 輪詢",
+    "rclpy 橋接 node 裡如果在 callback 中用阻塞的 ser.read() 會怎樣？方案 A 的 serial timeout 要設多少？",
+    "（無）",
+    [rx("timeout\\s*=\\s*0(?![.\\d])", "timeout0"), ca(["create_timer"], "timer_poll"), EV,
+     nrx("答案[^\\n]*timeout\\s*=\\s*None", "not_blocking")],
+    G("serial 讀取不可在 callback 中阻塞（會卡住其他 callback）。",
+      "會卡住其他 callback；方案 A 用 serial.Serial(port, 115200, timeout=0)，再用 create_timer(0.002, self.poll) 輪詢 in_waiting。",
+      "要更低延遲用 reader thread + queue.Queue"))
+ask("ref-host-get-until", T, F, "主機↔MCU 8/8",
+    "Pico 端非阻塞讀：stdio_get_until(in, sizeof in, make_timeout_time_us(0))；k<0 不處理",
+    "Pico 端要非阻塞地讀 USB 收到的 bytes，要用哪個呼叫？回傳值小於 0 代表什麼？",
+    "（無）",
+    [ca(["stdio_get_until"], "get_until"), ca(["make_timeout_time_us(0)"], "nonblocking"), EV,
+     nrx("答案[^\\n]*(scanf|fgets)", "not_scanf")],
+    G("Pico 端非阻塞讀：`int k = stdio_get_until(in, sizeof in, make_timeout_time_us(0));`",
+      "用 stdio_get_until(in, sizeof in, make_timeout_time_us(0))；k < 0 表示這次沒有資料，不處理。",
+      "逐 byte 累積到 0x00 為一個 frame"))
+absent("ref-host-absent-exclusive", T, F, "主機↔MCU 3/8",
+       "Linux 端卡沒寫 pySerial exclusive 參數 → 資料中沒有",
+       "pySerial 的 serial.Serial(..., exclusive=True) 有什麼作用？",
+       "flock|TIOCEXCL|lockf",
+       GA("一個 port 只能一個讀者；燒錄後重新列舉 → 重開 port。", "這張卡沒有寫 exclusive 參數。", "查 pySerial 3.5 文件"))
+absent("ref-host-absent-qos", T, F, "主機↔MCU 7/8",
+       "ROS 2 橋接卡沒寫 QoS 該選哪個 → 資料中沒有",
+       "橋接 node 發布感測資料時，QoS 用 BEST_EFFORT 還是 RELIABLE 比較好？",
+       "qos_profile_sensor_data|BEST_EFFORT[^\\n]{0,10}(比較好|較好|建議)|RELIABLE[^\\n]{0,10}(比較好|較好|建議)",
+       GA("self.pub = self.create_publisher(Int16MultiArray, 'pico/samples', 10)", "這張卡只寫 depth 10，沒有比較 QoS。", "查 ros2.md 的 QoS 參考卡或 ROS 2 文件"))
+check("ref-host-check-fwrite-crlf", T, F, "主機↔MCU 2/8",
+      "查詢 2/2：二進位 frame 用 fwrite 寫 stdout（CRLF 會轉）→ 違反；等 DTR 正確不亂報",
+      ["10\tstdio_init_all();", "11\twhile (!stdio_usb_connected()) sleep_ms(10);", "12\tfor (;;) {",
+       "13\t    size_t n = build_frame(txbuf, seq++, pl, 32);", "14\t    fwrite(txbuf, 1, n, stdout);",
+       "15\t    fflush(stdout);", "16\t}"],
+      "fwrite",
+      """參考卡上的規則：
+1. stdio_usb_connected() 看 DTR；未連線時輸出直接丟
+2. 不要在 IRQ 中 printf；stdio_init_all() 在 core 0 呼叫
+3. 預設輸出把 \\n 變 \\r\\n，毀二進位；printf / putchar / puts / fwrite 都會轉
+4. stdio_get_until：有 ≥1 byte 就回傳數量
+| # | 結果 OK / 違反 / 看不到 | 程式那一行（帶行號） |
+|---|---|---|
+| 1 | OK | 11 while (!stdio_usb_connected()) sleep_ms(10); |
+| 2 | OK | 10 stdio_init_all(); |
+| 3 | 違反 | 14 fwrite(txbuf, 1, n, stdout); 沒關 CRLF |
+| 4 | 看不到 | 沒有讀取 |
+最該先修的 1 條：stdio_init_all() 之後加 stdio_set_translate_crlf(&stdio_usb, false)，或改用 stdio_put_string(..., false, false)
+""")
+
+
+# ============================================================ emit
+def emit_checks(lines, checks):
+    lines.append("  checks:")
+    for c in checks:
+        parts = ", ".join(f"{k}: {Q(v) if isinstance(v, str) else json.dumps(v, ensure_ascii=False)}" for k, v in c.items())
+        lines.append(f"    - {{{parts}}}")
+
+
+def block(lines, key, text, indent=2):
+    pad = " " * indent
+    lines.append(f"{pad}{key}: |")
+    for ln in text.rstrip("\n").split("\n"):
+        lines.append(f"{pad}  {ln}" if ln else "")
+
+
+out = [HEADER]
+cur = None
+for c in cases:
+    if c["topic"] != cur:
+        cur = c["topic"]
+        out.append(f"\n# ============================================================ {c['file']}\n")
+    L = [f"- id: {c['id']}", f"  tags: [ref, hw, {c['topic']}" + "".join(", " + t for t in c["tags"]) + "]",
+         f"  desc: {Q(c['desc'])}", "  turns:", f"    - card: {{file: {Q(c['file'])}, title: {Q(c['title'])}}}",
+         "      assistant: \"收到\""]
+    if c["kind"] == "ask":
+        L += ["  card: {file: \"11-ask-reference.md\", title: \"查詢 1/2\"}", "  fills:",
+              f"    - {{match: \"問題\", value: {Q(c['q'])}}}", f"    - {{match: \"我的情境\", value: {Q(c['ctx'])}}}"]
+    else:
+        L += ["  card: {file: \"11-ask-reference.md\", title: \"查詢 2/2\"}", "  fills:",
+              "    - match: \"我的程式\"", "      value: |2"]
+        for ln in c["code"]:
+            L.append("        " + ln)
+    emit_checks(L, c["checks"])
+    block(L, "golden", c["golden"])
+    out.append("\n".join(L) + "\n")
+open(OUT, "w", encoding="utf-8").write("\n".join(out))
+print(len(cases), "cases;", sum(c["kind"] == "check" for c in cases), "check-code;",
+      sum("absent" in c["tags"] for c in cases), "absent")

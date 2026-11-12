@@ -1,0 +1,868 @@
+# 驗證與提交卡（cards/13-verify-submit.md）：歧義、邊界測資、對拍、量測 1（該移出的行）、量測 2（暖身重複統計）、micro-ROS、解釋程式、push 前檢查、CI log、git 救援
+# 標準答案的指令都實跑過：對拍腳本（bash 5.2 / Python 3.12，含浮點誤差版）、git（2.43，暫存 repo：restore --staged、
+# revert --no-edit、pull --rebase、rebase --continue、bisect run）、exit code 124/134/137/139、gcc 13 的 error / warning 原文。
+
+# ---------------------------------------------------------------- 驗證 1：題目歧義
+- id: ver-amb-unit
+  tags: [verify, ambiguity, grounding]
+  desc: 「最多接收 4096 的資料」沒單位 → 第 1 列兩種讀法；空輸入題目沒提（不能自己補）；可改檔案照抄
+  card: {file: "13-verify-submit.md", title: "驗證 1/7"}
+  fills:
+    - value: |
+        第 2 題：Pico 端每次最多接收 4096 的資料。請把 host 送來的資料分批傳給 Pico，在 Pico 上計算 CRC32 後回傳給 host。
+        結果以十六進位輸出，每行一個。
+        效能以完成全部資料的時間計分，時間越短分數越高。
+        只能修改 host/bridge.py 與 pico/main.c。
+  checks:
+    - {type: table_rows, min: 9, max: 11}
+    - {type: table_cell, key: '^1(?!\d)', col: 1, regex: '4096'}
+    # 卡片第 3 欄是「清楚？」→ 解讀 A / B 在第 3 / 4 欄（0 起算）；單位這列一定不清楚
+    - {type: table_cell, key: '^1(?!\d)', col: 2, regex: '否', name: unit_not_clear}
+    - {type: table_cell, key: '^1(?!\d)', col: 3, regex: 'byte|筆|位元組|個', name: unit_reading_a}
+    - {type: table_cell, key: '^1(?!\d)', col: 4, regex: 'byte|筆|位元組|個', name: unit_reading_b}
+    # 原文欄空白、把「題目沒提」寫在別格也可以（沒有自己補原文就好）
+    - {type: table_cell, key: '^5(?!\d)', col: 1, regex: '^\W*$|沒提|沒有|未提', name: row5_no_invented_quote}
+    - {type: regex, pattern: '^\|\s*5(?!\d)[^\n]*(沒提|沒有提|未提|沒寫|未明確|沒有指定)', name: row5_not_mentioned}
+    - {type: table_cell, key: '^7(?!\d)', col: 1, regex: 'bridge\.py|main\.c'}
+    - {type: regex, pattern: '問助教\s*[:：]\s*\S', name: has_question}
+  golden: |
+    | 項目 | 原文 | 清楚？ | 解讀 A | 解讀 B | 確認方法 |
+    | 1 單位（bytes / 筆數 / bit） | 「每次最多接收 4096 的資料」 | 否 | 4096 bytes | 4096 筆（每筆 4 bytes） | 問助教：4096 是 bytes 還是筆數？ |
+    | 2 上限、下限含不含 | 「最多接收 4096」 | 否 | 剛好 4096 可以 | 要小於 4096 | 送剛好 4096 bytes 測試 |
+    | 3 大小端、位元順序 | 題目沒提 | 否 | CRC 用 little-endian 回傳 | big-endian | 問助教：CRC 回傳的位元組順序？ |
+    | 4 輸出格式（換行、大小寫、hex） | 「結果以十六進位輸出，每行一個」 | 否 | 小寫、補滿 8 位 | 大寫、不補 0、有 0x | 問助教：要不要補 0、大小寫？ |
+    | 5 空輸入或錯誤輸入 | 題目沒提 | 否 | 輸出 00000000 | 不輸出 | 問助教：0 bytes 要輸出什麼？ |
+    | 6 計時的起點和終點 | 「完成全部資料的時間」 | 否 | 含傳輸 | 只算 Pico 計算 | 問助教：從什麼時候開始計時？ |
+    | 7 可以改哪些檔案 | 「只能修改 host/bridge.py 與 pico/main.c」 | 是 | 只有這 2 個檔 | 無 | 無 |
+    | 8 輸出順序（遞增或遞減、先後） | 「結果以十六進位輸出，每行一個」 | 否 | 照送來的批次順序 | 無 | 問助教：一批一行，照送的順序嗎？ |
+    | 9 其他 | 題目沒提 | 是 | 無 | 無 | 無 |
+    問助教：「每次最多接收 4096 的資料」的 4096 是 bytes 還是筆數？計時從什麼時候開始？
+
+- id: ver-amb-sort
+  tags: [verify, ambiguity, grounding, hard]
+  desc: 排序方向沒寫（遞增/遞減）→ 要列出；計時範圍題目寫清楚了 → 第 6 列解讀 B「無」；可改檔案題目沒提
+  card: {file: "13-verify-submit.md", title: "驗證 1/7"}
+  fills:
+    - value: |
+        Q3：ROS 2 節點 /sorter 訂閱 /input（std_msgs/Int32MultiArray），把陣列排序後發佈到 /output。
+        陣列長度介於 1 到 1000。
+        評分：judge 送出 20 組資料，從送出第一組開始計時，到收到最後一組結果為止。
+        排序結果需與 expected 完全相同。
+  checks:
+    - {type: table_rows, min: 9, max: 11}
+    - {type: table_cell, key: '^2(?!\d)', col: 1, regex: '1000'}
+    # 題目寫明「從送出第一組到收到最後一組」→ 含傳輸。解讀 B 寫「無」最好；問「含不含節點初始化」也合理；
+    # 但把傳輸排除（不含傳輸 / 只算排序、運算）是讀錯原文
+    - {type: not_regex, pattern: '^\|\s*6(?!\d)[^|\n]*\|[^\n]*((不含|不包含|不包括)[^|\n]{0,6}傳輸|(只|僅)(包含|包括|計算|算)?[^|\n傳]{0,12}(運算|排序|節點處理|處理資料))', name: row6_keeps_transfer}
+    - {type: table_cell, key: '^7(?!\d)', col: 1, regex: '^\W*$|沒提|沒有|未提', name: row7_no_invented_quote}
+    - {type: regex, pattern: '^\|\s*7(?!\d)[^\n]*(沒提|沒有提|未提|沒寫|未明確|沒有指定|未指定)', name: row7_not_mentioned}
+    # 排序方向要寫在解讀 / 確認方法欄或問助教那行（第 8 列標籤本身有「遞增或遞減」，只照抄標籤不算）
+    - {type: regex, pattern: '^\|[^|\n]*\|[^\n]*(遞增|遞減|升序|降序|由小到大|由大到小)|問助教[^\n]*(遞增|遞減|升序|降序|由小到大|由大到小)', name: sort_direction}
+  golden: |
+    | 項目 | 原文 | 清楚？ | 解讀 A | 解讀 B | 確認方法 |
+    | 1 單位（bytes / 筆數 / bit） | 「陣列長度介於 1 到 1000」 | 是 | 1000 個 int32 | 無 | 無 |
+    | 2 上限、下限含不含 | 「陣列長度介於 1 到 1000」 | 否 | 含 1000 | 不含 1000 | 送長度 1000 的陣列測試 |
+    | 3 大小端、位元順序 | 題目沒提 | 是 | 無 | 無 | 無 |
+    | 4 輸出格式（換行、大小寫、hex） | 「把陣列排序後發佈到 /output」 | 是 | Int32MultiArray | 無 | 無 |
+    | 5 空輸入或錯誤輸入 | 題目沒提 | 否 | 無 | 無 | 無 |
+    | 6 計時的起點和終點 | 「從送出第一組開始計時，到收到最後一組結果為止」 | 是 | 含傳輸 | 無 | 無 |
+    | 7 可以改哪些檔案 | 題目沒提 | 否 | 只改 /sorter 節點 | 也能改 launch 檔 | 問助教：可以改哪些檔案？ |
+    | 8 輸出順序（遞增或遞減、先後） | 「把陣列排序後發佈到 /output」 | 否 | 遞增（由小到大） | 遞減（由大到小） | 問助教：排序是遞增還是遞減？ |
+    | 9 其他 | 「排序結果需與 expected 完全相同」 | 是 | 無 | 無 | 看 expected 檔是遞增還是遞減 |
+    問助教：/output 要遞增還是遞減排序？長度 1000 包含在內嗎？
+
+# ---------------------------------------------------------------- 驗證 2：邊界測資
+- id: ver-edge-chunk
+  tags: [verify, edge, hard]
+  desc: CHUNK 4096 → 剛好 4096、跨界 4097、最大 65536；空檔題目寫了 00000000；其他預期輸出不能自己算 CRC → 跑 naive
+  card: {file: "13-verify-submit.md", title: "驗證 2/7"}
+  fills:
+    - {match: "輸入格式", value: "一個二進位檔，長度 0～65536 bytes。空檔案請輸出 00000000。"}
+    - {match: "上限常數", value: "#define CHUNK 4096   // 每次送給 Pico 的 bytes"}
+    - {match: "輸出", value: "印出整個檔案的 CRC32（8 位小寫 hex，zlib.crc32 同一種）"}
+  checks:
+    - {type: table_rows, min: 10, max: 12}
+    # 長度寫在「具體輸入」或「產生指令」都可以（指令 head -c 4096 本身就是具體輸入）
+    - {type: regex, pattern: '^\|\s*3(?!\d)[^\n]*4096', name: row3_4096}
+    - {type: regex, pattern: '^\|\s*4(?!\d)[^\n]*4097', name: row4_4097}
+    - {type: regex, pattern: '^\|\s*5(?!\d)[^\n]*65536', name: row5_65536}
+    - {type: table_cell, key: '^1(?!\d)', col: 3, regex: '00000000'}
+    - {type: table_cell, key: '^7(?!\d)', col: 3, regex: 'naive'}
+    - {type: regex, pattern: 'head -c 4097', name: cmd_4097}
+  golden: |
+    範圍（照抄題目）：最小＝0 bytes　最大＝65536 bytes
+    | 類別 | 具體輸入 | 產生指令（1 行） | 預期輸出 |
+    | 1 空（0 筆 / 0 bytes） | 0 bytes 的檔 | `: > t1.bin` | 00000000 |
+    | 2 1 筆 | 1 byte 0x41 | `printf 'A' > t2.bin` | 跑 naive |
+    | 3 剛好上限 | 4096 bytes 隨機 | `head -c 4096 /dev/urandom > t3.bin` | 跑 naive |
+    | 4 上限 + 1（跨界） | 4097 bytes 隨機 | `head -c 4097 /dev/urandom > t4.bin` | 跑 naive |
+    | 5 最大長度 | 65536 bytes 隨機 | `head -c 65536 /dev/urandom > t5.bin` | 跑 naive |
+    | 6 負數 / 最小值 | 不適用（bytes 沒有負數） | 不適用 | 不適用 |
+    | 7 全 0 | 4096 bytes 0x00 | `head -c 4096 /dev/zero > t7.bin` | 跑 naive |
+    | 8 全 0xFF / 最大值 | 4096 bytes 0xFF | `head -c 4096 /dev/zero \| tr '\0' '\377' > t8.bin` | 跑 naive |
+    | 9 長度不是 4 的倍數 | 4095 bytes | `head -c 4095 /dev/urandom > t9.bin` | 跑 naive |
+    | 10 重複值 / 已排序 / 反序 | 8192 bytes 全 0x55（剛好 2 塊） | `head -c 8192 /dev/zero \| tr '\0' 'U' > t10.bin` | 跑 naive |
+
+- id: ver-edge-ints
+  tags: [verify, edge]
+  desc: n 範圍 1～100000 → 0 筆與 100001 筆都不適用；負數要有 int32 最小值；剛好上限 100000
+  card: {file: "13-verify-submit.md", title: "驗證 2/7"}
+  fills:
+    - {match: "輸入格式", value: "第一行 n（1 ≤ n ≤ 100000），第二行 n 個 int32 整數，用空白隔開"}
+    - {match: "上限常數", value: "#define MAXN 100000"}
+    - {match: "輸出", value: "由小到大排序後，一行一個"}
+  checks:
+    - {type: table_rows, min: 10, max: 12}
+    # n ≥ 1 → 0 筆不適用；整列留白也算（沒有產生不合法的測資）。寫 `: > t.bin` / 跑 naive 是錯的
+    - {type: regex, pattern: '^\|\s*1(?!\d)[^\n]*(不適用|不允許|n\s*(≥|>=)\s*1)|^\|\s*1(?!\d)[^|\n]*(\|\s*)+$', name: empty_not_allowed}
+    - {type: table_cell, key: '^3(?!\d)', col: 1, regex: '100000'}
+    - {type: regex, pattern: '^\|\s*6(?!\d)[^\n]*(-2147483648|-2\^31|−2147483648)', name: int32_min}
+    - {type: regex, pattern: '^\|\s*8(?!\d)[^\n]*2147483647', name: int32_max}
+  golden: |
+    範圍（照抄題目）：最小＝n=1　最大＝n=100000（int32 -2147483648～2147483647）
+    | 類別 | 具體輸入 | 產生指令（1 行） | 預期輸出 |
+    | 1 空（0 筆 / 0 bytes） | 不適用（n ≥ 1） | 不適用 | 不適用 |
+    | 2 1 筆 | n=1，數字 7 | `printf '1\n7\n' > t2.txt` | 7 |
+    | 3 剛好上限 | n=100000 隨機 | `python3 -c "import random;n=100000;print(n);print(*[random.randint(-2**31,2**31-1) for _ in range(n)])" > t3.txt` | 跑 naive |
+    | 4 上限 + 1（跨界） | n=100001，題目不允許 → 不適用 | 不適用 | 不適用 |
+    | 5 最大長度 | 同第 3 列 n=100000 | 同第 3 列 | 跑 naive |
+    | 6 負數 / 最小值 | n=3：-2147483648 0 -1 | `printf '3\n-2147483648 0 -1\n' > t6.txt` | 跑 naive |
+    | 7 全 0 | n=5 全 0 | `printf '5\n0 0 0 0 0\n' > t7.txt` | 跑 naive |
+    | 8 全 0xFF / 最大值 | n=2：2147483647 2147483647 | `printf '2\n2147483647 2147483647\n' > t8.txt` | 跑 naive |
+    | 9 長度不是 4 的倍數 | n=3 | `printf '3\n3 1 2\n' > t9.txt` | 跑 naive |
+    | 10 重複值 / 已排序 / 反序 | n=6：6 5 4 3 2 1 | `printf '6\n6 5 4 3 2 1\n' > t10.txt` | 跑 naive |
+
+# ---------------------------------------------------------------- 驗證 3：對拍
+- id: ver-pair-sort
+  tags: [verify, harness]
+  desc: 完全相同 → A diff；骨架照抄、①②③ 換成題目的程式與 naive、用 $i 當 seed；腳本 ≤ 20 行（golden 腳本實跑 ALL PASS）
+  card: {file: "13-verify-submit.md", title: "驗證 3/7"}
+  fills:
+    - {match: "輸入格式", value: "第一行 n（1 ≤ n ≤ 50），第二行 n 個整數（-100～100）"}
+    - {match: "我的程式", value: "./build/q1"}
+    - {match: "正確答案", value: "python3 naive.py（慢但對，讀同樣的輸入，輸出排序結果）"}
+    - {match: "怎麼算對", value: "輸出由小到大排序後的數，一行一個，需與 expected 完全相同"}
+  checks:
+    # 比對方式看腳本裡的 ④（學生真正會跑的是腳本）；「比對：」欄常被省略，不單獨扣分。
+    # B（-Z --strip-trailing-cr）在「完全相同」題會放過格式錯 → 不算對
+    - {type: regex, pattern: '!\s*diff -q out\.txt ans\.txt', name: compare_A_exact}
+    - {type: regex, pattern: 'seq 1 \d+', name: keeps_loop}
+    - {type: regex, pattern: '\./build/q1\s*<\s*in\.txt\s*>\s*out\.txt', name: runs_prog}
+    - {type: regex, pattern: 'naive\.py\s*<\s*in\.txt\s*>\s*ans\.txt', name: runs_naive}
+    # ① 要產生隨機的 n + n 個數（`echo $i > in.txt` 不是合法輸入）
+    - {type: regex, pattern: '(random|randint|RANDOM|shuf)[^\n]*>\s*in\.txt', name: gen_random}
+    - {type: not_regex, pattern: '^\s*(if\s*!\s*)?[①②③④]\s*(python3|\./|cat|diff|cmp|echo)', name: no_slot_markers}
+    - {type: max_code_block_lines, max: 20}
+  golden: |
+    依據：「需與 expected 完全相同」
+    完整腳本（存成 check.sh，用 bash check.sh 跑）：
+    ```bash
+    # 比對：A 完全相同
+    for i in $(seq 1 200); do
+      python3 -c "import random as r;r.seed($i);n=r.randint(1,50);print(n);print(*[r.randint(-100,100) for _ in range(n)])" > in.txt
+      ./build/q1 < in.txt > out.txt
+      python3 naive.py < in.txt > ans.txt
+      if ! diff -q out.txt ans.txt >/dev/null; then echo "FAIL i=$i"; cp in.txt fail_in.txt; exit 1; fi
+    done; echo "ALL PASS"
+    ```
+
+- id: ver-pair-float
+  tags: [verify, harness, hard]
+  desc: 誤差 ≤ 1e-6 → D 浮點誤差（實測：%.9f 和 repr 的輸出 diff 會不同、容許誤差版 ALL PASS）；不能用 A diff
+  card: {file: "13-verify-submit.md", title: "驗證 3/7"}
+  fills:
+    - {match: "輸入格式", value: "第一行 n（1 ≤ n ≤ 100），第二行 n 個小數（-50～50）"}
+    - {match: "我的程式", value: "python3 avg.py"}
+    - {match: "正確答案", value: "python3 avg_naive.py（用 statistics.fmean，印出平均值）"}
+    - {match: "怎麼算對", value: "輸出平均值，與 expected 的誤差 ≤ 1e-6 即算正確（小數位數不限）"}
+  checks:
+    # 比對方式看腳本裡的 ④（D 的容許誤差指令）；「比對：」欄常被省略，不單獨扣分
+    - {type: regex, pattern: 'abs\(float', name: tolerance_compare}
+    - {type: regex, pattern: 'avg\.py\s*<\s*in\.txt\s*>\s*out\.txt', name: runs_prog}
+    - {type: regex, pattern: 'avg_naive\.py\s*<\s*in\.txt\s*>\s*ans\.txt', name: runs_naive}
+    - {type: regex, pattern: '(random|uniform|RANDOM|shuf)[^\n]*>\s*in\.txt', name: gen_random}
+    - {type: not_regex, pattern: '^\s*(if\s*!\s*)?[①②③④]\s*(python3|\./|cat|diff|cmp|echo)', name: no_slot_markers}
+    - {type: max_code_block_lines, max: 20}
+  golden: |
+    依據：「與 expected 的誤差 ≤ 1e-6 即算正確」
+    完整腳本（存成 check.sh，用 bash check.sh 跑）：
+    ```bash
+    # 比對：D 浮點誤差
+    for i in $(seq 1 200); do
+      python3 -c "import random as r;r.seed($i);n=r.randint(1,100);print(n);print(*[round(r.uniform(-50,50),3) for _ in range(n)])" > in.txt
+      python3 avg.py < in.txt > out.txt
+      python3 avg_naive.py < in.txt > ans.txt
+      if ! python3 -c "import sys;a,b=(open(f).read().split() for f in('out.txt','ans.txt'));sys.exit(len(a)!=len(b) or any(abs(float(x)-float(y))>1e-6 for x,y in zip(a,b)))"; then echo "FAIL i=$i"; cp in.txt fail_in.txt; exit 1; fi
+    done; echo "ALL PASS"
+    ```
+
+# ---------------------------------------------------------------- 驗證 4：量測 1（計時區段裡該移出的行）
+# grep 輸出是在同樣行號的檔案上實跑（卡片上的兩個 grep 指令原樣）
+- id: ver-meas-printf
+  tags: [verify, measure, hard]
+  desc: 計時 43～48；可疑行 42 fill_random（區段外）、46 printf（區段內 → 移出）、49 printf（區段外）→ 只移出 46
+  card: {file: "13-verify-submit.md", title: "驗證 4/7"}
+  fills:
+    - match: "計時的行"
+      value: |-
+        43:    uint64_t t0 = time_us_64();
+        48:    uint64_t t1 = time_us_64();
+    - match: "可疑的行"
+      value: |-
+        42:    fill_random(src, N);
+        46:        printf("i=%d v=%lu\n", i, (unsigned long)dst[i]);
+        49:    printf("CPU: %llu us\n", (unsigned long long)(t1 - t0));
+  checks:
+    - {type: answer_field, field: '開始行\**', regex: '^\D{0,6}43(?!\d)'}
+    - {type: answer_field, field: '結束行\**', regex: '^\D{0,6}48(?!\d)'}
+    - {type: regex, pattern: '^\|\s*\**46(?!\d)[^\n]*\|\s*\**是\**\s*\|[^\n]*移出', name: row46_inside_moved}
+    - {type: regex, pattern: '^\|\s*\**42(?!\d)[^\n]*\|\s*\**否\**\s*\|', name: row42_outside}
+    - {type: regex, pattern: '^\|\s*\**49(?!\d)[^\n]*\|\s*\**否\**\s*\|', name: row49_outside}
+    - {type: answer_field, field: '要移出的行號', regex: '^(?!.*(42|49)).*46', name: moved_only_46}
+  golden: |
+    開始行：43
+    結束行：48
+    | 行號 | 內容（照抄） | 之間？ | 處理 |
+    | 42 | fill_random(src, N); | 否 | 不用動 |
+    | 46 | printf("i=%d v=%lu\n", i, (unsigned long)dst[i]); | 是 | 移出 |
+    | 49 | printf("CPU: %llu us\n", (unsigned long long)(t1 - t0)); | 否 | 不用動 |
+    要移出的行號：46
+
+- id: ver-meas-python
+  tags: [verify, measure]
+  desc: 計時 14～17；可疑行 10 import random（區段外）、15 產生測資（區段內 → 移出）、18 print（區段外）→ 只移出 15
+  card: {file: "13-verify-submit.md", title: "驗證 4/7"}
+  fills:
+    - match: "計時的行"
+      value: |-
+        14:    t0 = time.perf_counter()
+        17:    t1 = time.perf_counter()
+    - match: "可疑的行"
+      value: |-
+        10:import random, time
+        15:    data = bytes(random.getrandbits(8) for _ in range(1_000_000))
+        18:    print(f"crc={c:08x} time={(t1 - t0) * 1000:.1f} ms")
+  checks:
+    - {type: answer_field, field: '開始行\**', regex: '^\D{0,6}14(?!\d)'}
+    - {type: answer_field, field: '結束行\**', regex: '^\D{0,6}17(?!\d)'}
+    - {type: regex, pattern: '^\|\s*\**15(?!\d)[^\n]*\|\s*\**是\**\s*\|[^\n]*移出', name: row15_inside_moved}
+    - {type: regex, pattern: '^\|\s*\**10(?!\d)[^\n]*\|\s*\**否\**\s*\|', name: row10_outside}
+    - {type: regex, pattern: '^\|\s*\**18(?!\d)[^\n]*\|\s*\**否\**\s*\|', name: row18_outside}
+    - {type: answer_field, field: '要移出的行號', regex: '^(?!.*(10|18)).*15', name: moved_only_15}
+  golden: |
+    開始行：14
+    結束行：17
+    | 行號 | 內容（照抄） | 之間？ | 處理 |
+    | 10 | import random, time | 否 | 不用動 |
+    | 15 | data = bytes(random.getrandbits(8) for _ in range(1_000_000)) | 是 | 移出 |
+    | 18 | print(f"crc={c:08x} time={(t1 - t0) * 1000:.1f} ms") | 否 | 不用動 |
+    要移出的行號：15
+
+# ---------------------------------------------------------------- 驗證 5：量測 2（暖身、重複、統計）
+- id: ver-meas-plan-pico
+  tags: [verify, measure, hard]
+  desc: 同 ver-meas-printf 的程式：沒暖身、沒重複、沒統計 → NG；第 49 行只印時間，沒印計算結果 → 第 4 列 NG；計時選 A time_us_64
+  card: {file: "13-verify-submit.md", title: "驗證 5/7"}
+  fills:
+    - {match: "平台", value: "Pico 2 C"}
+    - {match: "要比較", value: "CPU 迴圈 vs DMA 複製 4096 個 u32"}
+    - {match: "計時區段", value: "第 43～47 行"}
+    - match: "程式碼"
+      value:
+        number_lines: 40
+        text: |-
+          int main(void) {
+              stdio_init_all();
+              fill_random(src, N);
+              uint64_t t0 = time_us_64();
+              for (int i = 0; i < N; i++) {
+                  dst[i] = src[i];
+              }
+              uint64_t t1 = time_us_64();
+              printf("CPU: %llu us\n", (unsigned long long)(t1 - t0));
+              copy_with_dma(dst, src, N);
+  checks:
+    # 計時欄寫對函式就好（照抄字母不是重點）；選到別的平台的計時函式算錯
+    - {type: answer_field, field: '計時', regex: 'time_us_64', name: timer_pico}
+    - {type: not_regex, pattern: '計時[^\n|]*[:：][^\n]*(clock_gettime|perf_counter)', name: timer_not_other}
+    - {type: table_cell, key: '^1(?!\d)', col: 2, regex: 'NG', name: row1_warmup_ng}
+    - {type: table_cell, key: '^2(?!\d)', col: 2, regex: 'NG', name: row2_repeat_ng}
+    - {type: table_cell, key: '^4(?!\d)', col: 2, regex: 'NG', name: row4_result_ng}
+  golden: |
+    計時：A Pico `time_us_64()`（pico/timing.h）
+    | 項目 | 證據（行號 + 照抄） | OK/NG |
+    | 1 暖身：開始行之前先跑 1 次同樣的計算 | 沒有 | NG |
+    | 2 重複：計時外面有 for / while 重跑 ≥ 5 次 | 沒有 | NG |
+    | 3 統計：取中位數（BENCH 取最小值也可） | 沒有 | NG |
+    | 4 結果有用到：結束行之後印出計算結果（只印時間不算，不然 -O2 會刪掉計算） | 48 printf("CPU: %llu us\n", …) 只印時間 | NG |
+    | 5 同輸入：新舊版用同一份資料、同大小 | 49 copy_with_dma(dst, src, N); 同一份 src | OK |
+    修改建議：1. 第 43 行前先跑 1 次複製當暖身　2. 43–47 行包成 for 跑 5 次，時間存陣列取中位數　3. 第 48 行後印 dst 的 checksum
+
+- id: ver-meas-plan-python
+  tags: [verify, measure]
+  desc: 結果 c 在第 18 行印出 → 第 4 列 OK；沒暖身、沒重複 → NG；計時選 C perf_counter
+  card: {file: "13-verify-submit.md", title: "驗證 5/7"}
+  fills:
+    - {match: "平台", value: "Python"}
+    - {match: "要比較", value: "純 Python crc32_py vs zlib.crc32"}
+    - {match: "計時區段", value: "第 15～17 行（產生測資已經移到第 14 行，計時外面）"}
+    - match: "程式碼"
+      value:
+        number_lines: 10
+        text: |-
+          import random, time
+          from crc import crc32_py
+
+          def main():
+              data = bytes(random.getrandbits(8) for _ in range(1_000_000))
+              t0 = time.perf_counter()
+              c = crc32_py(data)
+              t1 = time.perf_counter()
+              print(f"crc={c:08x} time={(t1 - t0) * 1000:.1f} ms")
+  checks:
+    - {type: answer_field, field: '計時', regex: 'perf_counter', name: timer_python}
+    - {type: not_regex, pattern: '計時[^\n|]*[:：][^\n]*(clock_gettime|time_us_64)', name: timer_not_other}
+    - {type: table_cell, key: '^1(?!\d)', col: 2, regex: 'NG', name: row1_warmup_ng}
+    - {type: table_cell, key: '^2(?!\d)', col: 2, regex: 'NG', name: row2_repeat_ng}
+    - {type: table_cell, key: '^4(?!\d)', col: 2, regex: 'OK', name: row4_result_ok}
+  golden: |
+    計時：C Python `time.perf_counter()`
+    | 項目 | 證據（行號 + 照抄） | OK/NG |
+    | 1 暖身：開始行之前先跑 1 次同樣的計算 | 沒有 | NG |
+    | 2 重複：計時外面有 for / while 重跑 ≥ 5 次 | 沒有 | NG |
+    | 3 統計：取中位數（BENCH 取最小值也可） | 沒有 | NG |
+    | 4 結果有用到：結束行之後印出計算結果（只印時間不算，不然 -O2 會刪掉計算） | 18 print(f"crc={c:08x} …") 有印 c | OK |
+    | 5 同輸入：新舊版用同一份資料、同大小 | 沒有 zlib.crc32 那段 | NG |
+    修改建議：1. 第 15 行前先跑 1 次 crc32_py(data) 暖身　2. 15–17 行包成 for 跑 5 次，用 statistics.median 取中位數　3. zlib.crc32 用同一份 data 量
+
+# ---------------------------------------------------------------- 驗證 6：micro-ROS
+- id: ver-uros-size0
+  tags: [verify, microros, choice, hard]
+  desc: callback 有被呼叫但 data.size = 0 → C capacity 沒配（__init 後 capacity=0）；300 個 int32 ≈ 1216 B < reliable 2036 B，不是 B MTU
+  card: {file: "13-verify-submit.md", title: "驗證 6/7"}
+  fills:
+    - {match: "症狀", value: "host 用 reliable 發 Int32MultiArray（300 個 int32）到 /pico0/input，Pico 的 on_input 有被呼叫（LED 有閃），但 msg->data.size 一直是 0"}
+    - match: "agent 最後"
+      value: |
+        [1731400000.523456] info     | ProxyClient.cpp    | create_topic             | topic created          | client_key: 0x2A3B4C5D, topic_id: 0x000(2), participant_id: 0x000(1)
+        [1731400000.623456] info     | ProxyClient.cpp    | create_subscriber        | subscriber created     | client_key: 0x2A3B4C5D, subscriber_id: 0x000(4), participant_id: 0x000(1)
+        [1731400000.723456] info     | ProxyClient.cpp    | create_datareader        | datareader created     | client_key: 0x2A3B4C5D, datareader_id: 0x000(6), subscriber_id: 0x000(4)
+    - match: "by-id"
+      value: |
+        total 0
+        lrwxrwxrwx 1 root root 13 Nov 12 09:58 usb-Raspberry_Pi_Pico_E6614103E7-if00 -> ../../ttyACM0
+        /parameter_events
+        /pico0/input
+        /rosout
+        Type: std_msgs/msg/Int32MultiArray
+        Publisher count: 1
+        Subscription count: 1
+    - match: "Pico 程式"
+      value:
+        number_lines: 55
+        text: |-
+          static std_msgs__msg__Int32MultiArray in_msg;
+          static void on_input(const void *m) {
+              const std_msgs__msg__Int32MultiArray *msg = m;
+              gpio_put(LED, 1);
+              if (msg->data.size == 0) return;
+              compute(msg->data.data, msg->data.size);
+          }
+          ...
+              std_msgs__msg__Int32MultiArray__init(&in_msg);
+              rclc_subscription_init_default(&sub, &node,
+                  ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray), "/pico0/input");
+              rclc_executor_add_subscription(&exec, &sub, &in_msg, &on_input, ON_NEW_DATA);
+  checks:
+    # 原因欄：字母寫在冒號後、寫在「原因（C）」括號裡、或只抄選項文字都算（choice 檢查會把「（C）」當成照抄的說明吃掉）
+    - {type: regex, pattern: '原因\s*[:：（(]\s*\**\s*C(?![A-Za-z])|原因[^\n]*沒配 capacity', name: cause_C_capacity}
+    - {type: contains_any, items: ["capacity"], name: fix_capacity}
+    # 證據沒加「」（裸抄一行、用反引號）也算有寫；有加引號的內容一定要在資料裡
+    - {type: evidence_grounded, min_quotes: 0}
+    - {type: answer_field, field: '證據', regex: '\S{4,}', name: evidence_written}
+    # 6 個欄位；標籤和值分兩行寫也可以（≤ 13 行）
+    - {type: max_lines, max: 13}
+  golden: |
+    證據：「std_msgs__msg__Int32MultiArray__init(&in_msg);」
+    關鍵字：callback 有被呼叫但 data.size = 0
+    原因：C sequence 沒配 capacity（callback 有被呼叫但 data.size = 0）
+    真實值：300（症狀：300 個 int32）
+    修法：收之前設 in_msg.data.data=buf; in_msg.data.capacity=300; in_msg.data.size=0（buf 是 static int32_t buf[300]）
+    確認指令：ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [1, 2, 3]}"，LED 顯示 size 不是 0
+
+- id: ver-uros-port
+  tags: [verify, microros, choice]
+  desc: agent 開在 ttyACM0（Debug Probe），Pico 在 ttyACM1 → A 連錯 port；topic list 沒有板子的 topic 不是 H 打錯名字
+  card: {file: "13-verify-submit.md", title: "驗證 6/7"}
+  fills:
+    - {match: "症狀", value: "ros2 topic list 看不到 /pico0/output；Pico 的 LED 一直慢閃（程式裡代表還在 ping agent）"}
+    - match: "agent 最後"
+      value: |
+        $ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -v6
+        [1731401000.100001] info     | TermiosAgentLinux.cpp | init                     | running...             | fd: 3
+        [1731401000.100002] info     | Root.cpp           | set_verbose_level        | logger setup           | verbose_level: 6
+    - match: "by-id"
+      value: |
+        $ ls -l /dev/serial/by-id/
+        total 0
+        lrwxrwxrwx 1 root root 13 Nov 12 09:58 usb-Raspberry_Pi_Debug_Probe__CMSIS-DAP__E6633861A3-if01 -> ../../ttyACM0
+        lrwxrwxrwx 1 root root 13 Nov 12 09:58 usb-Raspberry_Pi_Pico_E6614103E7-if00 -> ../../ttyACM1
+        $ ros2 topic list
+        /parameter_events
+        /rosout
+    - match: "Pico 程式"
+      value:
+        number_lines: 30
+        text: |-
+          rmw_uros_set_custom_transport(true, NULL, pico_serial_transport_open, pico_serial_transport_close,
+              pico_serial_transport_write, pico_serial_transport_read);
+          while (rmw_uros_ping_agent(100, 1) != RMW_RET_OK) { blink_slow(); }
+  checks:
+    # 原因欄：字母寫在冒號後、寫在「原因（C）」括號裡、或只抄選項文字都算（choice 檢查會把「（C）」當成照抄的說明吃掉）
+    - {type: regex, pattern: '原因\s*[:：（(]\s*\**\s*A(?![A-Za-z])|原因[^\n]*連錯 port', name: cause_A_port}
+    # 資料裡本來就有 ttyACM1（by-id 那行）→ 要寫在真實值或修法欄；修法 / 確認指令還用 ttyACM0 算錯
+    - {type: regex, pattern: '(真實值|修法)[^\n]*ttyACM1', name: right_port}
+    - {type: not_regex, pattern: '(修法|確認指令)[^\n]*--dev\s*/dev/ttyACM0', name: not_old_port}
+    # 證據沒加「」（裸抄一行、用反引號）也算有寫；有加引號的內容一定要在資料裡
+    - {type: evidence_grounded, min_quotes: 0}
+    - {type: answer_field, field: '證據', regex: '\S{4,}', name: evidence_written}
+  golden: |
+    證據：「usb-Raspberry_Pi_Pico_E6614103E7-if00 -> ../../ttyACM1」
+    關鍵字：by-id 有 Pico 的才是板子
+    原因：A agent 沒開或連錯 port（一直 ping 不到、by-id 有 Pico 的才是板子）
+    真實值：/dev/ttyACM1
+    修法：--dev 改成 /dev/ttyACM1（ls 看到 Pico 在 ttyACM1，ttyACM0 是 Debug Probe）
+    確認指令：ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM1 -v6，看到 session established
+
+- id: ver-uros-handles
+  tags: [verify, microros, choice, hard]
+  desc: executor 只開 1 個 handle 卻加 timer + subscription → E；timer 的 topic 有資料，所以不是 QoS / 名稱
+  card: {file: "13-verify-submit.md", title: "驗證 6/7"}
+  fills:
+    - {match: "症狀", value: "/pico0/heartbeat 每秒都有資料，但 host 發到 /pico0/input 的訊息，Pico 的 on_input 從來沒被呼叫"}
+    - match: "agent 最後"
+      value: |
+        [1731402000.300001] info     | ProxyClient.cpp    | create_datawriter        | datawriter created     | client_key: 0x11223344, datawriter_id: 0x000(5), publisher_id: 0x000(3)
+        [1731402000.400001] info     | ProxyClient.cpp    | create_datareader        | datareader created     | client_key: 0x11223344, datareader_id: 0x000(6), subscriber_id: 0x000(4)
+    - match: "by-id"
+      value: |
+        total 0
+        lrwxrwxrwx 1 root root 13 Nov 12 09:58 usb-Raspberry_Pi_Pico_E6614103E7-if00 -> ../../ttyACM0
+        /parameter_events
+        /pico0/heartbeat
+        /pico0/input
+        /rosout
+    - match: "Pico 程式"
+      value:
+        number_lines: 70
+        text: |-
+          rclc_executor_init(&exec, &support.context, 1, &allocator);
+          rclc_executor_add_timer(&exec, &hb_timer);
+          rclc_executor_add_subscription(&exec, &sub, &in_msg, &on_input, ON_NEW_DATA);
+          while (true) {
+              rclc_executor_spin_some(&exec, RCL_MS_TO_NS(1));
+          }
+  checks:
+    # 原因欄：字母寫在冒號後、寫在「原因（C）」括號裡、或只抄選項文字都算（choice 檢查會把「（C）」當成照抄的說明吃掉）
+    - {type: regex, pattern: '原因\s*[:：（(]\s*\**\s*E(?![A-Za-z])|原因[^\n]*handle 不夠', name: cause_E_handles}
+    # 修法寫出 2，或真實值寫 2（修法照抄「N 改成 add_ 行數」）都可以
+    - {type: regex, pattern: 'rclc_executor_init[^\n]*2|N\s*=\s*2|改成\s*2|真實值\s*[:：]\s*\**\s*2(?!\d)', name: handles_2}
+    # 證據沒加「」（裸抄一行、用反引號）也算有寫；有加引號的內容一定要在資料裡
+    - {type: evidence_grounded, min_quotes: 0}
+    - {type: answer_field, field: '證據', regex: '\S{4,}', name: evidence_written}
+  golden: |
+    證據：「rclc_executor_init(&exec, &support.context, 1, &allocator);」
+    關鍵字：timer 會動但 sub 的 callback 從沒被呼叫、init 的 N < add_ 行數
+    原因：E executor handle 不夠（timer 會動但 sub 的 callback 從沒被呼叫、init 的 N < add_ 行數）
+    真實值：2（add_timer、add_subscription 共 2 行）
+    修法：rclc_executor_init 的 N = timer 數 + sub 數 = 2：rclc_executor_init(&exec, &support.context, 2, &allocator);
+    確認指令：ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [1]}"，看 on_input 有沒有被呼叫
+
+# ---------------------------------------------------------------- 驗證 7：解釋程式
+- id: ver-explain-c
+  tags: [verify, learn, grounding]
+  desc: crc32_update、proto_send 沒有定義在資料裡 → 先列「用到的」再挑出「看不到定義的」；答案放最後
+  card: {file: "13-verify-submit.md", title: "驗證 7/7"}
+  fills:
+    - match: "程式，帶行號"
+      value:
+        number_lines: 30
+        text: |-
+          static void handle(const frame_t *f) {
+              uint8_t reply[4];
+              uint32_t crc = 0xFFFFFFFFu;
+              for (uint16_t off = 0; off < f->len; off += 256) {
+                  uint16_t n = (f->len - off < 256) ? (f->len - off) : 256;
+                  crc = crc32_update(crc, f->payload + off, n);
+              }
+              crc ^= 0xFFFFFFFFu;
+              memcpy(reply, &crc, 4);
+              proto_send(f->cmd, f->seq, reply, 4);
+          }
+    - {match: "已經懂", value: "C 的 for 迴圈、陣列"}
+  checks:
+    # 名稱可以同一行用、隔開，也可以下一行起用 - 條列（到表格之前都算）
+    - {type: regex, pattern: '看不到定義的[^|]*crc32_update[^|]*proto_send|看不到定義的[^|]*proto_send[^|]*crc32_update', name: lists_unseen}
+    - {type: table_rows, min: 4}
+    - {type: regex, pattern: '自我測驗[\s\S]+答案', name: answers_last}
+    - {type: not_regex, pattern: '^\|[^\n]*crc32_update[^\n]*(查表|多項式|0xEDB88320)', name: no_invented_internals, category: grounding}
+  golden: |
+    用到的：handle、frame_t、crc32_update、memcpy、proto_send
+    看不到定義的：crc32_update、proto_send、frame_t
+    | 行號 | 白話（≤ 25 字） | 為什麼需要 |
+    | 30 | 處理一個收到的封包 f | 每收到一包就呼叫 |
+    | 31–32 | 準備 4 bytes 回覆，crc 先設全 1 | CRC32 規定初值是 0xFFFFFFFF |
+    | 33–36 | 每次拿 256 bytes 餵給 crc32_update（看不到定義） | 一次處理一小段 |
+    | 37 | 最後再反相 | CRC32 規定結尾要 XOR 0xFFFFFFFF |
+    | 38 | 把 crc 的 4 bytes 複製到 reply | 要用 bytes 傳回去 |
+    | 39 | proto_send（看不到定義）把結果送回去【推測】 | 回覆給電腦 |
+    整段在做什麼：把封包內容分段算 CRC32，再把結果回傳。
+    自我測驗：1. 為什麼 n 要取 f->len - off 和 256 的較小值？ 2. 第 37 行拿掉會怎樣？ 3. reply 為什麼是 4 bytes？
+    答案（放最後，先不要看）：1. 最後一段可能不到 256 bytes，避免讀超過 2. 結果和標準 CRC32 不同 3. uint32_t 是 4 bytes
+
+- id: ver-explain-py
+  tags: [verify, learn, grounding]
+  desc: rclpy callback 呼叫 pack_batch（資料裡沒定義）→ 看不到定義；表格至少 4 列
+  card: {file: "13-verify-submit.md", title: "驗證 7/7"}
+  fills:
+    - match: "程式，帶行號"
+      value:
+        number_lines: 12
+        text: |-
+          class Bridge(Node):
+              def __init__(self):
+                  super().__init__('bridge')
+                  self.ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.1)
+                  self.sub = self.create_subscription(Int32MultiArray, '/input', self.on_input, 10)
+                  self.pub = self.create_publisher(UInt32, '/crc', 10)
+
+              def on_input(self, msg):
+                  self.ser.write(pack_batch(msg.data))
+                  raw = self.ser.read(4)
+                  if len(raw) == 4:
+                      self.pub.publish(UInt32(data=struct.unpack('<I', raw)[0]))
+    - {match: "已經懂", value: "Python 的 class、函式"}
+  checks:
+    - {type: regex, pattern: '看不到定義的[^|]*pack_batch', name: lists_pack_batch}
+    - {type: table_rows, min: 4}
+    - {type: regex, pattern: '自我測驗[\s\S]+答案', name: answers_last}
+  golden: |
+    用到的：Bridge、Node、serial.Serial、create_subscription、create_publisher、pack_batch、struct.unpack、UInt32
+    看不到定義的：pack_batch
+    | 行號 | 白話（≤ 25 字） | 為什麼需要 |
+    | 12–14 | 建一個叫 bridge 的 ROS 2 節點 | 要在 ROS 2 裡收發 |
+    | 15 | 打開 USB 序列埠，最多等 0.1 秒 | 跟 Pico 溝通 |
+    | 16–17 | 訂閱 /input、準備發佈 /crc | 一邊收一邊送 |
+    | 19–20 | 收到陣列就用 pack_batch（看不到定義）打包後寫到序列埠 | 把資料送給 Pico |
+    | 21 | 讀 4 bytes 回覆 | Pico 回傳 CRC |
+    | 22–23 | 收滿 4 bytes 才用 little-endian 解開發佈 | 避免收不完整 |
+    整段在做什麼：把 /input 的陣列送給 Pico，收回 4 bytes 結果發佈到 /crc。
+    自我測驗：1. timeout=0.1 有什麼用？ 2. '<I' 的 < 代表什麼？ 3. 為什麼要檢查 len(raw) == 4？
+    答案（放最後，先不要看）：1. 收不到時最多等 0.1 秒不會卡死 2. little-endian 3. 逾時可能只收到一部分
+
+# ---------------------------------------------------------------- 提交 1：push 前檢查
+# 每個 git 指令的輸出各貼一格（卡片的資料格就是指令本身）；輸出在暫存 repo 用 git 2.43 實跑
+# 判定：「判定：不行」、**判定**：不行、表格後單獨一行「不行」、判定：NG、表格裡「| 判定 | … | 不行 |」都算；
+# 和另一種結論同時出現（例如表格裡寫可以 push、後面又寫不行）算錯
+- id: ver-push-forbidden
+  tags: [verify, submit, hard]
+  desc: name-only 有 judge/expected.txt（不准改）、build/app.uf2，grep 抓到 DEBUG printf → 1、2、5 NG，判定不行；第 1 列要把每個檔名都抄出來（含 expected.txt）
+  card: {file: "13-verify-submit.md", title: "提交 1/3"}
+  fills:
+    - {match: "status -sb", value: "## main...origin/main [ahead 1]"}
+    - {match: "oneline", value: "c8e0da6 Q1 faster"}
+    - match: "name-only"
+      value: |-
+        build/app.uf2
+        judge/expected.txt
+        src/main.c
+    - {match: "grep -nE", value: "19:+int main(){printf(\"DEBUG x\\n\");return 0;}"}
+    - {match: "CI 規定", value: "只能修改 src/ 底下的檔案；commit message 要以題號開頭，例如「Q1 …」"}
+    - {match: "本地 build", value: "[100%] Built target q1 / ALL PASS"}
+    - {match: "上一個 pipeline", value: "已結束"}
+  checks:
+    - {type: table_rows, min: 7, max: 9}
+    - {type: regex, pattern: '^\|\s*1(?!\d)[^\n]*expected', name: row1_quotes_expected}
+    - {type: regex, pattern: '^\|\s*1(?!\d)[^\n]*\|\s*\**NG\**[^|\n]{0,20}\|?\s*$', name: row1_ng}
+    - {type: regex, pattern: '^\|\s*2(?!\d)[^\n]*\|\s*\**NG\**[^|\n]{0,20}\|?\s*$', name: row2_ng}
+    - {type: regex, pattern: '^\|\s*5(?!\d)[^\n]*\|\s*\**NG\**[^|\n]{0,20}\|?\s*$', name: row5_ng}
+    - {type: regex, pattern: '^\|\s*4(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row4_ok}
+    - {type: regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?(不行|不可以|NG(?!\s*的))|^[\s|*]*[「『]?(不行|不可以 push)[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*(不行|不可以)', name: verdict_no}
+    - {type: not_regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?可以|^[\s|*]*[「『]?可以 push[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*\|\s*\**可以', name: verdict_not_yes}
+  golden: |
+    | 項目 | 規定 | 實際（照抄） | OK/NG/看不到 |
+    | 1 name-only 的檔名 | 只能修改 src/ 底下的檔案 | build/app.uf2、judge/expected.txt、src/main.c | NG |
+    | 2 grep 的輸出 | 沒有輸出 | 19:+int main(){printf("DEBUG x\n");return 0;} | NG |
+    | 3 本地 build / 測試 | 有 PASS、沒有 FAIL | [100%] Built target q1 / ALL PASS | OK |
+    | 4 git log 的訊息 | commit message 要以題號開頭，例如「Q1 …」 | Q1 faster | OK |
+    | 5 name-only 有沒有 build/ .o .uf2 .elf | 都沒有 | build/app.uf2 | NG |
+    | 6 git status 的行數 | 只有 ## 那 1 行 | ## main...origin/main [ahead 1] | OK |
+    | 7 上一個 pipeline | 已結束或第一次交 | 已結束 | OK |
+    NG 或看不到的列號：1、2、5
+    判定：不行
+    NG 的修法：1 `git restore --source=origin/main judge/expected.txt`　2 刪掉 src/main.c 的 printf　5 `git rm -r --cached build` 並把 build/ 加進 .gitignore，然後 `git commit --amend`
+
+- id: ver-push-pipeline
+  tags: [verify, submit]
+  desc: 檔案乾淨、grep 沒輸出 → 1、2 OK；但 commit message 沒題號、上一個 pipeline 還在跑 → 4、7 NG，判定不行
+  card: {file: "13-verify-submit.md", title: "提交 1/3"}
+  fills:
+    - {match: "status -sb", value: "## main...origin/main [ahead 1]"}
+    - {match: "oneline", value: "5e1f2a3 fix crc"}
+    - {match: "name-only", value: "src/crc.c"}
+    - {match: "grep -nE", value: "沒有輸出"}
+    - {match: "CI 規定", value: "可以改 src/ 底下的檔案；commit message 必須含題號，例如「Q2: …」，否則不評分"}
+    - {match: "本地 build", value: "[100%] Built target q2 / test 1..5 PASS"}
+    - {match: "上一個 pipeline", value: "還在跑"}
+  checks:
+    - {type: table_rows, min: 7, max: 9}
+    - {type: regex, pattern: '^\|\s*1(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row1_ok}
+    - {type: regex, pattern: '^\|\s*2(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row2_ok}
+    - {type: regex, pattern: '^\|\s*4(?!\d)[^\n]*\|\s*\**NG\**[^|\n]{0,20}\|?\s*$', name: row4_ng}
+    - {type: regex, pattern: '^\|\s*7(?!\d)[^\n]*\|\s*\**NG\**[^|\n]{0,20}\|?\s*$', name: row7_ng}
+    - {type: regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?(不行|不可以|NG(?!\s*的))|^[\s|*]*[「『]?(不行|不可以 push)[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*(不行|不可以)', name: verdict_no}
+    - {type: not_regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?可以|^[\s|*]*[「『]?可以 push[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*\|\s*\**可以', name: verdict_not_yes}
+  golden: |
+    | 項目 | 規定 | 實際（照抄） | OK/NG/看不到 |
+    | 1 name-only 的檔名 | 可以改 src/ 底下的檔案 | src/crc.c | OK |
+    | 2 grep 的輸出 | 沒有輸出 | 沒有輸出 | OK |
+    | 3 本地 build / 測試 | 有 PASS、沒有 FAIL | [100%] Built target q2 / test 1..5 PASS | OK |
+    | 4 git log 的訊息 | commit message 必須含題號，例如「Q2: …」 | fix crc（沒有題號） | NG |
+    | 5 name-only 有沒有 build/ .o .uf2 .elf | 都沒有 | src/crc.c | OK |
+    | 6 git status 的行數 | 只有 ## 那 1 行 | ## main...origin/main [ahead 1] | OK |
+    | 7 上一個 pipeline | 已結束或第一次交 | 還在跑 | NG |
+    NG 或看不到的列號：4、7
+    判定：不行
+    NG 的修法：4 `git commit --amend -m "Q2: fix crc"`　7 等上一個 pipeline 跑完再 push
+
+- id: ver-push-ok
+  tags: [verify, submit]
+  desc: 全部 OK → 判定「可以 push」（不能為了保險亂判 NG；git status 只有 ## 那行 = 乾淨，name-only 只有原始碼 = 沒有 build 產物）
+  card: {file: "13-verify-submit.md", title: "提交 1/3"}
+  fills:
+    - {match: "status -sb", value: "## main...origin/main [ahead 1]"}
+    - {match: "oneline", value: "7b3c9d1 Q3: batch frames"}
+    - match: "name-only"
+      value: |-
+        host/bridge.py
+        pico/main.c
+    - {match: "grep -nE", value: "沒有輸出"}
+    - {match: "CI 規定", value: "只能修改 host/bridge.py 與 pico/main.c；commit message 以「Q題號:」開頭"}
+    - {match: "本地 build", value: "[100%] Built target q3 / bash check.sh → ALL PASS"}
+    - {match: "上一個 pipeline", value: "已結束"}
+  checks:
+    - {type: table_rows, min: 7, max: 9}
+    - {type: regex, pattern: '^\|\s*1(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row1_ok}
+    - {type: regex, pattern: '^\|\s*4(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row4_ok}
+    - {type: regex, pattern: '^\|\s*7(?!\d)[^\n]*\|\s*\**OK\**[^|\n]{0,20}\|?\s*$', name: row7_ok}
+    - {type: regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?可以|^[\s|*]*[「『]?可以 push[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*\|\s*\**可以', name: verdict_yes}
+    - {type: not_regex, pattern: '(判定|結論)\**\s*[:：]\s*\**\s*[「『]?(不行|不可以|NG(?!\s*的))|^[\s|*]*[「『]?(不行|不可以 push)[」』]?\**[。.]?\s*\|?\s*$|^\|\s*\**判定\**\s*\|[^\n]*(不行|不可以)', name: verdict_not_no}
+  golden: |
+    | 項目 | 規定 | 實際（照抄） | OK/NG/看不到 |
+    | 1 name-only 的檔名 | 只能修改 host/bridge.py 與 pico/main.c | host/bridge.py、pico/main.c | OK |
+    | 2 grep 的輸出 | 沒有輸出 | 沒有輸出 | OK |
+    | 3 本地 build / 測試 | 有 PASS、沒有 FAIL | bash check.sh → ALL PASS | OK |
+    | 4 git log 的訊息 | commit message 以「Q題號:」開頭 | Q3: batch frames | OK |
+    | 5 name-only 有沒有 build/ .o .uf2 .elf | 都沒有 | host/bridge.py、pico/main.c | OK |
+    | 6 git status 的行數 | 只有 ## 那 1 行 | ## main...origin/main [ahead 1] | OK |
+    | 7 上一個 pipeline | 已結束或第一次交 | 已結束 | OK |
+    NG 或看不到的列號：無
+    判定：可以 push
+    NG 的修法：無
+
+# ---------------------------------------------------------------- 提交 2：CI / judge log
+- id: ver-ci-hidden-build
+  tags: [verify, ci, choice, hard]
+  desc: make 用 `|| true` 吞掉編譯錯誤，後面 judge 全 FAIL → 第一個錯誤是 CHUNK_SZ undeclared → A 建置錯，不是 C 答案錯（gcc 原文實跑）
+  card: {file: "13-verify-submit.md", title: "提交 2/3"}
+  fills:
+    - value: |
+        Running with gitlab-runner 17.5.0 (c3a2b1f0)
+          on exam-runner-02 Xy7kQz9a, system ID: s_7d1e0c2b4a90
+        Preparing the "docker" executor
+        Using docker image sha256:4b1e... for exam/pico-judge:2026 ...
+        Executing "step_script" stage of the job script
+        $ make -k || true
+        mkdir -p build
+        gcc -O2 -Wall -o build/q1 src/q1.c
+        src/q1.c: In function 'main':
+        src/q1.c:7:21: error: 'CHUNK_SZ' undeclared (first use in this function); did you mean 'CHUNK_SIZE'?
+            7 |     for (i = 0; i < CHUNK_SZ; i++)
+              |                     ^~~~~~~~
+        make: *** [Makefile:3: build/q1] Error 1
+        $ python3 judge/run_tests.py --bin build/q1
+        [judge] test 1 ... FAIL (expected 3c8a01f2, got '')
+        [judge] test 2 ... FAIL (expected 00000000, got '')
+        [judge] test 3 ... FAIL (expected 9e1d77b0, got '')
+        [judge] Score: 0/100
+        ERROR: Job failed: exit code 1
+  checks:
+    - {type: choice, option: "建置錯", field_in_answer: "類型"}
+    - {type: regex, pattern: '第一個錯誤[^\n]*CHUNK_SZ', name: first_error_is_compile}
+    # 寫 make 那行（`$ ` 開頭）或真正出錯的 gcc 那行都可以
+    - {type: answer_field, field: '出錯指令\**', regex: 'make|gcc'}
+    - {type: answer_field, field: '分數那一行\**', regex: '0/100'}
+    - {type: regex, pattern: '下一步[^\n]*[:：][^\n]*(05|建置)', name: next_step_build}
+  golden: |
+    出錯指令：$ make -k || true
+    第一個錯誤：「src/q1.c:7:21: error: 'CHUNK_SZ' undeclared (first use in this function); did you mean 'CHUNK_SIZE'?」
+    分數那一行：「[judge] Score: 0/100」
+    關鍵字：error:
+    類型：A 建置錯（error:、undefined reference、CMake Error）
+    下一步：05 建置卡（CHUNK_SZ 改成 CHUNK_SIZE）
+
+- id: ver-ci-timeout
+  tags: [verify, ci, choice]
+  desc: 只有 warning + 小測資 PASS，大測資 timeout → exit code 124 → D 超時；warning 不能當第一個錯誤
+  card: {file: "13-verify-submit.md", title: "提交 2/3"}
+  fills:
+    - value: |
+        Executing "step_script" stage of the job script
+        $ gcc -O2 -Wall -Wextra -o build/q2 src/q2.c
+        src/q2.c: In function 'count':
+        src/q2.c:6:23: warning: comparison of integer expressions of different signedness: 'int' and 'size_t' {aka 'long unsigned int'} [-Wsign-compare]
+            6 |     for (int i = 0; i < strlen(s); i++)
+              |                       ^
+        src/q2.c:4:9: warning: unused variable 'tmp' [-Wunused-variable]
+            4 |     int tmp;
+              |         ^~~
+        $ ./build/q2 < tests/small.in > out_small.txt && diff out_small.txt tests/small.out && echo "small PASS"
+        small PASS
+        $ timeout 10 ./build/q2 < tests/big.in > out_big.txt
+        ERROR: Job failed: exit code 124
+  checks:
+    - {type: choice, option: "超時", field_in_answer: "類型"}
+    # 省略 `timeout 10` 前綴、只寫 ./build/q2 < tests/big.in 也認得出是哪一步
+    - {type: answer_field, field: '出錯指令\**', regex: 'timeout 10|big\.in'}
+    - {type: not_regex, pattern: '第一個錯誤[^\n]*warning', name: warning_not_error}
+    # 分數那一行留白（下一行直接是類型）也算「沒有」；抄 ERROR / small PASS 當分數行不算
+    - {type: regex, pattern: '分數那一行[^\n]*(資料中沒有|沒有)|分數那一行\**\s*[:：]\s*(關鍵字|類型|$)', name: no_score_line}
+    - {type: regex, pattern: '下一步[^\n]*[:：][^\n]*(驗證 ?4|量測)', name: next_step_measure}
+  golden: |
+    出錯指令：$ timeout 10 ./build/q2 < tests/big.in > out_big.txt
+    第一個錯誤：「ERROR: Job failed: exit code 124」
+    分數那一行：資料中沒有
+    關鍵字：exit code 124
+    類型：D 超時（Timeout、timed out、TLE、exit code 124 / 137、Killed）
+    下一步：驗證 4 量測
+
+- id: ver-ci-wa
+  tags: [verify, ci, choice]
+  desc: 有 warning 但建置成功，judge 有 expected/got 不同 → C 答案錯；分數 60/100
+  card: {file: "13-verify-submit.md", title: "提交 2/3"}
+  fills:
+    - value: |
+        $ cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+        [ 50%] Building C object CMakeFiles/q4.dir/q4.c.o
+        /builds/s0123/exam/q4.c:6:23: warning: comparison of integer expressions of different signedness: 'int' and 'size_t' {aka 'long unsigned int'} [-Wsign-compare]
+        [100%] Linking C executable q4
+        [100%] Built target q4
+        $ python3 judge/run_tests.py --bin build/q4
+        [judge] test 1 ... PASS (0.02 s)
+        [judge] test 2 ... PASS (0.03 s)
+        [judge] test 3 ... FAIL expected 9f3a01c2 got 9f3a01c3
+        [judge] test 4 ... PASS (0.05 s)
+        [judge] test 5 ... FAIL expected 00000000 got ffffffff
+        [judge] Score: 60/100
+        ERROR: Job failed: exit code 1
+  checks:
+    - {type: choice, option: "答案錯", field_in_answer: "類型"}
+    - {type: answer_field, field: '分數那一行\**', regex: '60/100'}
+    # 只抄「FAIL expected 9f3a01c2 got 9f3a01c3」（少了 [judge] test 3 ...）也是同一行
+    - {type: regex, pattern: '第一個錯誤[^\n]*(test 3|9f3a01c3)', name: first_fail_test3}
+    - {type: regex, pattern: '下一步[^\n]*[:：][^\n]*(驗證 ?3|對拍)', name: next_step_pair}
+    - {type: not_regex, pattern: '類型[^\n]*建置錯', name: warning_not_build_error}
+  golden: |
+    出錯指令：$ python3 judge/run_tests.py --bin build/q4
+    第一個錯誤：「[judge] test 3 ... FAIL expected 9f3a01c2 got 9f3a01c3」
+    分數那一行：「[judge] Score: 60/100」
+    關鍵字：FAIL、expected … got
+    類型：C 答案錯（Wrong Answer、expected … got、diff 有輸出、FAIL）
+    下一步：驗證 3 對拍（test 5 是空輸入，先做邊界測資）
+
+# ---------------------------------------------------------------- 提交 3：git 救援
+- id: ver-git-misadd
+  tags: [verify, git, choice]
+  desc: 誤 add build/ 還沒 commit → B git restore --staged build/（修改保留，實跑過）；不能給 reset --hard / rm
+  card: {file: "13-verify-submit.md", title: "提交 3/3"}
+  fills:
+    - {match: "我想做的事", value: "不小心 git add . 把 build/ 也加進去了，還沒 commit。想把 build/ 拿掉，但 src/q1.c 的修改要留著。"}
+    - match: "git 輸出"
+      value: |
+        On branch main
+        Changes to be committed:
+          (use "git restore --staged <file>..." to unstage)
+        	new file:   build/CMakeFiles/a.o
+        	new file:   build/Makefile
+        	new file:   build/q1.elf
+        	modified:   src/q1.c
+  checks:
+    - {type: choice, option: "誤 add", field_in_answer: "情況"}
+    - {type: regex, pattern: 'restore --staged\s+build', name: unstage_build}
+    - {type: not_regex, pattern: '指令[^\n]*[:：][^\n]*(reset --hard|rm -rf|clean -f|--force)', name: no_destructive}
+    # 模型常把答案寫在「填法：」那行（填法：不會）→ 也算；照抄整句填法（只寫「會」或「不會」）不算
+    - {type: regex, pattern: '(會丟資料嗎|填法)\**\s*[:：]\s*\**\s*[「『]?不會|^\s*\**不會\**\s*$', name: no_data_loss}
+    # 證據常是整段 git status（跨行的「…」evidence_grounded 抓不到）→ 只要「」裡開頭是 git 輸出原文就算
+    - {type: regex, pattern: '證據\**\s*[:：]\s*\**\s*[「『"“`]\s*(On branch|Changes to be committed|\(use|new file|modified)', name: evidence_git_output}
+  golden: |
+    證據：「new file:   build/q1.elf」
+    情況：B 誤 add 還沒 commit
+    指令：git restore --staged build/
+    會丟資料嗎：不會
+    確認指令：git status --short（只剩 M  src/q1.c，build/ 變成 ??）
+
+- id: ver-git-rejected
+  tags: [verify, git, choice]
+  desc: push 被拒（fetch first）→ G git pull --rebase 再 push；不能 --force（輸出為實跑）
+  card: {file: "13-verify-submit.md", title: "提交 3/3"}
+  fills:
+    - {match: "我想做的事", value: "在 GitLab 網頁上改過 README，現在本機 commit 完 push 失敗"}
+    - match: "git 輸出"
+      value: |
+        To gitlab.exam.example:s0123/exam.git
+         ! [rejected]        main -> main (fetch first)
+        error: failed to push some refs to 'gitlab.exam.example:s0123/exam.git'
+        hint: Updates were rejected because the remote contains work that you do not
+        hint: have locally. This is usually caused by another repository pushing to
+        hint: the same ref. If you want to integrate the remote changes, use
+        hint: 'git pull' before pushing again.
+  checks:
+    - {type: choice, option: "push 被拒", field_in_answer: "情況"}
+    - {type: regex, pattern: 'pull --rebase', name: pull_rebase}
+    - {type: not_regex, pattern: '指令[^\n]*[:：][^\n]*(--force|push -f|reset --hard)', name: no_force}
+    # 模型常把答案寫在「填法：」那行（填法：不會）→ 也算；照抄整句填法（只寫「會」或「不會」）不算
+    - {type: regex, pattern: '(會丟資料嗎|填法)\**\s*[:：]\s*\**\s*[「『]?不會|^\s*\**不會\**\s*$', name: no_data_loss}
+  golden: |
+    證據：「! [rejected]        main -> main (fetch first)」
+    情況：G push 被拒（rejected、fetch first）
+    指令：git pull --rebase 再 git push
+    會丟資料嗎：不會
+    確認指令：git status -sb（顯示 [ahead 1] 再 push）
+
+- id: ver-git-revert
+  tags: [verify, git, choice, hard]
+  desc: 已 push 的版本 CI 變 0 分，想回上一版 → D git revert --no-edit HEAD（實跑過）；陷阱：reset --hard + push --force
+  card: {file: "13-verify-submit.md", title: "提交 3/3"}
+  fills:
+    - {match: "我想做的事", value: "剛 push 的 Q1 新版 CI 從 80 分變 0 分，想馬上回到上一版（3f2c1aa）再交一次"}
+    - match: "git 輸出"
+      value: |
+        On branch main
+        Your branch is up to date with 'origin/main'.
+
+        nothing to commit, working tree clean
+        9d41e07 (HEAD -> main, origin/main) Q1 use dma
+        3f2c1aa Q1 first working version
+        a1b2c3d init
+  checks:
+    - {type: choice, option: "回上一版", field_in_answer: "情況"}
+    - {type: regex, pattern: 'git revert', name: revert}
+    - {type: not_regex, pattern: '指令[^\n]*[:：][^\n]*(reset --hard|--force|push -f)', name: no_destructive}
+    # 模型常把答案寫在「填法：」那行（填法：不會）→ 也算；照抄整句填法（只寫「會」或「不會」）不算
+    - {type: regex, pattern: '(會丟資料嗎|填法)\**\s*[:：]\s*\**\s*[「『]?不會|^\s*\**不會\**\s*$', name: no_data_loss}
+  golden: |
+    證據：「9d41e07 (HEAD -> main, origin/main) Q1 use dma」
+    情況：D 已 commit（含已 push）的版本壞了，回上一版
+    指令：git revert --no-edit HEAD 再 git push
+    會丟資料嗎：不會
+    確認指令：git diff 3f2c1aa HEAD --stat（沒有輸出 = 和上一版相同）

@@ -1,0 +1,259 @@
+# 整題連續對話（仿真題）：同一個對話一路貼卡，後一步的資料用 <<TURNk>> 帶入模型第 k 步自己的回答。
+# 同一題拆成「前綴鏈」：chainA-1 只評第 1 步、chainA-2 評到第 2 步…，每一步都有分數。
+# 步驟編號 = turns 的順序（從 0 開始），最後的 card 是被評分的那一步。
+
+# ---------------- 仿真題 A：DMA 複製 ----------------
+- id: chainA-1-understand
+  tags: [chain, chainA, exam]
+  desc: 仿真題 A 第 1 步：開場卡 + 範本補充卡之後，理解卡要照抄配分、硬體沒寫要「資料中沒有」
+  data:
+    readme: |
+      # 第二大題 2-3（25 分）
+      pico/main.c 的 copy_frame() 用 CPU 迴圈把 rx_buf（uint8_t，4096 bytes）複製到 tx_buf，再把 tx_buf 送回電腦。
+      請改用 DMA 複製，結果必須和原本完全相同。分數 = 正確性 10 分 + 速度排名 15 分（以 judge 量到的 copy_frame 時間排名）。
+      不能修改 host/、judge/ 與 pico/main.c 以外的檔案。commit message 以 Q2-3 開頭。每 15 分鐘最多評分 1 次。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["C、Python、git", "DMA、PIO、ROS 2"], assistant: "了解"}
+    - {card: {file: "09-template-adapt.md", title: "範本 1/7"}, assistant: "了解"}
+  card: {file: "10-exam-day-flow.md", title: "開考 3/5"}
+  fills:
+    - value: {ref: readme}
+  checks:
+    - {type: regex, pattern: "10\\s*分[\\s\\S]{0,40}15\\s*分", name: keeps_points}
+    - {type: regex, pattern: "硬體[^\\n]*(資料中沒有|RP2350|Pico|未提及|沒寫)", name: hw_absent}
+    - {type: regex, pattern: "不能改[^\\n]*(host|judge)", name: cant_change}
+    - {type: regex, pattern: "提交[^\\n]*(15 分鐘|Q2-3)", name: submit_rule}
+  golden: |
+    - 小題清單與配分：2-3（25 分）= 正確性 10 分 + 速度排名 15 分
+    - 每小題的目標（一句）：copy_frame() 改用 DMA 複製，結果相同
+    - 輸入（來源、格式、大小）：rx_buf，uint8_t，4096 bytes
+    - 輸出（目的地、格式）：tx_buf 送回電腦
+    - 正確性怎麼判：結果必須和原本完全相同
+    - 效能指標與單位：judge 量到的 copy_frame 時間排名
+    - 提交方式、次數限制：commit message 以 Q2-3 開頭；每 15 分鐘最多評分 1 次
+    - 硬體（板子、片數、核心）：資料中沒有
+    - 不能改的檔案 / 介面：host/、judge/ 與 pico/main.c 以外的檔案
+    - 不能用的方法：資料中沒有
+    - 範例輸入輸出在哪：資料中沒有
+    - 最容易誤解的 2 點：rx_buf 是 bytes 不是 words；只能改 pico/main.c
+
+- id: chainA-2-match
+  tags: [chain, chainA, exam]
+  desc: 仿真題 A 第 2 步：開考 4 拿「模型自己寫的理解卡」→ 2-3 選 I（DMA）
+  data:
+    readme: |
+      # 第二大題 2-3（25 分）
+      pico/main.c 的 copy_frame() 用 CPU 迴圈把 rx_buf（uint8_t，4096 bytes）複製到 tx_buf，再把 tx_buf 送回電腦。
+      請改用 DMA 複製，結果必須和原本完全相同。分數 = 正確性 10 分 + 速度排名 15 分（以 judge 量到的 copy_frame 時間排名）。
+      不能修改 host/、judge/ 與 pico/main.c 以外的檔案。commit message 以 Q2-3 開頭。每 15 分鐘最多評分 1 次。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["C、Python、git", "DMA、PIO、ROS 2"], assistant: "了解"}
+    - {card: {file: "09-template-adapt.md", title: "範本 1/7"}, assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+  card: {file: "10-exam-day-flow.md", title: "開考 4/5"}
+  fills:
+    - "<<TURN2>>"
+  checks:
+    - {type: regex, pattern: "^\\|\\s*\\**2-3\\**\\s*\\|\\s*\\**I\\b", name: picks_I}
+    - {type: contains_any, items: ["app_dma.c"], name: names_template}
+  golden: |
+    | 小題 | 類別 | 證據：「題目原句」 | 範本 |
+    | 2-3 | I | 「請改用 DMA 複製」 | pico/app_dma.c |
+
+- id: chainA-3-implement
+  tags: [chain, chainA, impl]
+  desc: 仿真題 A 第 3 步：先貼 DMA 參考卡，再用優化 3 把 CPU 迴圈換成 dma_copy32 → count 要 1024（4096 bytes ÷ 4）
+  data:
+    readme: |
+      # 第二大題 2-3（25 分）
+      pico/main.c 的 copy_frame() 用 CPU 迴圈把 rx_buf（uint8_t，4096 bytes）複製到 tx_buf，再把 tx_buf 送回電腦。
+      請改用 DMA 複製，結果必須和原本完全相同。分數 = 正確性 10 分 + 速度排名 15 分（以 judge 量到的 copy_frame 時間排名）。
+      不能修改 host/、judge/ 與 pico/main.c 以外的檔案。commit message 以 Q2-3 開頭。每 15 分鐘最多評分 1 次。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["C、Python、git", "DMA、PIO、ROS 2"], assistant: "了解"}
+    - {card: {file: "09-template-adapt.md", title: "範本 1/7"}, assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 4/5"}, fills: ["<<TURN2>>"]}
+    - {card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}, assistant: "收到"}
+  card: {file: "03-optimize.md", title: "優化 3/6"}
+  fills:
+    - {match: "方案描述", value: "把 copy_frame() 的 CPU 迴圈換成預製範本 app_dma.c 的 dma_copy32(uint32_t *to, const uint32_t *from, uint32_t n)（n = u32 個數，內部已處理 claim / write_increment / encode / wait / unclaim）"}
+    - match: "要改的程式碼"
+      value: |2
+            10	static uint8_t rx_buf[4096] __attribute__((aligned(4)));
+            11	static uint8_t tx_buf[4096] __attribute__((aligned(4)));
+            ...
+            40	void copy_frame(void) {
+            41	    for (int i = 0; i < 4096; i++)
+            42	        tx_buf[i] = rx_buf[i];
+            43	}
+    - {match: "不能改", value: "函式名稱 copy_frame、rx_buf / tx_buf 的宣告"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "dma_copy32\\s*\\(\\s*\\(?\\s*uint32_t\\s*\\*\\s*\\)?\\s*tx_buf\\s*,\\s*\\(?\\s*(const\\s+)?uint32_t\\s*\\*\\s*\\)?\\s*rx_buf\\s*,\\s*(1024|4096\\s*/\\s*4|sizeof\\s*\\(?\\s*rx_buf\\s*\\)?\\s*/\\s*4)", name: correct_call}
+    - {type: not_regex, pattern: "dma_copy32\\s*\\([^)\\n]*,\\s*4096\\s*\\)", name: no_bytes_count, category: correctness}
+  golden: |
+    main.c:41
+    修改前：for (int i = 0; i < 4096; i++) tx_buf[i] = rx_buf[i];
+    修改後：dma_copy32((uint32_t *)tx_buf, (const uint32_t *)rx_buf, 4096 / 4);
+    可能的副作用（1 句）：rx_buf / tx_buf 要 4 bytes 對齊（已 aligned(4)）
+    正確性驗證指令（1 行）：在 copy_frame 後 memcmp(tx_buf, rx_buf, 4096) == 0
+    成功的樣子：memcmp 回傳 0
+
+- id: chainA-4-review
+  tags: [chain, chainA, review]
+  desc: 仿真題 A 第 4 步：長對話之後用範本 7 檢查一份埋了 bug 的 diff（自己寫 DMA、沒開 write_increment）
+  data:
+    readme: |
+      # 第二大題 2-3（25 分）
+      pico/main.c 的 copy_frame() 用 CPU 迴圈把 rx_buf（uint8_t，4096 bytes）複製到 tx_buf，再把 tx_buf 送回電腦。
+      請改用 DMA 複製，結果必須和原本完全相同。分數 = 正確性 10 分 + 速度排名 15 分（以 judge 量到的 copy_frame 時間排名）。
+      不能修改 host/、judge/ 與 pico/main.c 以外的檔案。commit message 以 Q2-3 開頭。每 15 分鐘最多評分 1 次。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["C、Python、git", "DMA、PIO、ROS 2"], assistant: "了解"}
+    - {card: {file: "09-template-adapt.md", title: "範本 1/7"}, assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 4/5"}, fills: ["<<TURN2>>"]}
+    - {card: {file: "pico-dma.md", title: "RP2350 DMA 2/8"}, assistant: "收到"}
+  card: {file: "09-template-adapt.md", title: "範本 7/7"}
+  fills:
+    - value: |
+        diff --git a/pico/main.c b/pico/main.c
+        @@ -38,6 +38,13 @@
+         void copy_frame(void) {
+        -    for (int i = 0; i < 4096; i++)
+        -        tx_buf[i] = rx_buf[i];
+        +    int ch = dma_claim_unused_channel(true);
+        +    dma_channel_config c = dma_channel_get_default_config(ch);
+        +    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+        +    dma_channel_configure(ch, &c, tx_buf, rx_buf, dma_encode_transfer_count(1024), true);
+        +    dma_channel_wait_for_finish_blocking(ch);
+        +    dma_channel_unclaim(ch);
+         }
+  checks:
+    - {type: table_cell, key: "^3\\b", col: 1, regex: "有問題"}
+    - {type: regex, pattern: "最嚴重[\\s\\S]{0,120}write_increment", name: worst_is_write_incr}
+    - {type: table_cell, key: "^2\\b", col: 1, regex: "OK|看不到"}
+  golden: |
+    diff 的 + / - 行：
+    +    channel_config_set_transfer_data_size(&c, DMA_SIZE_32);
+    +    dma_channel_configure(ch, &c, tx_buf, rx_buf, dma_encode_transfer_count(1024), true);
+    | 檢查項目 | 結果 | 證據（diff 那一行） |
+    | 1 大小端 | 看不到 | |
+    | 2 DMA count | OK | 「dma_encode_transfer_count(1024)」 |
+    | 3 write_increment / unclaim | 有問題 | 「dma_channel_configure(ch, &c, tx_buf, rx_buf, dma_encode_transfer_count(1024), true);」前面沒有 set_write_increment |
+    | 4 spinlock | 看不到 | |
+    | 5 buffer | 看不到 | |
+    | 6 printf | 看不到 | |
+    | 7 micro-ROS | 看不到 | |
+    | 8 新 cmd | 看不到 | |
+    | 9 volatile | 看不到 | |
+    最嚴重的 1 個問題與修法（沒有就寫「無」，≤ 2 行）：第 3 項，加 channel_config_set_write_increment(&c, true)
+
+# ---------------- 仿真題 B：ROS 2 收不到 ----------------
+- id: chainB-1-match
+  tags: [chain, chainB, exam]
+  desc: 仿真題 B 第 1～2 步：理解卡 → 開考 4，2-1 要選 E（ROS 2 node 收不到）
+  data:
+    readme: |
+      # 第二大題 2-1（15 分）
+      host/ 裡的 /filter_node 應該訂閱 /sensor_raw（std_msgs/Float32MultiArray），濾波後發佈 /sensor_filtered。
+      目前 /sensor_filtered 完全沒有資料，程式沒有任何錯誤訊息。請修好，讓 /sensor_filtered 每秒至少 50 筆。
+      只能修改 host/filter_node.py。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["Python、git", "ROS 2"], assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+  card: {file: "10-exam-day-flow.md", title: "開考 4/5"}
+  fills:
+    - "<<TURN1>>"
+  checks:
+    - {type: regex, pattern: "^\\|\\s*\\**2-1\\**\\s*\\|\\s*\\**E\\b", name: picks_E}
+  golden: |
+    | 小題 | 類別 | 證據：「題目原句」 | 範本 |
+    | 2-1 | E | 「目前 /sensor_filtered 完全沒有資料」 | ros2/node_template.py、ros2/README.md |
+
+- id: chainB-2-locate
+  tags: [chain, chainB, ros2]
+  desc: 仿真題 B 第 3 步：工具 6 比對兩邊 node info → 第一個 NG 是 topic 名稱（/sensor_row）
+  data:
+    readme: |
+      # 第二大題 2-1（15 分）
+      host/ 裡的 /filter_node 應該訂閱 /sensor_raw（std_msgs/Float32MultiArray），濾波後發佈 /sensor_filtered。
+      目前 /sensor_filtered 完全沒有資料，程式沒有任何錯誤訊息。請修好，讓 /sensor_filtered 每秒至少 50 筆。
+      只能修改 host/filter_node.py。
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["Python、git", "ROS 2"], assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 4/5"}, fills: ["<<TURN1>>"]}
+  card: {file: "06-tools-debug.md", title: "工具 6/9"}
+  fills:
+    - {match: "兩邊在哪跑", value: "同容器不同 shell"}
+    - {match: "docker run", value: "（同容器）"}
+    - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+    - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+    - {match: "A：ros2 node", value: "/filter_node\n/sensor_driver\n---\n/sensor_driver\n  Subscribers:\n  Publishers:\n    /sensor_raw: std_msgs/msg/Float32MultiArray"}
+    - {match: "B：ros2 node", value: "/filter_node\n/sensor_driver\n---\n/filter_node\n  Subscribers:\n    /sensor_row: std_msgs/msg/Float32MultiArray\n  Publishers:\n    /sensor_filtered: std_msgs/msg/Float32MultiArray"}
+    - {match: "topic", value: "sensor_raw"}
+    - {match: "topic info", value: "Type: std_msgs/msg/Float32MultiArray\nPublisher count: 1\nSubscription count: 0"}
+  checks:
+    - {type: regex, pattern: "第一個 NG\\s*[:：][^\\n]*(6|名稱|sensor_row)", name: first_ng_name}
+    - {type: contains_any, items: ["sensor_row"], name: spots_typo}
+  golden: |
+    | 項目 | A 的值 | B 的值 | OK/NG |
+    | 1 ROS_DISTRO | jazzy | jazzy | OK |
+    | 2 ROS_DOMAIN_ID（沒設=0） | 沒設 | 沒設 | OK |
+    | 3 ROS_AUTOMATIC_DISCOVERY_RANGE | 沒設 | 沒設 | OK |
+    | 4 RMW_IMPLEMENTATION | 沒設 | 沒設 | OK |
+    | 5 --net=host（不同容器才需要） | 同容器 | 同容器 | OK |
+    | 6 topic 名稱（A 發佈的 vs B 訂閱的） | /sensor_raw | /sensor_row | NG |
+    | 7 型別 | Float32MultiArray | Float32MultiArray | OK |
+    | 8 Publisher / Subscription count | 1 | 0 | NG |
+    第一個 NG：6 topic 名稱（/sensor_raw vs /sensor_row）
+    下一步（1 個指令）：grep -n "sensor_row" host/filter_node.py
+
+- id: chainB-3-fix
+  tags: [chain, chainB, patch]
+  desc: 仿真題 B 第 4 步：工具 7 拿「模型自己的定位結果」修 typo，名稱與 QoS 不動
+  data:
+    readme: |
+      # 第二大題 2-1（15 分）
+      host/ 裡的 /filter_node 應該訂閱 /sensor_raw（std_msgs/Float32MultiArray），濾波後發佈 /sensor_filtered。
+      目前 /sensor_filtered 完全沒有資料，程式沒有任何錯誤訊息。請修好，讓 /sensor_filtered 每秒至少 50 筆。
+      只能修改 host/filter_node.py。
+    info_a: "/filter_node\n/sensor_driver\n---\n/sensor_driver\n  Subscribers:\n  Publishers:\n    /sensor_raw: std_msgs/msg/Float32MultiArray"
+    info_b: "/filter_node\n/sensor_driver\n---\n/filter_node\n  Subscribers:\n    /sensor_row: std_msgs/msg/Float32MultiArray\n  Publishers:\n    /sensor_filtered: std_msgs/msg/Float32MultiArray"
+  turns:
+    - {card: {file: "00-starter.md", title: "開場｜1/3"}, fills: ["Python、git", "ROS 2"], assistant: "了解"}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 3/5"}, fills: [{ref: readme}]}
+    - {card: {file: "10-exam-day-flow.md", title: "開考 4/5"}, fills: ["<<TURN1>>"]}
+    - card: {file: "06-tools-debug.md", title: "工具 6/9"}
+      fills:
+        - {match: "兩邊在哪跑", value: "同容器不同 shell"}
+        - {match: "docker run", value: "（同容器）"}
+        - {match: "A：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+        - {match: "B：printenv", value: "ROS_DISTRO=jazzy\nROS_VERSION=2"}
+        - {match: "A：ros2 node", value: {ref: info_a}}
+        - {match: "B：ros2 node", value: {ref: info_b}}
+        - {match: "topic", value: "sensor_raw"}
+        - {match: "topic info", value: "Type: std_msgs/msg/Float32MultiArray\nPublisher count: 1\nSubscription count: 0"}
+  card: {file: "06-tools-debug.md", title: "工具 7/9"}
+  fills:
+    - {match: "定位結果", value: "<<TURN3>>"}
+    - match: "要改的程式碼"
+      value: |2
+            14	        self.declare_parameter("in_topic", "/sensor_row")
+            15	        self.declare_parameter("out_topic", "/sensor_filtered")
+            16	        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+            17	        self.sub = self.create_subscription(Float32MultiArray, self.get_parameter("in_topic").value, self.on_msg, qos)
+    - {match: "不能改", value: "node 名稱、out_topic、QoS"}
+  checks:
+    - {type: patch_format, max_patches: 2}
+    - {type: regex, pattern: "修改後[\\s\\S]{0,120}\"/sensor_raw\"", name: fixes_topic}
+    - {type: not_regex, pattern: "修改後[^\\n]*(RELIABLE|ReliabilityPolicy\\.RELIABLE)", name: keeps_qos, category: correctness}
+  golden: |
+    filter_node.py:14
+    修改前：self.declare_parameter("in_topic", "/sensor_row")
+    修改後：self.declare_parameter("in_topic", "/sensor_raw")
+    為什麼（1 句）：publisher 發的是 /sensor_raw，名稱差一個字
+    驗證指令（1 行）：ros2 topic hz /sensor_filtered
+    成功的樣子：average rate ≥ 50
