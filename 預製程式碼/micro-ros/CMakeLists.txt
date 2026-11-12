@@ -55,7 +55,7 @@ pico_add_extra_outputs(app)              # 產生 .uf2
 # ---- Pico 2（RP2350）注意（詳見 README §6）----
 # 官方預編 libmicroros.a 是用 -mcpu=cortex-m0plus -march=armv6-m 編的（toolchain.cmake），
 # 官方 README 只寫支援 Pico（RP2040）；RP2350 支援 issue #1482 仍 open。
-# 推論（未實際連結驗證）：M0+ 物件可以連進 M33 / -mfloat-abi=softfp 的程式（ABI 相容），
-# 本資料夾用到的程式路徑應該連得起來。若出現
+# 實測（2026-11-12，SDK 2.2.0、pico2）：M0+ 物件可以連進 M33 / -mfloat-abi=softfp 的程式，
+# 本資料夾 3 支程式都連結成功，沒有缺 __atomic_*_4。換了 SDK 或改了程式後若出現
 #   undefined reference to `__atomic_exchange_4'（或 _compare_exchange_4 / _fetch_add_4）
 # → 照 README §6 加一個小檔補上；仍不行就重編 libmicroros（toolchain.cmake 改 -mcpu=cortex-m33）。
