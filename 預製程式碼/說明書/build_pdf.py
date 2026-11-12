@@ -60,7 +60,8 @@ const { chromium } = require('playwright');
 """
 
 
-def build_html() -> str:
+def build_html(pages: dict | None = None) -> str:
+    """pages：{章節標題: 起始頁}；有的話寫進目錄。"""
     parts, toc = [], []
     for prefix, rel in [(None, c) for c in CHAPTERS] + APPENDICES:
         path = ROOT / rel
@@ -71,7 +72,8 @@ def build_html() -> str:
         if prefix:  # tools/ 手冊：在標題前加「附錄 X」
             md = md.replace("# ", f"# {prefix}　", 1)
         t = chapter_title(md, rel)
-        toc.append(f"<li>{html.escape(t)} <span class='src'>（{html.escape(rel)}）</span></li>")
+        pg = f"<span style='float:right'>{pages[t]}</span>" if pages and t in pages else ""
+        toc.append(f"<li>{html.escape(t)} <span class='src'>（{html.escape(rel)}）</span>{pg}</li>")
         body = md_to_html(md).replace("</h1>", f"</h1><div class='src'>{html.escape(rel)}</div>", 1)
         parts.append(f"<section class='chapter'>{body}</section>")
     cover = ("<div class='cover'><div class='t'>預製程式碼 使用說明書</div>"
@@ -91,21 +93,54 @@ def have_node_playwright() -> bool:
     return r.returncode == 0
 
 
+def find_pages(pdf: pathlib.Path) -> dict:
+    """用 pdftotext 找每一章從第幾頁開始（目錄頁之後，第一個出現章名的頁）。"""
+    if not shutil.which("pdftotext"):
+        return {}
+    text = subprocess.run(["pdftotext", "-layout", str(pdf), "-"], capture_output=True, text=True).stdout
+    pages = text.split("\f")
+    titles = []
+    for prefix, rel in [(None, c) for c in CHAPTERS] + APPENDICES:
+        path = ROOT / rel
+        if path.exists():
+            md = path.read_text(encoding="utf-8")
+            if prefix:
+                md = md.replace("# ", f"# {prefix}　", 1)
+            titles.append(chapter_title(md, rel))
+    found, start = {}, 2                      # 封面、目錄之後
+    for t in titles:
+        key = t.replace("　", " ")[:14]
+        for i in range(start, len(pages)):
+            if key in pages[i].replace("　", " "):
+                found[t] = i + 1
+                start = i
+                break
+    return found
+
+
+def render(src: pathlib.Path, tmp: str) -> None:
+    if have_node_playwright():
+        subprocess.run(["node", "-e", RENDER_JS, str(src), str(OUT)], check=True)
+    else:
+        chrome = next((shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser", "chrome")
+                       if shutil.which(n)), None)
+        if not chrome:
+            sys.exit("找不到 playwright 或 Chrome / Chromium")
+        subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer",
+                        f"--user-data-dir={tmp}/profile", f"--print-to-pdf={OUT}", src.as_uri()],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         src = pathlib.Path(tmp) / "manual.html"
         src.write_text(build_html(), encoding="utf-8")
-        if have_node_playwright():
-            subprocess.run(["node", "-e", RENDER_JS, str(src), str(OUT)], check=True)
-        else:
-            chrome = next((shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser", "chrome")
-                           if shutil.which(n)), None)
-            if not chrome:
-                sys.exit("找不到 playwright 或 Chrome / Chromium")
-            subprocess.run([chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer",
-                            f"--user-data-dir={tmp}/profile", f"--print-to-pdf={OUT}", src.as_uri()],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
-    print(OUT.relative_to(ROOT))
+        render(src, tmp)
+        pages = find_pages(OUT)               # 第二次：把頁碼寫進目錄（目錄只有一頁，頁數不會變）
+        if pages:
+            src.write_text(build_html(pages), encoding="utf-8")
+            render(src, tmp)
+    print(OUT.relative_to(ROOT), f"（目錄頁碼 {len(pages)} 項）")
 
 
 if __name__ == "__main__":

@@ -1326,7 +1326,7 @@ pioasm 組譯結果如上。板子上沒有實測。
 
 | 症狀 | 原因 | 修法 |
 |---|---|---|
-| 照 `README.md:143` 以為電腦端 `on_bytes()` 沒擋大資料 | 那一列過時 | 見 3.6.1：現在會拒絕 > 4096 bytes |
+| 以為電腦端 `on_bytes()` 沒擋大資料（舊版 `README.md:143` 這樣寫） | 那一列過時（已更新） | 見 3.6.1：現在會拒絕 > 4096 bytes |
 | `README.md:87` 寫「USB 速度上限約 1 MB/s」 | Full Speed 12 Mbit/s 是規格；實際吞吐量沒有實測 | 需要數字就自己用 `ros2/bench.py` 量 |
 
 ## 3.4 照題目改：食譜
@@ -1565,10 +1565,10 @@ assert r == sorted(vals), r
 
 | # | 問題 | 核對結果 | 影響 / 怎麼處理 |
 |---|---|---|---|
-| 2 | `README.md:143` 說電腦端 `serial_bridge.py` 的 `on_bytes()`「沒有切包…未改」 | **確認過時**。現在 `ros2/serial_bridge.py:78` 會拒絕 `len(msg.data) > CHUNK_BYTES`（`frame.py:19`，4096）並印錯誤。（審查清單寫「約 315 行」，實際檔案只有 105 行，在第 78 行。） | 電腦端上限 4096 比 Pico 的 8192 嚴。題目 CRC 資料 4097～8192 bytes 時 Pico 收得了，但電腦端先擋掉。要放寬就把 `CHUNK_BYTES` 改成 8192（≤ `FRAME_MAX_PAYLOAD`） |
+| 2 | `README.md:143` 原本說電腦端 `serial_bridge.py` 的 `on_bytes()`「沒有切包…未改」 | **確認過時，2026-11-12 已更新 README**。現在 `ros2/serial_bridge.py:78` 會拒絕 `len(msg.data) > CHUNK_BYTES`（`frame.py:19`，4096）並印錯誤。 | 電腦端上限 4096 比 Pico 的 8192 嚴。題目 CRC 資料 4097～8192 bytes 時 Pico 收得了，但電腦端先擋掉。要放寬就把 `CHUNK_BYTES` 改成 8192（≤ `FRAME_MAX_PAYLOAD`） |
 | 6 | `app_pio.c` 的 `test_loopback` / `load()`：狀態機和程式沒釋放；第二次 load 失敗時第一個一直占著 | **確認**。`app_pio.c:62-63`：`bitstream_in` 載入成功、`shift_out` 失敗時直接 return，`sm_rx` 和 `off_rx` 沒有 remove；成功跑完（`:80`）也沒有 `pio_sm_set_enabled(false)` / `pio_remove_program_and_unclaim_sm` | 目前 `main` 只呼叫一次，不影響輸出；但把 `test_loopback` 拿去重複呼叫或在同一個 pio1 再載別的程式，會遇到指令空間 / SM 不夠。修法：失敗分支與結尾都對已載入的那個呼叫 `pio_remove_program_and_unclaim_sm(&prog, pio, sm, off)` |
 | 9 | DMA sniffer 的 zlib CRC32 等價（CRC32R + OUT_REV + 軟體 XOR）只從暫存器文件推得 | **確認仍未上板**。暫存器說明（`regs/dma.h` SNIFF_CTRL、SNIFF_DATA）與 SDK 函式（`dma.h:965-1055`）都核對過；Python 模型 200/200 組等於 zlib（3.3.8）；但模型是依文件寫的，不能取代硬體 | 考場先跑 `app_dma`，看 `PASS`；FAIL 照 3.3.8 的對照表改；正式答案保留軟體 CRC 當備案 |
-| 10 | pico-sdk 版本差異 | `dma_encode_transfer_count`：SDK 2.2.0 有（`dma.h:531`），2.1.1 沒有 → `app_dma.c:21-24`、`app_dma_pio.c:27-29` 的補丁在 2.1.1 實際編譯通過。RISC-V：SDK 2.2.0 的 `pico_riscv_gcc.cmake` 固定 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`、**沒有** `-mstrict-align`；`$S/sdk/` 裡的 2.3.x 版 `pico_riscv_gcc.cmake` 會依序試 `-mcpu=hazard3-rp2350`、含 `zcb_zcmp` 的 `-march`、最後才退回同一組，並預設加 `-mstrict-align`（可用 `PICO_NO_STRICT_ALIGN` 關）。「2.3.1 起」這個確切版本號沿用審查清單，作者沒有逐版核對 | 補丁版本在 2.0/2.1 直接回傳 n、不遮 MODE bits，所以 count 必須自己保證 < 2^28（`dma_xfer` 有檢查）。RISC-V 在 SDK 2.2.0 沒有 `-mstrict-align`：Hazard3 遇到不對齊存取的行為 ⚠️未驗證；考場用 ARM 最穩 |
+| 10 | pico-sdk 版本差異 | `dma_encode_transfer_count`：SDK 2.2.0 有（`dma.h:531`），2.1.1 沒有 → `app_dma.c:21-24`、`app_dma_pio.c:27-29` 的補丁在 2.1.1 實際編譯通過。RISC-V：SDK 2.2.0 的 `pico_riscv_gcc.cmake` 固定 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`、**沒有** `-mstrict-align`；2.3.x 的 `pico_riscv_gcc.cmake` 會依序試 `-mcpu=hazard3-rp2350`、含 `zcb_zcmp` 的 `-march`、最後才退回同一組，；`-mstrict-align` 是 2.3.1 才預設加（2.3.0 還沒有，已對照兩版原始碼；可用 `PICO_NO_STRICT_ALIGN` 關） | 補丁版本在 2.0/2.1 直接回傳 n、不遮 MODE bits，所以 count 必須自己保證 < 2^28（`dma_xfer` 有檢查）。RISC-V 在 SDK 2.2.0 沒有 `-mstrict-align`：Hazard3 遇到不對齊存取的行為 ⚠️未驗證；考場用 ARM 最穩 |
 
 ### 3.6.2 本章作者另外發現的
 

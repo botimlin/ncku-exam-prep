@@ -140,7 +140,7 @@ RISC-V（Hazard3）：`cmake -DPICO_BOARD=pico2 -DPICO_PLATFORM=rp2350-riscv ..`
 | 輸入方向 USB 有流量控制（RX buffer 64B 滿了 host 會等），不會掉 byte | OK | `pico_stdio_usb/include/tusb_config.h` |
 | baudrate 1200 會讓板子重開進 BOOTSEL | OK，註解提醒 | stdio_usb.h `PICO_STDIO_USB_RESET_MAGIC_BAUD_RATE` |
 | `stdio_init_all()` 不會印任何開機訊息；只有 panic/assert 會印字 | OK | `pico_stdio/stdio.c` |
-| ⚠ 電腦端 `serial_bridge.py` 的 `on_bytes()`（CRC32）**沒有切包**：資料 > 8192 bytes 時 Pico 會丟掉 → 3 次逾時。CRC 無法分包後在電腦端合併（Pico 每包都從 0 開始算） | 電腦端問題，未改（題目資料大時：加大 `FRAME_MAX_PAYLOAD`，或在電腦端用 `zlib.crc32` 分段驗證） | serial_bridge.py |
+| ⚠ 電腦端 `serial_bridge.py` 的 `on_bytes()`（CRC32）**不能切包**：CRC 無法分包後在電腦端合併（Pico 每包都從 0 開始算） | **已改**：送出前擋下 > `CHUNK_BYTES`（4096，`frame.py`）的資料並印 error，不會再白等 3 次逾時。上限 4096 比 Pico 的 8192 嚴；資料大時：`CHUNK_BYTES` 改 8192、加大 `FRAME_MAX_PAYLOAD`，或協定加「起始 crc」欄位 | serial_bridge.py |
 | 壞 CRC 時 Pico 丟掉整包再找 AA 55，frame.py 只往後挪 1 byte；USB 不會掉 byte，所以實務上沒差 | OK（差異已知） | frame.py `FrameParser.feed()` |
 
 ### PIO（app_pio.c、pio/*.pio）

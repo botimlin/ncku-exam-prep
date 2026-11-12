@@ -48,7 +48,7 @@
 
 - **臨界區（critical section）**：存取共享資料、一次只能一條執行緒做的那幾行程式。
 - **mutex（互斥鎖）**：拿不到鎖就**睡覺**，讓出 CPU，等別人放鎖時被叫醒。等很久時省 CPU；但每次 lock/unlock 都有成本，搶的時候還要進作業系統。
-- **spinlock（自旋鎖）**：拿不到鎖就**一直原地繞圈**檢查。臨界區超短、而且執行緒數 ≤ 核心數時才划算；拿著鎖的執行緒被作業系統暫停時，其他人會白繞（本章 T=8 實測 spinlock 5021 ms，7.5）。官方 demo 和 Pico 的硬體鎖都是這種。
+- **spinlock（自旋鎖）**：拿不到鎖就**一直原地繞圈**檢查。臨界區超短、而且執行緒數 ≤ 核心數時才划算；拿著鎖的執行緒被作業系統暫停時，其他人會白繞（本章 T=8 實測 spinlock 5021 ms，7.5）。官方 demo（`pthread_spin_lock`）和 Pico SDK 的 `spin_lock_*` 都是這種。
 - **atomic（原子操作）**：CPU 一條指令完成「讀-改-寫」，例如 `atomic_fetch_add`。不用鎖，但那個變數所在的 cache line 會在核心之間搬來搬去，還是慢。
 - 共同原則：**鎖要抓得越短越好**、**最好根本不要在熱迴圈裡共享**。
 
@@ -126,7 +126,7 @@ gcc -O2 -Wall -Wextra -std=c11 -pthread parallel_template.c -o $B/par && $B/par 
 gcc -O2 -Wall -Wextra -std=c11 -pthread pipeline_template.c -o $B/pipe && $B/pipe
 ```
 
-本章照做，兩支都 0 警告。`par 4` 跑完要 10～20 秒（mutex / spinlock 版很慢），不是當機。
+本章照做，兩支都 0 警告。`par 4` 本章實測整支跑完 `real 0m10.972s`（mutex / spinlock 版很慢），不是當機。
 
 #### 對外介面
 
@@ -135,12 +135,12 @@ gcc -O2 -Wall -Wextra -std=c11 -pthread pipeline_template.c -o $B/pipe && $B/pip
 | # | 清單內容 | 本章哪裡有實測 |
 |---|---|---|
 | 1 | 先量測，不要猜（`BENCH`、`time`） | 7.3.2、7.5 |
-| 2 | 編譯選項 `-O2` → `-O3` → `-O3 -march=native` | 7.5：serial 45.9 ms → 15.5 ms |
+| 2 | 編譯選項 `-O2` → `-O3` → `-O3 -march=native` | 7.5：serial 46.9 ms → 15.5 ms |
 | 3 | 熱迴圈裡不要有鎖 / 原子操作；臨界區要短 | 7.5：mutex 0.11x～0.36x、local 3.89x |
 | 4 | 批次處理 | 7.5：pipeline C 版 1.56x vs B 版 0.85x |
 | 5 | cache 友善、避開 false sharing | 7.5：padded 3.79x vs false-share 2.75x |
 | 6 | 查表 | 第 5 章 `algo/crc32.c` |
-| 7 | 強度削減（`% 256` → `& 255`） | 沒有實測 |
+| 7 | 強度削減（`% 256` → `& 255`） | 7.4.7：無號數編譯器自己會做，實測 1.06x |
 | 8 | 迴圈展開 | 第 5 章 |
 | 9 | `restrict` | 沒有實測 |
 | 10 | 換演算法 | 第 5 章 `algo/sort.c` |
@@ -753,7 +753,15 @@ int main(void) {
 }
 ```
 
-（這段沒有實測。對無號數 `% 256` 和 `& 255` 在 `-O2` 下通常編成一樣的指令，量不出差別是正常的；這正是「先量再改」的意義。）
+本章實測（gcc 13.3 `-O2 -Wall -Wextra -std=c11`，0 警告）：
+
+```text
+  % 256                             0.155 ms
+  & 255                             0.146 ms
+加速 1.06x
+```
+
+對無號數，編譯器自己就會把 `% 256` 換成 `& 255`，兩者幾乎一樣快。README 清單第 7 條（強度削減）在這種情況下不用手動做；量了才知道，這正是「先量再改」的意義。
 
 ### 7.4.8 搬到 Pico 2 雙核心
 
@@ -779,7 +787,7 @@ int main(void) {
 
 量測方法：每支程式內建 `BENCH`（每種寫法跑 3 次取最快）；加速倍數 = serial 時間 ÷ 該寫法時間。
 
-環境：Intel Xeon Processor @ 2.30GHz、4 vCPU（1 thread per core）、16 GB RAM、cache line 64 B、Linux 6.18、gcc 13.3 `-O2 -std=c11 -pthread`。**這個容器同時有其他工作在跑**（量測時 load average 1.06～3.90），所以同一個寫法每次量的結果會變。下面列出每一次的數字，不做平均。
+環境：Intel Xeon Processor @ 2.30GHz、4 vCPU（1 thread per core）、16 GB RAM、cache line 64 B、Linux 6.18、gcc 13.3 `-O2 -std=c11 -pthread`。**這個容器同時有其他工作在跑**（量測時 load average 1.06～3.90），所以同一個寫法每次量的結果會變。下面列出其中 5 次（從最空閒到最忙），不做平均；其他 6 次 T=4 的 local 落在 1.25x～1.94x，在表的範圍內。
 
 確認 4 核是真的：4 個單執行緒程式同時跑的牆上時間（1.663 s）和只跑 1 個（1.692 s）一樣（本章 `spin1.c` 實測）。
 
@@ -816,7 +824,7 @@ int main(void) {
 - T=1 時 mutex 0.36x：**沒有人搶**，每個元素 lock/unlock 一次的固定成本就讓它慢 3 倍。
 - T=8 > 4 核：local 沒有更快；spinlock 慘到 5 秒（拿著鎖的執行緒被暫停，其他人白繞）。
 
-**編譯選項（T=4，load 1.68）**：`-O3 -march=native` 時 serial 15.463 ms、local 5.723 ms（2.70x）；同一台 `-O2` serial 45～53 ms。光換編譯選項，單執行緒就快 3 倍左右（45.9 → 15.5 ms），和 README `:43`「先把單執行緒版本優化好」一致。
+**編譯選項（T=4，load 1.68）**：`-O3 -march=native` 時 serial 15.463 ms、local 5.723 ms（2.70x）；緊接著跑的 `-O2` 版 `./par 1` serial 46.940 ms。光換編譯選項，單執行緒就快 3.04 倍（46.9 → 15.5 ms），和 README `:44`「先把單執行緒版本優化好，再談平行化」一致。
 
 **pipeline_template（ms，括號是加速）**
 
@@ -829,7 +837,7 @@ int main(void) {
 
 - C 版三次都在 1.55x～1.58x，最穩定；B 版在這台比單執行緒慢（每筆一次 cache line 交接，成本和 64 輪計算差不多）。理論上限是 2x（兩邊各做一半）。
 
-**官方 section2-3 critical-section（3 次）**：no lock 39980 / 39891 / 39884（全部 LOST UPDATES）、42.3～44.9 ms；short hold 全部 40000、41.8～49.8 ms；long hold 全部 40000、86.0～87.2 ms（約是 short 的 2 倍，就是「退回單執行緒」）。
+**官方 section2-3 critical-section（3 次）**：no lock 39980 / 39891 / 39884（全部 LOST UPDATES）、42.3～44.9 ms；short hold 全部 40000、41.8～49.8 ms；long hold 全部 40000、86.0～87.2 ms（是同一次 short 的 1.73～2.06 倍，就是「退回單執行緒」）。
 
 ## 7.6 限制、已知問題、沒驗證的地方
 
@@ -857,7 +865,7 @@ int main(void) {
 | 找 data race | `gcc -O1 -g -fsanitize=thread -std=c11 -pthread x.c -o x && ./x` |
 | 找最花時間的函式 | `gcc -O2 -g -pg x.c -o x && ./x && gprof -b ./x gmon.out \| head -30` |
 | 逐行指令數 | `valgrind --tool=callgrind --callgrind-out-file=cg.out ./x && callgrind_annotate cg.out` |
-| 更快的編譯選項 | `-O3 -march=native`（本章 serial 45.9 → 15.5 ms） |
+| 更快的編譯選項 | `-O3 -march=native`（本章 serial 46.9 → 15.5 ms） |
 
 函式簽名：
 
