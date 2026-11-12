@@ -408,7 +408,7 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
 | `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | CRC-32C（check `0xE3069283`） | O(n)；`TC` 1 KB | 只有查表版 |
 | `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | `crc`：**第一段傳 `0xFFFF`**，之後傳上次結果 | CRC-16/IBM-3740（check `0x29B1`） | O(n)；`T16` 512 byte | 傳 0 開始 = CRC-16/XMODEM（沒有 xorout，所以 init 0 就是 XMODEM） |
 | `crc_param_t` | `width`、`poly`、`init`、`refin`、`refout`、`xorout` | 結構（M33 上 20 byte） | — | 欄位順序固定，照 5.2.4 表格填 |
-| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | 參數、資料 | 照參數算出的 CRC | O(16n)（每 byte 8 次位移 + 8 次反轉）；不用表；M33 stack 32 byte | **width 只能 8..32**；**不能分段**（每次呼叫都重新套 init、xorout） |
+| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | 參數、資料 | 照參數算出的 CRC | O(8n) 次位移（refin 時每 byte 再加 8 次反轉）；不用表；M33 stack 32 byte | **width 只能 8..32**；**不能分段**（每次呼叫都重新套 init、xorout） |
 
 `crc32_bitwise` / `table` / `slice4` / `update` / `crc32c_update` 的分段規則跟 zlib 一樣：`c = f(0, a, na); c = f(c, b, nb);` 等於 `f(0, a+b, na+nb)`。原理：函式開頭 `crc = ~crc`、結尾 `return ~crc`（`crc32.c:44,50`），把 init 和 xorout 都藏在裡面，所以傳 0 進去 = 從 `0xFFFFFFFF` 開始。
 
@@ -444,7 +444,7 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
 | `crc32.c:11` | `#define POLY32CR 0x82F63B78u` | CRC-32C 反轉多項式 | 一般不改 |
 | `crc32.c:12` | `#define POLY16 0x1021u` | `crc16_ccitt_false` 的多項式（不反轉） | 要別的「不反轉、無 xorout」的 16-bit CRC，例如 CRC-16/UMTS 換 `0x8005`（init 傳 0）、CRC-16/T10-DIF 換 `0x8BB7` |
 
-`POLY32R` 的反轉值可以用 `crc32.c:97` 的 `reflect(poly, 32)` 算，或在 Python：`int(f"{0xF4ACFB13:032b}"[::-1], 2)`。本次用 Python 算出 `0xC8DF352F`、`0xD419CC15`。
+`POLY32R` 的反轉值可以用 `crc32.c:97` 的 `reflect(poly, 32)` 算，或在 Python：`int(f"{0xF4ACFB13:032b}"[::-1], 2)`。本次用 Python 算出 `0xC8DF352F`、`0xD419CC15`；並在 repo 外的複本把 `POLY32R` 改成 `0xC8DF352Fu`，`crc32_update`、`crc32_bitwise`、切兩段算 `"123456789"` 都得到 `0x1697D06A`（= CRC-32/AUTOSAR 的 check）。
 
 #### 實際執行輸出
 見 5.3.3（`crc32_test`）與 5.3.3 的「CRC 規格表」輸出。
@@ -1027,3 +1027,650 @@ uint32_t fletcher32(const uint8_t *p, size_t n) {
 |---|---|---|
 | `implicit declaration of function 'clock_gettime'` | `test_util.h` 不是第一個 include | 放第一行 |
 | 測出來 0 ns | 結果沒用到被優化掉 | 用 `SINK()` |
+
+## 5.4 照題目改：食譜
+
+### 5.4.1 題目給了一個不常見的 CRC 規格
+
+**題目長這樣**：「封包最後 2 byte 是 CRC-16，多項式 0x1021，初值 0x1D0F，不反轉，無最後 XOR」或「CRC-32/AUTOSAR」或「CRC-7，多項式 x^7+x^3+1」。
+
+**步驟**：
+1. 把題目的描述翻成 7 個參數（5.2.3）。多項式寫成「反轉」形式（例如 `0xA001`、`0xEDB88320`）時，先換回一般寫法並設 refin=refout=1。
+2. 查 5.2.4 表格有沒有同一列；有就整格複製。
+3. **先驗證參數**：寫一個 3 行的測試，對 `"123456789"` 算，和題目給的範例（或表格 check 值）比對。
+   ```c
+   crc_param_t p = {16, 0x1021, 0x1D0F, 0, 0, 0x0000};      /* CRC-16/SPI-FUJITSU */
+   printf("%04X\n", (unsigned)crc_generic(&p, (const uint8_t *)"123456789", 9));   /* 應為 E5CC */
+   ```
+4. 正確後再決定要不要換成快的版本：
+   - 資料小（幾 KB）：直接用 `crc_generic`（28~31 MB/s，本次實測）。
+   - refin=refout=1、init=xorout=`0xFFFFFFFF` 的 32-bit CRC：改 `crc32.c:10` 的 `POLY32R` 成反轉多項式，直接用 `crc32_update`。
+   - 其他（不反轉、init 不是全 1、width 8..32 任意）：用下面的 `crcf`（ch05 自寫查表版，可分段）。
+   - width < 8：用下面的 `crc_bits`。
+
+**`crcf`：任意 refin==refout 規格的查表版（ch05 自寫；本次對 12 種規格 × 100 組隨機長度、切兩段算，和 `crc_generic` 全一致；CRC-32/AUTOSAR 470.0 MB/s，`crc_generic` 28.3 MB/s，快 16.6 倍）**：
+
+```c
+#include <stdint.h>
+#include <stddef.h>
+typedef struct { uint8_t width, ref; uint32_t poly, init, xorout; uint32_t T[256]; } crcf_t;
+static uint32_t refl(uint32_t v, int bits) { uint32_t r = 0; for (int i = 0; i < bits; i++) { r = (r << 1) | (v & 1u); v >>= 1; } return r; }
+void crcf_init(crcf_t *c, int width, uint32_t poly, uint32_t init, int ref, uint32_t xorout) {
+    uint32_t mask = (width == 32) ? 0xFFFFFFFFu : ((1u << width) - 1u);
+    c->width = (uint8_t)width; c->ref = (uint8_t)ref; c->poly = poly; c->init = init; c->xorout = xorout;
+    for (uint32_t i = 0; i < 256; i++) {
+        uint32_t r;
+        if (ref) { uint32_t pr = refl(poly, width); r = i;
+                   for (int k = 0; k < 8; k++) r = (r >> 1) ^ (pr & (0u - (r & 1u))); }
+        else     { uint32_t top = 1u << (width - 1); r = i << (width - 8);
+                   for (int k = 0; k < 8; k++) r = (r & top) ? (r << 1) ^ poly : (r << 1);
+                   r &= mask; }
+        c->T[i] = r;
+    }
+}
+/* 「原始暫存器」版：可以分段。開始 reg = crcf_start(c)，最後 crcf_finish(c, reg) */
+uint32_t crcf_start(const crcf_t *c) { return c->ref ? refl(c->init, c->width) : c->init; }
+uint32_t crcf_feed(const crcf_t *c, uint32_t reg, const uint8_t *p, size_t n) {
+    uint32_t mask = (c->width == 32) ? 0xFFFFFFFFu : ((1u << c->width) - 1u);
+    if (c->ref) while (n--) reg = (reg >> 8) ^ c->T[(reg ^ *p++) & 0xFF];
+    else        while (n--) reg = ((reg << 8) ^ c->T[((reg >> (c->width - 8)) ^ *p++) & 0xFF]) & mask;
+    return reg;
+}
+uint32_t crcf_finish(const crcf_t *c, uint32_t reg) {
+    uint32_t mask = (c->width == 32) ? 0xFFFFFFFFu : ((1u << c->width) - 1u);
+    return (reg ^ c->xorout) & mask;
+}
+```
+
+用法：`static crcf_t c; crcf_init(&c, 16, 0x1021, 0x1D0F, 0, 0); uint32_t r = crcf_start(&c); r = crcf_feed(&c, r, buf1, n1); r = crcf_feed(&c, r, buf2, n2); uint16_t crc = crcf_finish(&c, r);`。`crcf_t` 有 1 KB 的表，在 MCU 上放 `static`。refin ≠ refout 的規格（例如 CRC-12/UMTS）不支援，用 `crc_generic`。
+
+**`crc_bits`：width 1..32 都可用的逐位元版（ch05 自寫；本次 CRC-7/MMC、CRC-5/USB、CRC-4/G-704、CRC-3/GSM、CRC-32、CRC-16/CCITT-FALSE 共 6 個 check 值 PASS，UBSan 無錯誤）**：
+
+```c
+uint32_t crc_bits(int width, uint32_t poly, uint32_t init, int refin, int refout, uint32_t xorout,
+                  const uint8_t *p, size_t n) {
+    uint32_t mask = (width == 32) ? 0xFFFFFFFFu : ((1u << width) - 1u), crc = init & mask;
+    while (n--) {
+        uint8_t b = *p++;
+        for (int k = 0; k < 8; k++) {
+            int in = refin ? (b >> k) & 1 : (b >> (7 - k)) & 1;      /* refin：LSB 先 */
+            int fb = (int)((crc >> (width - 1)) & 1u) ^ in;
+            crc = (crc << 1) & mask;
+            if (fb) crc ^= poly;
+        }
+    }
+    if (refout) { uint32_t r = 0; for (int i = 0; i < width; i++) { r = (r << 1) | (crc & 1u); crc >>= 1; } crc = r; }
+    return (crc ^ xorout) & mask;
+}
+```
+
+**怎麼驗證**：電腦端用 Python 版 `crc_generic`（食譜 5.4.7）對同一份資料算，跟板子回傳值比。**成功的樣子**：`"123456789"` 的結果等於表格 check 值，且隨機資料 C 與 Python 一致。
+
+### 5.4.2 軟體 CRC 換成 DMA sniffer（硬體 CRC）
+
+**題目長這樣**：「CRC 計算太慢，請用硬體加速」「用 DMA 的校驗功能」（`預測考題.md` 2-3-D）。
+
+**先知道**：RP2350 的 DMA sniffer 只會 4 種 CRC 計算（`regs/dma.h` 的 `SNIFF_CTRL_CALC`，pico-sdk 2.2.0）：`0x0` CRC-32（IEEE 多項式，資料 MSB 先）、`0x1` CRC-32 資料位元反轉、`0x2` CRC-16-CCITT、`0x3` CRC-16-CCITT 資料位元反轉，另有 `0xe` 全部 XOR 的奇偶、`0xf` 32-bit 加總。暫存器說明寫明 `OUT_REV`、`OUT_INV` 只改「讀出來的值」，不影響計算。**整顆晶片只有一個 sniffer**（第 3 章 `app_dma.c` 一節）。
+
+**步驟（zlib CRC-32，最常見）**：
+1. 從 `pico/app_dma.c:65-87` 把 `dma_crc32()` 整個函式複製到你的程式（設定：8-bit 傳輸、初值 `0xFFFFFFFF`、`OUT_REV`、`CALC_VALUE_CRC32R`、讀出後軟體 `^ 0xFFFFFFFF`）。
+2. CMake：`target_link_libraries(你的app ... hardware_dma)`，程式 `#include "hardware/dma.h"`。
+3. 把原本的軟體呼叫換掉。以 `pico/app_serial.c:44-49` 的 `CMD_CRC32` 為例：
+   - 改前（`app_serial.c:45`）：`uint32_t c = crc32_update(0, f->payload, f->len);`
+   - 改後：`uint32_t c = dma_crc32(f->payload, f->len);`
+4. **開機自我測試**：先跑第 3 章的 `app_dma`，看 `crc32("123456789") ... PASS`。或在你的程式開頭比 `dma_crc32("123456789", 9) == 0xCBF43926`，並和軟體 `crc32_update` 對一份隨機資料比。FAIL 時看 `app_dma.c:63-64` 的提示：值是 `0x649C2FD3` → 把 `output_reverse` 改 false；值是 `0x340BC6D9` → 最後的 XOR 多做了。
+5. 一次 DMA 算完整段資料，不要分段續算（`app_dma.c:82-83` 註解：寫回初值時是否受 OUT_REV 影響文件沒寫）。
+
+本次把上面這個改法（加上排序、串流 SHA-0 兩個新指令，見 5.4.3、5.4.4）放進 `app_serial.c` 的複本 `app_serial_ch05.c`，用 pico-sdk 2.2.0（pico2、ARM）**編譯連結通過、0 警告**（`text 28816 / bss 38240`）。⚠️ **沒有上板**；sniffer 結果和 zlib 相同這件事目前只由暫存器文件推導（已知問題 9），一定要看自我測試。
+
+**其他 CRC 規格**：
+- CRC-32/MPEG-2（`{32, 0x04C11DB7, 0xFFFFFFFF, 0, 0, 0}`）：推導上是 `CALC_VALUE_CRC32`、不設 `OUT_REV`、不做最後 XOR；BZIP2 再加 `^0xFFFFFFFF`。⚠️未驗證。
+- CRC-16（CCITT 多項式 `0x1021` 系列：XMODEM、CCITT-FALSE、KERMIT…）：用 `CALC_VALUE_CRC16` / `CRC16R`。16-bit 結果落在 32-bit 累加器的哪一半、`OUT_REV` 會不會把它反轉到高 16 位，文件沒寫清楚 → ⚠️未驗證。上板時把 `r`、`r & 0xFFFF`、`r >> 16` 都印出來，和 `crc_generic` 的答案比。
+- 其他多項式（`0x8005` 的 MODBUS、CRC-32C…）：sniffer 不支援，只能軟體算。
+
+**成功的樣子**：自我測試 PASS，且同一份資料 DMA 與軟體結果相同。速度數字見第 3 章（`app_dma` 會印 `cpu=…us dma=…us`）。
+
+### 5.4.3 大陣列分給多塊板子排序，再 k-way merge
+
+**題目長這樣**：「把 N 個整數排序，可以用多塊板子」（`預測考題.md` 1-B，去年 ③）。
+
+**板子端**（每塊收一段、排好、回傳）：在 `app_serial.c` 的 `handle()` 加一個指令（第 2 章 2.4.6 有電腦端加指令的步驟）。本次編譯通過的寫法：
+
+```c
+#include "sort.h"
+#define CMD_SORT_U32 0x04     // payload = u32 陣列 → 回排序好的 u32 陣列
+static uint32_t sort_buf[FRAME_MAX_PAYLOAD / 4], sort_tmp[FRAME_MAX_PAYLOAD / 4];
+...
+    case CMD_SORT_U32: {
+        uint32_t n = f->len / 4;
+        memcpy(sort_buf, f->payload, n * 4);
+        radix_sort_u32(sort_buf, n, sort_tmp);
+        proto_send(f->cmd, f->seq, (const uint8_t *)sort_buf, (uint16_t)(n * 4));
+        break;
+    }
+```
+
+CMake 加 `algo/sort.c` 和 include 路徑（食譜 5.4.6）。有號數就在 `radix_sort_u32` 前後各做一次 `^= 0x80000000u`。
+
+**電腦端**（切塊 → 平行送 → 合併），沿用 `ros2/multi_device.py` 的 `split`、`run_parallel`（第 2 章 2.3.5），合併換成 `heapq.merge`：
+
+```python
+import heapq
+from frame import pack_u32, unpack_u32
+from multi_device import split, run_parallel
+CMD_SORT_U32 = 0x04
+chunks = split(pack_u32(values))                 # 每塊 <= CHUNK_BYTES（4096 B = 1024 個 u32）
+replies = run_parallel(ports, chunks, CMD_SORT_U32)
+out = list(heapq.merge(*[unpack_u32(r) for r in replies]))
+assert out == sorted(values)
+```
+
+本次用假的序列埠（`transact` 換成「Python 排好回傳」）跑這段：100,000 個隨機 `uint32`、98 塊、2 個 port，`合併正確 True`。真的板子沒有實測。有號數：`pack_u32` 會把負數轉成二補數（`frame.py:28-30`），收回來要轉回有號再比：`[x - (1 << 32) if x >> 31 else x for x in ...]`。
+
+**合併在板子上做時**（例如 core0、core1 各排一半，或一塊板子收回兩塊的結果）：
+- 2 段：`merge_two_sorted(a, na, b, nb, out)`。
+- 3~4 段：`kway_merge(lists, lens, k, out)`。
+- 8 段以上：兩兩合併比 `kway_merge` 快（本次 n = 2^20、k = 16：15.93 ms vs 62.32 ms），但需要一個 n 大小的暫存區。ch05 自寫版（k 段等長、連續放在 `src`，k 是 2 的冪；本次 k = 2、4、8、16 都排序正確）：
+
+```c
+static uint32_t *tree_merge(uint32_t *src, uint32_t *dst, size_t n, int k) {
+    size_t len = n / k;
+    while (len < n) {
+        for (size_t lo = 0; lo < n; lo += 2 * len) {
+            size_t m = lo + len < n ? len : n - lo, r = lo + 2 * len <= n ? len : (lo + len < n ? n - lo - len : 0);
+            merge_two_sorted(src + lo, m, src + lo + m, r, dst + lo);
+        }
+        uint32_t *t = src; src = dst; dst = t; len *= 2;
+    }
+    return src;                     /* 結果在 src 或 dst 其中一個，用回傳值 */
+}
+```
+
+**注意**：`seq` 只有 8 bit（`multi_device.py` 用 chunk 編號的低 8 位），塊數超過 256 時 seq 會重複；`run_parallel` 依索引存結果所以順序仍正確，但重送時可能收到舊回覆（見第 2 章 2.6）。
+
+**成功的樣子**：電腦端 `out == sorted(values)` 為 True；兩塊板子時間接近單塊的一半加上合併時間（本次單核模擬：兩半各 radix + merge 11.01 ms，單次 radix 6.88 ms）。
+
+### 5.4.4 資料分好幾包收到：串流算 SHA-0
+
+**題目長這樣**：「Host 會分多個封包送出一份資料，請回傳整份資料的 SHA-0」。
+
+**步驟**：
+1. 用一個全域的 `sha1_ctx`（不要放 stack，也不要每包重開）。
+2. 收到第一包前 `sha1_init(&ctx, 1)`（**1 = SHA-0**）。
+3. 每包 `sha1_update(&ctx, payload, len)`，長度任意、不用湊 64。
+4. 收到「結束」的訊號（題目會定義：最後一包的旗標、另一個指令、或總長度到了）才 `sha1_final(&ctx, out)`，回傳 20 byte。
+5. 下一份資料重新 `init`。
+
+本次放進 `app_serial_ch05.c` 編譯通過的寫法（兩個新指令：`0x05` 餵資料、`0x06` 結束）：
+
+```c
+#include "sha1_sha0.h"
+#define CMD_SHA0_UPDATE 0x05     // payload = 下一段資料 → 回空封包（ack）
+#define CMD_SHA0_FINAL  0x06     // 回 20 byte SHA-0，並重新開始
+static sha1_ctx sha_ctx;
+static int sha_started = 0;
+...
+    case CMD_SHA0_UPDATE:
+        if (!sha_started) { sha1_init(&sha_ctx, 1); sha_started = 1; }   // 1 = SHA-0
+        sha1_update(&sha_ctx, f->payload, f->len);
+        proto_send(f->cmd, f->seq, NULL, 0);
+        break;
+    case CMD_SHA0_FINAL:
+        if (!sha_started) sha1_init(&sha_ctx, 1);      // 沒資料 = SHA-0("")
+        sha1_final(&sha_ctx, reply);
+        sha_started = 0;                               // 下一次 UPDATE 重新開始
+        proto_send(f->cmd, f->seq, reply, 20);
+        break;
+```
+
+**順序很重要**：SHA 對資料順序敏感，封包必須照順序餵。用 `multi_device.py` 那種「多執行緒搶工作」的方式送會亂序，**這題只能用一個 port、依序送**。若電腦端會重送（`frame.transact` 逾時重試），板子要用 `seq` 判斷是不是重複的包，否則同一段會被餵兩次（⚠️ 上面的範例沒有處理重送）。
+
+**怎麼驗證**：電腦端用 Python 版 `sha0`（食譜 5.4.7）算整份資料，和板子回的 20 byte 比。在電腦上先用 `sha_test.c` 的「隨機切段」那段邏輯（`sha_test.c:51-71`）確認你的切法不影響結果。
+
+**加速**：一核收封包、一核算 SHA（第 3 章 `app_multicore.c` 一節）；注意 `rx` 只有一份，要多個 buffer 輪流（`app_serial.c:85-86` 註解）。
+
+**成功的樣子**：板子回的 hex 等於 Python `sha0(data).hex()`；`"abc"` 分成 `"a"`、`"bc"` 兩包送，結果是 `0164b8a914cd2a5e74c4f7ff082c4d97f1edf880`。
+
+### 5.4.5 BNN 用 popcount 加速（含權重格式轉換）
+
+**題目長這樣**：「eBNN 推論太慢」「請優化推論速度」。
+
+**步驟**：
+1. **選對 popcount**（最重要，零成本）：
+   - Pico 2 用 RISC-V（Hazard3）編：pico-sdk 預設 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb`（`pico-sdk/cmake/preload/toolchains/pico_riscv_gcc.cmake:5`），已含 Zbb，`__builtin_popcount` 會變成 1 條 `cpop`，`bnn_dot` 內迴圈只有 8 條指令（本次 objdump：`lw lw addi addi xnor cpop add bne`）。什麼都不用改。
+   - Pico 2 用 ARM（Cortex-M33）編：M33 沒有 popcount 指令，預設會呼叫 libgcc 的 `__popcountsi2`（本次 objdump 確認 `bnn.o` 有 2 個呼叫）。加 `target_compile_definitions(你的app PRIVATE BNN_SWAR_POPCOUNT)` 改用 SWAR，內迴圈 18 條指令、沒有函式呼叫（本次 objdump）。
+   - 板子上兩者的實際速度**沒有實測**；host 上 SWAR 比 `__builtin_popcount`（無硬體指令）快 1.49 倍（12.09 → 8.12 µs），硬體 popcnt 快 3.48 倍（3.47 µs）。
+2. **改成數「不同」**：`dot = n - 2 * popcount(a ^ w)`，省掉 NOT。本次在 M33 上內迴圈從 18 條變 17 條（幾乎沒差）；host 上因為編譯器自動向量化差很多（SWAR 6.82 → 2.61 µs），**這個差距不代表 Pico**。不急的話不用改。
+3. **用雙核心或多板分神經元 / 分樣本**（5.2.8 的去年考題對照）。
+4. **少搬資料**：權重放 `static const`（在 flash，透過 XIP cache 讀）或複製到 RAM 再算。哪個快在 Pico 上**沒有實測**（⚠️未驗證）。
+5. **傳輸**：輸入用 bits 傳（784 bit = 100 byte），回傳只回類別編號（1 byte）。
+
+**權重格式轉換**：題目的權重若是 numpy `packbits`（預設 `bitorder='big'`：第 i 個元素在 byte `i/8` 的 bit `7 - i%8`，MSB 先），要轉成 `bnn.h` 的排列。ch05 自寫（本次 100 個元素與 `bnn_pack` 結果相同）：
+
+```c
+/* numpy.packbits（bitorder='big'）的位元組 → bnn.h 的排列（第 i 個 → word i/32 的 bit i%32） */
+static void bnn_from_packbits(const uint8_t *pb, int n, uint32_t *out) {
+    for (int k = 0; k < BNN_WORDS(n); k++) out[k] = 0;
+    for (int i = 0; i < n; i++)
+        if ((pb[i >> 3] >> (7 - (i & 7))) & 1) out[i >> 5] |= 1u << (i & 31);
+}
+```
+
+開機時轉一次存進 RAM 陣列，推論時不要每次轉。若題目給的是 `bitorder='little'` 的 bytes，那就是 `bnn.h` 的排列（小端 CPU 上 4 byte 直接當一個 word），可以直接 `memcpy`。
+
+**怎麼驗證**：用 Python 版 `bnn_dense_sign` / `bnn_dense_score`（食譜 5.4.7）算同一組輸入，比對分數。**成功的樣子**：分數陣列逐項相同，argmax 相同；改了 popcount 之後 `bnn_test` 仍 `結果：全部通過`。
+
+### 5.4.6 把 algo 的檔案放進 Pico 專案
+
+**要複製哪些檔**：只複製核心檔，**不要**複製 `*_test.c`、`test_util.h`。
+
+| 要用 | 複製 |
+|---|---|
+| CRC | `crc32.c`、`crc32.h` |
+| SHA-0 / SHA-1 | `sha1_sha0.c`、`sha1_sha0.h` |
+| SHA-256 | `sha256.c`、`sha256.h` |
+| 排序 | `sort.c`、`sort.h` |
+| BNN | `bnn.c`、`bnn.h` |
+| Adler / Fletcher / XOR / IP | 把需要的函式從 `checksum_misc.c` 貼到你的 `.c`（不要貼 `#ifdef TEST_MAIN` 那段） |
+
+**CMake**（本次在 pico-sdk 2.2.0、`PICO_BOARD=pico2`、ARM 編譯連結通過，0 警告）。假設檔案放在專案的 `algo/` 子資料夾：
+
+```cmake
+add_executable(app_algo
+    app_algo.c
+    algo/crc32.c algo/sha1_sha0.c algo/sha256.c algo/sort.c algo/bnn.c)   # 只放核心檔，不要放 *_test.c
+target_include_directories(app_algo PRIVATE ${CMAKE_CURRENT_LIST_DIR}/algo)
+target_compile_options(app_algo PRIVATE -O2 -Wall -Wextra)
+if (PICO_PLATFORM STREQUAL "rp2350-arm-s")
+    target_compile_definitions(app_algo PRIVATE BNN_SWAR_POPCOUNT)       # M33 沒有 popcount 指令
+endif()
+target_link_libraries(app_algo pico_stdlib)
+pico_enable_stdio_usb(app_algo 1)
+pico_enable_stdio_uart(app_algo 0)
+pico_add_extra_outputs(app_algo)
+```
+
+（`PICO_PLATFORM` 在 `-DPICO_BOARD=pico2` 時是 `rp2350-arm-s`，本次 `CMakeCache.txt` 確認；加 `-DPICO_PLATFORM=rp2350-riscv` 時條件不成立，就用 `cpop`。）要加到既有的 `pico/CMakeLists.txt`：在對應的 `add_app(...)` 後面補 `target_sources(app_xxx PRIVATE algo/sort.c ...)` 和上面的 `target_include_directories`。
+
+本次的測試程式 `app_algo.c`（ch05 自寫，開機印 CRC、SHA-0 自我測試與 CRC/SHA/radix/BNN 的時間）連結結果：`text 34588 / bss 232792`（bss 大是因為測試用了 64 KB 資料 + 128 KB 排序陣列 + 25 KB 權重）。⚠️ 沒有上板，沒有板上速度數字。
+
+**和 `pico/serial_proto.c` 同時用的衝突**：`serial_proto.c:25` 和 `crc32.c:77` 都定義了 `crc32_update`（同樣是 zlib CRC-32），放進同一個執行檔會出錯。本次實測：
+
+```text
+crc32.c:78: multiple definition of `crc32_update'; CMakeFiles/app_conflict.dir/serial_proto.c.o:serial_proto.c:25: first defined here
+collect2: error: ld returned 1 exit status
+```
+
+（報錯行號 78 是函式本體那行。）修法擇一：
+- 只需要 zlib CRC-32 → 不要加 `crc32.c`，直接用 `serial_proto.c` 的 `crc32_update`（同樣結果）。
+- 還需要 `crc32c_update`、`crc_generic` 等 → 對 `crc32.c` 改名：`set_source_files_properties(algo/crc32.c PROPERTIES COMPILE_DEFINITIONS "crc32_update=algo_crc32_update")`。本次這樣改後 `app_serial` + `crc32.c` 連結通過；注意這個屬性對所有用到 `algo/crc32.c` 的 target 都生效，別的 target 若呼叫 `crc32_update` 會找不到，改呼叫 `crc32_slice4`。
+
+**MCU 上的記憶體注意**：
+- 大陣列一律 `static`（Pico 主 stack 只有 `PICO_STACK_SIZE` = 0x800 = 2 KB 的保留空間，pico-sdk `rp2350/pico_platform/include/pico/platform.h:45`）。
+- `radix_sort_u32` 本身用 1064 byte stack、`sha256` 壓縮用 336 byte（5.5.6），在 core1（預設 2 KB）上用時要留意。
+- 有用雙核心：開機先呼叫一次 `crc32_init()` 再 `multicore_launch_core1`（避免兩核同時第一次建表）。
+
+**RISC-V 版**：本次在這個容器用 `-DPICO_PLATFORM=rp2350-riscv -DPICO_GCC_TRIPLE=riscv64-unknown-elf` 可以 configure，但連結 SDK 的 boot stage2 時失敗（`cannot read spec file 'nosys.specs'`：容器的 RISC-V 工具鏈只有 picolibc、沒有 newlib）。這是容器限制，不是 algo 的問題；6 個核心檔用 SDK 同樣的 `-march` 單獨編譯 0 警告（5.5.4）。考場 Docker 的工具鏈⚠️未驗證。
+
+### 5.4.7 在電腦上用 Python 對答案（`algo_ref.py`）
+
+**題目長這樣**：板子回了一個 CRC / SHA-0 / 分數，你要知道對不對。電腦端 Python 有 `zlib.crc32`、`zlib.adler32`、`hashlib.sha1`、`hashlib.sha256`、`binascii.crc_hqx`（= CRC-16/XMODEM），**沒有** SHA-0、任意參數 CRC、Fletcher、BNN。下面這個檔補齊（ch05 自寫，純標準函式庫）。
+
+本次驗證：`python3 -I algo_ref.py` 自我測試通過；C 程式讀 stdin 印出 9 種結果，對 200 組隨機資料（0~299 byte）和 Python 比對 **0 組不一致**（`sha0`、`sha1`、`sha256`、`crc32`、CRC-32C、`adler32`、`fletcher16`、`inet_csum`、CRC-16/MODBUS）；隨機 2 層 BNN（100→40→10，含 gamma 正負）的隱藏 bits、10 個分數、argmax 和 C 完全相同。速度（本次）：100 KB 的 `sha0` 66.9 ms、`crc_generic` 122.1 ms（`zlib.crc32` 0.052 ms）→ 幾 MB 以內的資料夠用。
+
+```python
+"""algo_ref.py — 電腦端對答案用（純 Python，只用標準函式庫）。對應 algo/ 的 C 函式。"""
+import struct, zlib, hashlib
+
+def reflect(v, bits):
+    r = 0
+    for _ in range(bits):
+        r = (r << 1) | (v & 1); v >>= 1
+    return r
+
+def crc_generic(data, width, poly, init, refin, refout, xorout):
+    """= algo/crc32.c crc_generic（width 8..32）"""
+    top, mask = 1 << (width - 1), (1 << width) - 1
+    crc = init & mask
+    for b in data:
+        if refin: b = reflect(b, 8)
+        crc ^= b << (width - 8)
+        for _ in range(8):
+            crc = ((crc << 1) ^ poly) if crc & top else (crc << 1)
+        crc &= mask
+    if refout: crc = reflect(crc, width)
+    return (crc ^ xorout) & mask
+
+def _sha1_core(data, is_sha0):
+    h = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0]
+    rotl = lambda x, n: ((x << n) | (x >> (32 - n))) & 0xFFFFFFFF
+    msg = data + b'\x80' + b'\x00' * ((55 - len(data)) % 64) + struct.pack('>Q', len(data) * 8)
+    for off in range(0, len(msg), 64):
+        w = list(struct.unpack('>16I', msg[off:off + 64]))
+        for t in range(16, 80):
+            x = w[t-3] ^ w[t-8] ^ w[t-14] ^ w[t-16]
+            w.append(x if is_sha0 else rotl(x, 1))       # 唯一差別
+        a, b, c, d, e = h
+        for t in range(80):
+            if t < 20:   f, k = (b & c) | (~b & d), 0x5A827999
+            elif t < 40: f, k = b ^ c ^ d, 0x6ED9EBA1
+            elif t < 60: f, k = (b & c) | (b & d) | (c & d), 0x8F1BBCDC
+            else:        f, k = b ^ c ^ d, 0xCA62C1D6
+            a, b, c, d, e = (rotl(a, 5) + f + e + k + w[t]) & 0xFFFFFFFF, a, rotl(b, 30), c, d
+        h = [(x + y) & 0xFFFFFFFF for x, y in zip(h, (a, b, c, d, e))]
+    return struct.pack('>5I', *h)
+
+def sha0(data): return _sha1_core(data, True)
+def sha1(data): return _sha1_core(data, False)        # 可用 hashlib.sha1 對照
+
+def fletcher16(data):
+    s1 = s2 = 0
+    for b in data:
+        s1 = (s1 + b) % 255; s2 = (s2 + s1) % 255
+    return (s2 << 8) | s1
+
+def inet_csum(data):
+    if len(data) % 2: data += b'\x00'
+    s = sum(struct.unpack('>%dH' % (len(data) // 2), data))
+    while s >> 16: s = (s & 0xFFFF) + (s >> 16)
+    return ~s & 0xFFFF
+
+def bnn_pack(v):                      # list of ±1 → list of uint32（第 i 個 → word i//32 的 bit i%32）
+    out = [0] * ((len(v) + 31) // 32)
+    for i, x in enumerate(v):
+        if x > 0: out[i >> 5] |= 1 << (i & 31)
+    return out
+
+def bnn_dot(a_bits, w_bits, n):       # = bnn.c bnn_dot
+    match = 0
+    for i in range(n):
+        match += ((a_bits[i >> 5] >> (i & 31)) & 1) == ((w_bits[i >> 5] >> (i & 31)) & 1)
+    return 2 * match - n
+
+def bnn_fold_bn(gamma, beta, mean, std, bias):   # = bnn.c bnn_fold_bn → (thr, flip)
+    import math
+    if gamma == 0: return (-(2**30) if beta >= 0 else 2**30 - 1, 0)   # = INT32_MIN/2、INT32_MAX/2
+    t = mean - bias - beta * std / gamma
+    return (math.ceil(t), 0) if gamma > 0 else (math.ceil(-t), 1)
+
+def bnn_dense_sign(x_bits, n_in, W_rows, thr, flip=None):  # W_rows[j] = 第 j 個神經元的 bits（list of uint32）
+    out = [0] * ((len(W_rows) + 31) // 32)
+    for j, w in enumerate(W_rows):
+        d = bnn_dot(x_bits, w, n_in)
+        if flip and flip[j]: d = -d
+        if d >= thr[j]: out[j >> 5] |= 1 << (j & 31)
+    return out
+
+def bnn_dense_score(x_bits, n_in, W_rows, bias=None):
+    return [bnn_dot(x_bits, w, n_in) + (bias[j] if bias else 0) for j, w in enumerate(W_rows)]
+
+if __name__ == '__main__':
+    s = b'123456789'
+    assert crc_generic(s, 32, 0x04C11DB7, 0xFFFFFFFF, 1, 1, 0xFFFFFFFF) == zlib.crc32(s) == 0xCBF43926
+    assert crc_generic(s, 16, 0x8005, 0xFFFF, 1, 1, 0) == 0x4B37
+    assert sha0(b'abc').hex() == '0164b8a914cd2a5e74c4f7ff082c4d97f1edf880'
+    assert sha1(b'abc') == hashlib.sha1(b'abc').digest()
+    assert zlib.adler32(b'Wikipedia') == 0x11E60398
+    assert fletcher16(b'abcde') == 0xC8F0
+    assert inet_csum(bytes([0, 1, 0xf2, 3, 0xf4, 0xf5, 0xf6, 0xf7])) == 0x220D
+    assert bnn_dot(bnn_pack([1, -1, 1]), bnn_pack([1, 1, 1]), 3) == 1
+    print('algo_ref 自我測試：全部通過')
+```
+
+**用法**：存成 `algo_ref.py`（放在 repo 外，或放在你自己的工作資料夾），`python3 algo_ref.py` 看到 `algo_ref 自我測試：全部通過`。在其他程式 `import algo_ref as R` 後：`R.sha0(data).hex()`、`R.crc_generic(data, 16, 0x1021, 0x1D0F, 0, 0, 0)`。排序用 Python 內建 `sorted()`，k-way merge 用 `heapq.merge`。
+
+**注意**：`bnn_fold_bn` 在 Python 用 double、C 用 float，`t` 剛好落在整數邊界附近時 `ceil` 可能差 1（⚠️ 本次隨機測試沒遇到，但沒排除）。題目若有給整數門檻，兩邊都直接用那個門檻。
+
+### 5.4.8 CRC-32 的資料被拆給多塊板子：在電腦端合併
+
+**題目長這樣**：「資料很大，分給兩塊板子各算一半的 CRC-32，最後要整份的 CRC-32」。`ros2/multi_device.py` 的 `merge_sum` 註解寫「CRC32 不能直接相加」——確實不能相加，但可以用下面的公式合併。
+
+CRC 是「仿射」函數（線性 + 常數），所以只要知道 A 的 CRC、B 的 CRC、B 的長度，就能算 A+B 的 CRC（ch05 自寫；本次 500 組隨機兩段、1 組 5 段，和 `zlib.crc32(a + b)` 全部一致）：
+
+```python
+import zlib
+def crc32_combine(crc_a, crc_b, len_b):
+    """crc32(A+B)，只知道 crc32(A)、crc32(B)、len(B)。花 O(len_b) 時間（電腦端夠快）。"""
+    z = bytes(len_b)
+    return zlib.crc32(z, crc_a) ^ crc_b ^ zlib.crc32(z)
+```
+
+多段依序合併：`c = crcs[0]; for i in range(1, k): c = crc32_combine(c, crcs[i], lens[i])`。
+
+**成功的樣子**：合併結果等於 `zlib.crc32(整份資料)`。（SHA 不能這樣拆，見 5.2.6。）
+
+## 5.5 效能：量測方法與實測數字
+
+### 5.5.1 量測方法
+
+- 測速都用 `test_util.h` 的 `BENCH_MIN(ns, reps, code)`：同一段程式跑 `reps` 次（CRC/SHA/BNN 5 次、排序 3 次）取最快那次，`CLOCK_MONOTONIC` 計時；結果寫進 `volatile` 的 `SINK` 避免被優化掉。
+- 速度欄位 `MB/s` = byte 數 ÷ 微秒（10^6 byte/s）；4 MB = 4,194,304 byte。
+- 排序的時間**都含一次 `memcpy` 還原資料**（n = 2^20 時 memcpy 本身 0.28 ms）。
+- 本次 host：x86_64 Intel Xeon @ 2.30GHz、4 核、gcc 13.3.0、`-O2`。qemu-riscv32 的時間**不代表真實硬體**，只列出來證明程式在 rv32 上跑得完。
+- Pico 2 上的速度**全部沒有實測**（沒有板子）。要量就用 `pico/timing.h`（第 3 章）或 5.4.6 的 `app_algo.c` 那種 `time_us_64()` 前後相減。
+
+### 5.5.2 CRC 與 SHA（host，4 MB）
+
+| 函式 | 時間 | 速度 | 相對 `crc32_bitwise` |
+|---|---|---|---|
+| `crc32_bitwise` | 36.47 ms | 115.0 MB/s | 1x |
+| `crc32_table` | 8.65 ms | 484.8 MB/s | 4.2x |
+| `crc32_slice4`（= `crc32_update`） | 2.90 ms | 1445.4 MB/s | 12.6x |
+| `crc32c_update` | 8.58 ms | 488.6 MB/s | 4.3x |
+| `crc16_ccitt_false` | 11.85 ms | 353.9 MB/s | 3.1x |
+| `crc_generic`（CRC-32/AUTOSAR，ch05 自寫測速） | 148.03 ms | 28.3 MB/s | 0.25x |
+| `crc_generic`（CRC-16/SPI-FUJITSU） | 135.18 ms | 31.0 MB/s | 0.27x |
+| `crcf` 查表（CRC-32/AUTOSAR，食譜 5.4.1） | 8.92 ms | 470.0 MB/s | 4.1x |
+| `crcf` 查表（CRC-16/SPI-FUJITSU，不反轉） | 11.63 ms | 360.6 MB/s | 3.1x |
+| `sha1` | 9.91 ms | 423.1 MB/s | — |
+| `sha0` | 10.09 ms | 415.8 MB/s | — |
+| `sha256` | 34.20 ms | 122.6 MB/s | — |
+
+### 5.5.3 排序與合併（host）
+
+各種 n（ch05 自寫 `sortb.c`，單次排序的微秒數，含 memcpy，取最快）：
+
+| n | insertion | merge | radix | qsort | radix 對 qsort |
+|---|---|---|---|---|---|
+| 16 | 0.04 | 0.05 | 0.40 | 0.17 | 0.4x（較慢） |
+| 32 | 0.16 | 0.16 | 0.49 | 0.37 | 0.8x |
+| 64 | 0.72 | 0.43 | 0.69 | 0.82 | 1.2x |
+| 256 | 6.96 | 2.02 | 1.44 | 4.19 | 2.9x |
+| 1000 | 78.48 | 10.14 | 4.54 | 32.68 | 7.2x |
+| 10000 | 6691.55 | 420.43 | 47.41 | 645.84 | 13.6x |
+| 100000 | — | 5634.73 | 499.44 | 8312.02 | 16.6x |
+| 1048576 | — | 77191.39 | 6856.08 | 109096.96 | 15.9x |
+
+結論：n ≤ 32 用 insertion（radix 有固定 4×256 的計數成本）；n ≥ 256 用 radix；要穩定又不是整數鍵用 merge。`sort_test` 本身（n = 2^20）：qsort 106.25 ms、merge 77.68 ms、radix 6.88 ms（15.4 倍）、兩半 radix + merge 11.01 ms。
+
+合併（n = 2^20 切 k 段等長，各段先 radix 排好，只量合併）：
+
+| k | `kway_merge` | 兩兩合併（食譜 5.4.3 `tree_merge`） | `merge_two_sorted` |
+|---|---|---|---|
+| 2 | 6.39 ms | 3.97 ms | 3.93 ms |
+| 4 | 12.52 ms | 7.94 ms | — |
+| 8 | 29.05 ms | 12.19 ms | — |
+| 16 | 62.32 ms | 15.93 ms | — |
+
+### 5.5.4 BNN（host，784 輸入 × 256 神經元一層）
+
+| 編譯方式 | `bnn_test`（`bnn_dense_sign`） | 直接呼叫 `bnn_dot` 256 次 | 改數「不同」（食譜 5.4.5 第 2 步） |
+|---|---|---|---|
+| `-O2`（`__builtin_popcount` 沒有硬體指令） | 12.09 µs | 10.99 µs | 11.60 µs |
+| `-O2 -DBNN_SWAR_POPCOUNT` | 8.12 µs | 6.82 µs | 2.61 µs（x86 自動向量化，不代表 Pico） |
+| `-O2 -march=native` / `-mpopcnt`（硬體 popcnt） | 3.47 µs | 2.42 µs | 1.91 µs |
+
+靜態分析（本次 objdump，`bnn_dot` 每個 word 的內迴圈指令數）：
+
+| 目標 | popcount 怎麼來 | 內迴圈 |
+|---|---|---|
+| rv32 + Zbb（pico-sdk 預設 `-march`） | `cpop` 指令 | 8 條（`lw lw addi addi xnor cpop add bne`） |
+| rv32 沒有 Zbb（`-march=rv32imac_zicsr_zifencei`） | 呼叫 `__popcountsi2` | 函式呼叫（本次 objdump 有 2 個呼叫） |
+| Cortex-M33 預設 | 呼叫 `__popcountsi2` | 函式呼叫 |
+| Cortex-M33 `-DBNN_SWAR_POPCOUNT` | SWAR | 18 條，無呼叫 |
+| Cortex-M33 SWAR + 數「不同」 | SWAR | 17 條 |
+
+### 5.5.5 交叉編譯與 qemu-riscv32
+
+6 個核心檔交叉編譯（本次，`-O2 -Wall -Wextra -std=c11`，**全部 0 警告**）：
+
+```bash
+# 在 algo/ 外面的資料夾執行；A 指向 algo/
+A=~/ncku-exam-prep/預製程式碼/algo
+mkdir -p /tmp/algo_arm && cd /tmp/algo_arm
+for f in crc32 sha1_sha0 sha256 sort bnn checksum_misc; do
+  arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c $A/$f.c -o $f.o; done
+arm-none-eabi-size *.o
+mkdir -p /tmp/algo_rv && cd /tmp/algo_rv
+for f in crc32 sha1_sha0 sha256 sort bnn checksum_misc; do
+  riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -O2 -Wall -Wextra -std=c11 -c $A/$f.c -o $f.o; done
+riscv64-unknown-elf-size *.o
+```
+
+`size` 結果（byte；`text` 含唯讀常數，例如 SHA-256 的 `K` 表）：
+
+| 檔案 | M33 text | M33 bss | rv32 Zbb text | rv32 Zbb bss |
+|---|---|---|---|---|
+| `crc32.o` | 800 | 5636 | 1044 | 5636 |
+| `sha1_sha0.o` | 1088 | 0 | 1468 | 0 |
+| `sha256.o` | 1096 | 0 | 1446 | 0 |
+| `sort.o` | 936 | 0 | 1008 | 0 |
+| `bnn.o` | 700（`-DBNN_SWAR_POPCOUNT` 768） | 0 | 844（無 Zbb 926） | 0 |
+| `checksum_misc.o` | 392 | 0 | 352 | 0 |
+
+全部核心檔加起來 M33 不到 5 KB 程式碼 + 5.5 KB 表格（RP2350 有 520 KB SRAM）。
+
+**qemu-riscv32 跑測試**：picolibc 沒有 `CLOCK_MONOTONIC`，也不會自己呼叫 Linux 系統呼叫，所以 ch05 自寫了一個小墊片 `shim.c`（stdout 走 Linux `write`、`clock_gettime` 走 `clock_gettime64`、自己的 stack）和 `shim_main.c`（把測試的 `main` 改名成 `test_main` 再呼叫），編譯旗標：
+
+```text
+riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 --specs=picolibc.specs -O2 -std=c11
+  -include shim.h -Dmain=test_main（只加在測試檔）
+  -Wl,--defsym=__ram_size=0x4000000 -Wl,--defsym=__data_source=__data_start -Wl,--defsym=__tdata_source=__tdata_start
+  -Wl,--defsym=__stack=shim_stack+0x100000 -Wl,--no-gc-sections
+```
+
+結果：`crc32_test`、`sha_test`、`sort_test`、`bnn_test`、`checksum_misc -DTEST_MAIN` **5 支全部 `結果：全部通過`、exit 0**。這證明程式在 32-bit `size_t`、rv32 + Zbb 上也正確。qemu 上的時間（只供參考，不是硬體速度）：
+
+```text
+crc32_bitwise 77.77 ms / crc32_table 11.05 ms / crc32_slice4 4.15 ms（4 MB）
+sha1 34.36 ms / sha0 41.07 ms / sha256 321.61 ms（4 MB）
+qsort 607.89 ms / merge 148.91 ms / radix 24.44 ms（n = 2^20）
+bnn 每層 12.26 us
+```
+
+### 5.5.6 記憶體（Cortex-M33，`-fstack-usage`，本次實測）
+
+| 函式 | 本身 stack（byte） | 備註 |
+|---|---|---|
+| `radix_sort_u32` | 1064 | `size_t cnt[256]` = 1 KB |
+| `sha256` 的 `compress` | 336 | `w[64]` = 256 byte |
+| `sha256` | 136 | 含 `sha256_ctx`（112） |
+| `sha1` / `sha0` | 128 | 含 `sha1_ctx`（104） |
+| `sha1_sha0.c` 的 `compress` | 128 | |
+| `kway_merge` | 88 | `pos[16]` |
+| `merge_sort_u32` | 64 | |
+| `bnn_dense_sign` / `bnn_dot` | 48 / 40 | |
+| `crc_generic` | 32 | |
+| 其他（CRC 查表、checksum、insertion…） | 0~28 | |
+
+最壞的呼叫鏈：`sha256()` → `sha256_update` → `compress` = 136 + 24 + 336 = 496 byte；`sha1()` 鏈 = 128 + 24 + 128 = 280 byte。靜態記憶體只有 `crc32.c` 的表 5636 byte。
+
+## 5.6 限制、已知問題、沒驗證的地方
+
+**程式問題（本次發現，沒有改程式）**：
+
+1. **`crc_generic` 的 width < 8 是未定義行為**（`crc32.c:110`：`crc ^= b << (c->width - 8);`）。`crc32.h:33` 註解寫了「8..32」，但程式沒檢查。本次 UBSan 對 width = 7 回報 `crc32.c:110:18: runtime error: shift exponent -1 is negative`，回傳 0（CRC-7/MMC 正確值 0x75）。width = 0 或 > 32 同樣會出錯。替代：食譜 5.4.1 的 `crc_bits`。
+2. **`crc32_update` 和 `pico/serial_proto.c:25` 同名**，同一個執行檔同時放 `algo/crc32.c` 和 `pico/serial_proto.c` 會 `multiple definition` 連結失敗（本次實測）。修法見食譜 5.4.6。
+3. **`kway_merge` 的 k > `KWAY_MAX`（16）會默默截斷**（`sort.c:69`），第 17 段以後的資料不會出現在輸出裡，也沒有回傳錯誤。輸出長度少了，呼叫者若照 Σlens 讀 `out` 會讀到舊資料。
+4. **CRC 表的懶惰初始化不是執行緒安全的**：`crc32_table`、`crc32_slice4`、`crc32c_update`、`crc16_ccitt_false` 在 `!inited` 時呼叫 `crc32_init()`（例如 `crc32.c:55`）。兩核同時第一次呼叫會同時寫表（寫的值一樣，實務上多半沒事，但屬於資料競爭）。雙核心時先在 core0 呼叫 `crc32_init()` 再啟動 core1。
+5. **`radix_sort_u32` 在 M33 上用 1064 byte stack**（`sort.c:48` 的 `size_t cnt[256]`）。Pico 的 core1 預設 stack 是 `PICO_CORE1_STACK_SIZE` = 0x800（2 KB，pico-sdk `pico/multicore.h:32-37`），呼叫鏈深時會不夠。檔頭沒有提醒。
+6. **`bnn_fold_bn` 的 `(int32_t)t`**（`bnn.c:49` 的 `ceil_f`）：`|t| > 2^31` 時是未定義行為。正常 BN 參數不會發生（只有 gamma 非常接近 0 時）。
+7. **`bnn_dense_sign` 要求 `thr` 非 NULL**（`bnn.c:31` 直接讀 `L->thr[j]`），`bnn.h:48` 的註解只說最後一層可 NULL，容易誤用。
+8. **`bnn_test.c:78` 的 `uint32_t x[2]` 寫死 2 個 word**，改 `N_IN` 超過 64 時會出界（`TODO` 註解沒提到這行）。
+
+**註解和實測不符（不影響正確性）**：
+
+9. `sha1_sha0.c:1` 說「stack 用約 64 byte」；M33 實測 `compress` 128 byte、`sha1()` 整條呼叫鏈 280 byte。
+10. `crc32.c:53` 說查表「約快 5~8 倍」、`:61` 說 slice-by-4「再快 2~3 倍」；本次 host 實測查表 4.2 倍、slice4 再 3.0 倍（README 在 Ryzen 上是 4.1 倍、3.0 倍）。
+11. `sha256_update` 逐 byte 複製進 `buf`（`sha256.c:51-54`），不像 `sha1_update` 整塊直接算。這是 SHA-256 比 SHA-1 慢的原因之一（另一個是回合計算較重）；本次沒有拆開量兩者各占多少。
+
+**功能限制**：
+
+12. `crc_generic` 不能分段（每次呼叫都重套 init、xorout）；`fletcher16` 也不能分段。
+13. `checksum_misc.c` 沒有 Fletcher-32（5.3.11 有 ch05 自寫版）。
+14. `bnn.c` 只有 dense 層，沒有 binary conv / max-pool（`bnn.h:9-10` 只在註解說明作法）。
+15. `test_util.h` 用 POSIX 計時，`*_test.c` 不能直接在 Pico 上跑（設計如此，`README.md:4`）。
+
+**沒驗證的地方**：
+
+16. **所有 Pico 2 上的速度都沒有實測**；DMA sniffer = zlib CRC-32 的設定只由暫存器文件推導（已知問題 9，屬第 3 章 `pico/app_dma.c`，上板要看自我測試 PASS/FAIL）。sniffer 的 CRC-16 / 不反轉 CRC-32 對應（食譜 5.4.2）⚠️未驗證。
+17. RISC-V 版 Pico 專案在本容器無法完整連結（缺 newlib 的 `nosys.specs`，5.4.6）；核心檔單獨編譯與 qemu 測試都通過。
+18. 去年 eBNN 題目的原始檔案、權重格式不在 repo 裡；5.2.8 的對照是依 `預測考題.md` 的摘要推的。
+19. Python `bnn_fold_bn`（double）和 C（float）在門檻剛好落在整數邊界時可能差 1（5.4.7）。
+20. eBNN 原論文程式的位元順序、BN 實作細節本次沒有查證（⚠️未驗證）；題目給權重時以題目說明為準，用 5.4.5 的轉換。
+
+## 5.7 一頁速查表
+
+**編譯（在 `algo/`，`B=/tmp/algo_build`）**
+
+| 要做 | 指令 | 成功的樣子 |
+|---|---|---|
+| CRC 測試 | `gcc -O2 -Wall -Wextra -std=c11 crc32.c crc32_test.c -o $B/crc && $B/crc` | `結果：全部通過`（17 PASS） |
+| SHA 測試 | `gcc -O2 -Wall -Wextra -std=c11 sha1_sha0.c sha256.c sha_test.c -o $B/sha && $B/sha` | 10 PASS |
+| 排序測試 | `gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort` | 5 PASS |
+| BNN 測試 | `gcc -O2 -Wall -Wextra -std=c11 bnn.c bnn_test.c -o $B/bnn && $B/bnn` | 4 PASS |
+| 校驗碼測試 | `gcc -O2 -Wall -Wextra -std=c11 -DTEST_MAIN checksum_misc.c -o $B/ck && $B/ck` | 13 PASS |
+| 用 sanitizer 再跑 | 把 `-O2` 換成 `-O1 -g -fsanitize=address,undefined` | 同上、沒有 `runtime error` |
+| M33 只編核心 | `arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -c crc32.c` | 0 警告 |
+| rv32 只編核心 | `riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -O2 -c bnn.c` | 0 警告 |
+
+**函式簽名**
+
+| 函式 | 一句話 |
+|---|---|
+| `uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)` | zlib CRC-32；第一段傳 0，可分段 |
+| `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | CRC-32C；第一段傳 0 |
+| `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | 第一段傳 `0xFFFF`（傳 0 = XMODEM） |
+| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | `{width, poly, init, refin, refout, xorout}`，width 8..32，不能分段 |
+| `void sha1_init(sha1_ctx *c, int is_sha0)` | **1 = SHA-0**、0 = SHA-1 |
+| `void sha1_update(sha1_ctx *c, const uint8_t *p, size_t n)` / `void sha1_final(sha1_ctx *c, uint8_t out[20])` | 串流 |
+| `void sha0(const uint8_t *p, size_t n, uint8_t out[20])` / `sha1(...)` / `sha256(..., uint8_t out[32])` | 一次算完 |
+| `void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | 最快；有號數前後 `^= 0x80000000u` |
+| `void merge_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` / `void insertion_sort_u32(uint32_t *a, size_t n)` | 穩定 / 小陣列 |
+| `void merge_two_sorted(const uint32_t *a, size_t na, const uint32_t *b, size_t nb, uint32_t *out)` | out 不可重疊 |
+| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k ≤ 16，否則默默截斷 |
+| `void bnn_pack(const int8_t *v, int n, uint32_t *out)` | `v > 0` → 1 |
+| `int32_t bnn_dot(const uint32_t *a, const uint32_t *w, int n)` | `2*popcount(~(a^w)) - n` |
+| `void bnn_dense_sign(const bnn_layer_t *L, const uint32_t *in, uint32_t *out_bits)` | 隱藏層；thr 必填 |
+| `void bnn_dense_score(const bnn_layer_t *L, const uint32_t *in, int32_t *score)` / `int bnn_argmax(const int32_t *s, int n)` | 輸出層 |
+| `void bnn_fold_bn(float gamma, float beta, float mean, float std, float bias, int32_t *thr, uint8_t *flip)` | `std = sqrtf(var + eps)` |
+| `uint32_t adler32(uint32_t adler, const uint8_t *p, size_t n)` | 第一次傳 1 |
+| `uint16_t inet_csum(const uint8_t *p, size_t n)` | RFC 1071，大端 |
+
+**標準答案（拿來驗證）**
+
+| 輸入 | 結果 |
+|---|---|
+| CRC-32（zlib）`"123456789"` | `0xCBF43926`（少 XOR = `0x340BC6D9`、位元反轉 = `0x649C2FD3`） |
+| CRC-32C `"123456789"` | `0xE3069283` |
+| CRC-16/CCITT-FALSE、XMODEM、MODBUS `"123456789"` | `0x29B1`、`0x31C3`、`0x4B37` |
+| SHA-0 `"abc"` | `0164b8a914cd2a5e74c4f7ff082c4d97f1edf880` |
+| SHA-1 `"abc"` | `a9993e364706816aba3e25717850c26c9cd0d89d` |
+| SHA-256 `"abc"` | `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad` |
+| Adler-32 `"Wikipedia"` | `0x11E60398` |
+| Fletcher-16 `"abcde"` | `0xC8F0` |
+
+**常見錯誤**
+
+| 症狀 | 第一個要檢查的 |
+|---|---|
+| CRC 差一個 `~` | xorout（5.2.4 JAMCRC 那列） |
+| CRC-16 = `0x31C3` 但要 `0x29B1` | `crc16_ccitt_false` 第一段要傳 `0xFFFF` |
+| `multiple definition of 'crc32_update'` | 和 `pico/serial_proto.c` 衝突（食譜 5.4.6） |
+| SHA-0 結果 = SHA-1 | `sha1_init` 第二個參數要 1 |
+| 分包 SHA 結果錯 | 只能 init 一次、final 一次、照順序餵 |
+| 負數排在最後 | `^= 0x80000000u` |
+| 合併結果少資料 | `kway_merge` k > 16 |
+| BNN 分數差、n 非 32 倍數才錯 | 尾巴 mask |
+| BNN 全錯 | 權重 bit 順序（`bnn_from_packbits`）、flip |
+| Pico 當掉 | 大陣列放 stack；改 `static` |
