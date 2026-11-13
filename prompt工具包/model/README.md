@@ -6,10 +6,10 @@
 
 1. **自己的角色和規則**（`00-總說明.md`）。
 2. **你手上有哪些資料**：所有卡片的名稱清單（`01-資源目錄.md`），加上預製範本的細節規格（`spec-*.md` 規格卡）。
-3. **怎麼跟你要**：模型會輸出固定格式的【需要】，你照下面的對照表去拿，貼回去。
+3. **怎麼跟你要**：模型在回答最後寫【要資料】（考場、終端機、題目的東西）或【要卡】（工具包的卡），你照下面兩張對照表去拿，貼回去。
 4. **考場上要跟你要什麼**：每種狀況要哪些資料、你要跑什麼指令（`02-要資料.md`）。
 
-跟 `../cards/` 的關係：`cards/` 是「你貼一張卡，模型照格式做一件事」；`model/` 是「模型自己說它需要哪張卡、哪段程式、哪個指令的輸出」。兩套可以一起用：模型要的提示卡、參考卡都在 `cards/`。
+跟 `../cards/` 的關係：`cards/` 是「你貼一張卡，模型照格式做一件事」；`model/` 是「模型自己說它需要哪張卡、哪段程式、哪個指令的輸出」。兩套用**同一個協定**（訊息分 資料 / 提示卡 / 一般問題；缺東西用【要資料】/【要卡】），規則卡二選一（開場 1/3 或總說明 1/2，不要一起貼）；模型要的提示卡、參考卡都在 `cards/`。
 
 > 這一套**沒有用 GPU 跑過壓力測試**（`cards/` 有）。卡片寫法沿用壓力測試學到的 25 條規則（`../README.md`）。規格卡的內容來自 `../../預製程式碼/說明書/`（2026-11-12～13 逐行核對、實測過的版本），行號以 commit 當時的程式為準。
 
@@ -17,7 +17,7 @@
 
 | 檔案 | 給誰 | 內容 |
 |---|---|---|
-| `README.md` | 你 | 本文件：怎麼用、怎麼回應模型的【需要】 |
+| `README.md` | 你 | 本文件：怎麼用、怎麼回應模型的【要資料】/【要卡】 |
 | `00-總說明.md` | 模型 | 總說明 1/2（角色、規則、你有什麼、請求格式）；2/2（資料代號、狀況 → 先要什麼） |
 | `01-資源目錄.md` | 模型 | 目錄 1～N：所有規格卡、參考卡、提示卡的名稱與主題（`gen_catalog.py` 自動產生） |
 | `02-要資料.md` | 你（也可以貼給模型） | 資料代號 K/B/R/T/P/S 的取法：要跑的指令、貼多少 |
@@ -37,35 +37,41 @@
 1. 貼「總說明 1/2」→ 模型回「了解」。
 2. 貼「總說明 2/2」→ 模型回「了解」。（context 很小、或只想問一件小事時可以跳過）
 3. 貼你的問題或題目段落，資料放在 `<<<資料 開始>>>`…`<<<資料 結束>>>` 之間。
-4. 模型回【需要】→ 照下一節去拿 → 貼回去。重複，直到模型直接回答。
+4. 模型回【要資料】/【要卡】→ 照下一節去拿 → 貼回去。重複，直到模型直接回答。
 5. 貼了 4～5 張卡、或模型開始忘規則、表格寫一半：請模型照「開場 3/3」（`cards/00-starter.md`）輸出狀態卡，開新對話貼「總說明 1/2 + 狀態卡」接著做。
 
 4k context 的模型：總說明兩張約 2,300 字元，一張規格卡約 1,100 字元。**同一個對話最多再貼 3 張卡左右**，就要換新對話。
 
-## 怎麼回應【需要】
+## 怎麼回應【要資料】和【要卡】
 
-模型的請求長這樣：`【需要】規格卡 ROS 2｜要看 serial_bridge 的參數`。照「需要」後面的第一個詞找：
+先看標籤，就知道去哪裡拿：**【要資料】→ 終端機 / 題目頁面**；**【要卡】→ 工具包的 md 檔**。兩種都要時，先給資料。
 
-| 模型寫 | 去哪拿 | 怎麼拿 |
-|---|---|---|
-| `目錄 n` | `model/01-資源目錄.md` | 複製【目錄｜n/N｜…】那一張 |
-| `規格卡 ROS n` | `model/spec-ros2.md` | 複製【規格卡｜ROS n/…｜…】那一張 |
-| `規格卡 PICO n` | `model/spec-pico.md` | 同上 |
-| `規格卡 UROS n` | `model/spec-micro-ros.md` | 同上 |
-| `規格卡 ALGO n` | `model/spec-algo.md` | 同上 |
-| `規格卡 BITS n` | `model/spec-bits-riscv.md` | 同上 |
-| `規格卡 PERF n` | `model/spec-linux-perf.md` | 同上 |
-| `參考卡 RP2350 pico-sdk n` / `RP2350 DMA` / `RP2350 PIO` / `RP2350 週邊` | `cards/pico-sdk.md`、`pico-dma.md`、`pio.md`、`pico-peripherals.md` | 複製那一張 |
-| `參考卡 多核同步` / `RISC-V Hazard3` / `Cortex-M33` | `cards/multicore-sync.md`、`riscv-hazard3.md`、`arm-cortex-m33.md` | 同上 |
-| `參考卡 ROS 2` / `主機↔MCU` / `演算法` | `cards/ros2.md`、`host-mcu-comm.md`、`algorithms-ds.md` | 同上 |
-| `參考卡 C/Linux 效能` / `Python 效能` / `平行` | `cards/c-linux-perf.md`、`python-perf.md`、`parallel-distributed.md` | 同上 |
-| `參考卡 git/環境` / `控制DSP` / `FreeRTOS` / `官方文件導航` | `cards/git-env.md`、`control-dsp.md`、`freertos.md`、`08-docs-map.md` | 同上 |
-| `提示卡 開考` / `讀題` / `建置` / `工具` / `除錯` / `優化` | `cards/10-exam-day-flow.md`、`02-read-spec.md`、`05-cmake-build.md`、`06-tools-debug.md`、`04-debug.md`、`03-optimize.md` | 複製那一張，把 `{{…}}` 填好再貼 |
-| `提示卡 範本` / `查詢` / `實作` / `驗證` / `提交` / `速學` | `cards/09-template-adapt.md`、`11-ask-reference.md`、`12-implement.md`、`13-verify-submit.md`（驗證、提交）、`07-unknown-tech.md` | 同上 |
-| `API卡 …`、`片段卡 …`、`食譜卡 優化 n`、`提示卡 套用 1/1` | `arsenal/*.md`（軍火庫） | 系列名 → 檔案的對照在 `arsenal/README.md` |
-| `程式 <路徑> a-b` | 預製程式碼（或出題 repo） | `cat -n <路徑> \| sed -n a,bp`，貼帶行號的結果 |
-| `資料 K1`…`S4` | `model/02-要資料.md` | 照那個代號的指令跑，貼結果 |
-| `指令 <指令>` | 你的終端機 | 跑那個指令，貼輸出（超過 60 行只貼前 60 行，並說還有幾行） |
+### 【要資料】：去終端機或題目拿
+
+| 模型寫 | 怎麼拿 |
+|---|---|
+| `K1`…`S4`（代號） | 照 `02-要資料.md` 那個代號的指令跑，貼結果 |
+| `題目第 n 段` | 從題目頁面複製那一段（≤ 1000 字） |
+| `程式 <路徑> a-b` | `cat -n <路徑> \| sed -n a,bp`，貼帶行號的結果（預製程式碼或出題 repo 都一樣） |
+| `指令 <指令>` | 跑那個指令，貼輸出（超過 60 行只貼前 60 行，並說還有幾行） |
+
+### 【要卡】：去工具包拿（照「要卡」後面的第一個詞找）
+
+| 模型寫 | 去哪拿 |
+|---|---|
+| `目錄 n` | `model/01-資源目錄.md` 的【目錄｜n/N｜…】 |
+| `規格卡 ROS / PICO / UROS / ALGO / BITS / PERF n` | `model/spec-ros2.md`、`spec-pico.md`、`spec-micro-ros.md`、`spec-algo.md`、`spec-bits-riscv.md`、`spec-linux-perf.md` |
+| `參考卡 RP2350 pico-sdk n` / `RP2350 DMA` / `RP2350 PIO` / `RP2350 週邊` | `cards/pico-sdk.md`、`pico-dma.md`、`pio.md`、`pico-peripherals.md` |
+| `參考卡 多核同步` / `RISC-V Hazard3` / `Cortex-M33` | `cards/multicore-sync.md`、`riscv-hazard3.md`、`arm-cortex-m33.md` |
+| `參考卡 ROS 2` / `主機↔MCU` / `演算法` | `cards/ros2.md`、`host-mcu-comm.md`、`algorithms-ds.md` |
+| `參考卡 C/Linux 效能` / `Python 效能` / `平行` | `cards/c-linux-perf.md`、`python-perf.md`、`parallel-distributed.md` |
+| `參考卡 git/環境` / `控制DSP` / `FreeRTOS` / `官方文件導航` | `cards/git-env.md`、`control-dsp.md`、`freertos.md`、`08-docs-map.md` |
+| `提示卡 開考` / `讀題` / `建置` / `工具` / `除錯` / `優化` | `cards/10-exam-day-flow.md`、`02-read-spec.md`、`05-cmake-build.md`、`06-tools-debug.md`、`04-debug.md`、`03-optimize.md`（把 `{{…}}` 填好再貼） |
+| `提示卡 範本` / `查詢` / `實作` / `驗證` / `提交` / `速學` | `cards/09-template-adapt.md`、`11-ask-reference.md`、`12-implement.md`、`13-verify-submit.md`、`07-unknown-tech.md` |
+| `API卡 …`、`片段卡 …`、`食譜卡 優化 n`、`提示卡 套用 1/1` | `arsenal/*.md`（系列名 → 檔案的對照在 `arsenal/README.md`） |
+| 只寫主題（例：「DMA 參考卡」） | 模式 A 的模型不知道卡名：貼 `cards/<主題>.md` 裡最相關的一張；不確定就貼目錄 |
+
+參考卡、規格卡、API 卡、片段卡、食譜卡是**資料**（包在資料區塊裡，模型回「收到」）；提示卡是**任務**（直接貼，不要包）。
 
 貼回去的格式（每次都一樣）：
 
@@ -86,7 +92,9 @@
 | 一直要、不回答 | 回「資料已經夠了，請直接用現有資料回答，缺的標【推測】」 |
 | 拿到資料後又要同一樣 | 它忘了：開新對話，貼「總說明 1/2 + 狀態卡 + 那份資料」 |
 | 改了程式之後行號對不上 | 規格卡的行號是考前版本；你改過的檔案用 `grep -n "函式名" 檔名` 找新行號再貼 |
-| 模型說的 API、暫存器和卡片不同 | 以卡片和官方 header 為準（`cards/08-docs-map.md` 有網址） |
+| 貼了卡片 / 題目，它開始分析或跟你要東西 | 回「這是 A 類訊息（只有資料），只回覆『收到』」；再犯就開新對話 |
+| 題目和卡片說法不同 | 照優先順序：題目原文 > 考場 header、指令輸出 > 卡片 > 模型記憶 |
+| 模型說的 API、暫存器和卡片不同 | 以卡片和考場 header 為準（`cards/08-docs-map.md` 有網址） |
 
 ## 為什麼這樣設計
 

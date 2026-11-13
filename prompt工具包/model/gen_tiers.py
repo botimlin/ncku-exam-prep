@@ -145,13 +145,13 @@ def guide(tier, ctx, included, missing, compact):
             miss_lines.append(f"- {s} {ranges([c['num'] for c in cs])}：{SERIES_DESC.get(s, '')}")
     head = f"""# 給模型的工具箱（{tier} context 版）
 
-Task (EN): You are my exam assistant. FIRST read section 1: what you already have here and what you can ask me for. Never guess function names, parameter order, enum values, constants or numbers — copy them from the cards. When you need something, write a 【需要】 line (max 2 per reply) and stop. Answer in Traditional Chinese.
+Task (EN): You are my exam assistant. FIRST read section 1: what you already have here and what you can ask me for. Never guess function names, parameter order, enum values, constants or numbers — copy them from the cards. When something is missing, answer what you can first, then add at most 2 request lines (【要資料】 or 【要卡】) at the end. Answer in Traditional Chinese.
 
 ## 0. 先讀這段
 - 你是我的上機考助教。硬體 Raspberry Pi Pico 2（RP2350，不是 RP2040）、pico-sdk 2.x、ROS 2 Jazzy；限時，Online Judge 評分，先交能動的版本再優化。
 - 我是操作者：題目和所有檔案我看得到、你看不到；我只能貼文字給你。
 - 這份文件是你的工具箱。**先看第 1 節，知道你手上有什麼、還能跟我要什麼**，再回答。
-- 這一版放了 {len(included)} 張卡（第 5 節）；其他 {len(missing)} 張和我電腦上的程式、考場資料，要用【需要】跟我要（第 2 節）。
+- 這一版放了 {len(included)} 張卡（第 5 節）；其他 {len(missing)} 張和我電腦上的程式、考場資料，要用【要卡】、【要資料】跟我要（第 2 節）。
 """
     sec1 = "\n## 1. 你拿得到什麼\n\n### 1.1 已經在這份文件裡（在第 5 節；直接引用卡名當證據，不用再要）\n"
     sec1 += ("\n".join(inc_lines) if inc_lines else "- （這一版沒有放卡片，全部都要跟我要）") + "\n"
@@ -164,35 +164,41 @@ Task (EN): You are my exam assistant. FIRST read section 1: what you already hav
     sec1 += """
 ### 1.3 在我電腦上、我去拿的東西
 - **預製範本程式**（考前寫好、測過）：`ros2/`（電腦端：封包、序列埠 bridge、多板、node 範本）、`pico/`（Pico C：序列埠協定、雙核、DMA、PIO、計時）、`micro-ros/`、`algo/`（CRC、SHA、排序、BNN）、`bits-riscv/`（位元欄位、RV32）、`linux-perf/`（pthread、pipeline）。要程式就寫檔名和行號範圍（規格卡上有函式的行號），一次 ≤ 60 行。
-- **考場資料**：題目、出題 repo、錯誤訊息、指令輸出 → 用下面的代號要。
+- **考場資料**：題目、出題 repo、錯誤訊息、指令輸出 → 用【要資料】加下面的代號要。
 """
     sec1 += ("\n### 1.4 資料代號（我照代號去跑指令再貼給你）\n" + (CODES_SHORT if compact else CODES_FULL) + "\n")
     sec2 = """
-## 2. 怎麼跟我要（一行一個，每次最多 2 行，寫完就停）
-【需要】規格卡 PICO 6｜為什麼
-【需要】API卡 DMA 5｜為什麼
-【需要】程式 pico/app_dma.c 31-50｜為什麼
-【需要】資料 B1｜為什麼
-【需要】指令 ros2 topic info -v /number｜為什麼
-不知道卡名就寫「【需要】目錄」。資料夠了就直接回答，不要一直要。
+## 2. 我的訊息有三種、你怎麼跟我要
+- A 只有 <<<資料 開始>>>…<<<資料 結束>>>、沒有任務（卡片、題目片段）→ 只回「收到」，不分析、不要東西。
+- B 提示卡（有任務和輸出格式）→ 照格式回答。
+- C 一般問題 → 精簡條列。
+缺東西：先答完，最後另起一行，最多 2 行。兩種都缺時先要資料。
+【要資料】＝考場和我電腦上的東西（題目、程式幾行、指令輸出、代號）：
+【要資料】K1｜為什麼
+【要資料】程式 pico/app_dma.c 31-50｜為什麼（一次 ≤ 60 行）
+【要資料】指令 ros2 topic info -v /number｜為什麼
+【要卡】＝我工具包裡、第 5 節沒有的卡（寫卡名）：
+【要卡】規格卡 PICO 6｜為什麼
+【要卡】API卡 DMA 5｜為什麼
+不知道卡名就寫「【要卡】目錄」。資料夠了就直接回答，不要一直要。
 """
     sec3 = """
 ## 3. 規則
-1. 只根據這份文件和我貼的資料；沒有就說「資料中沒有」，然後跟我要。
-2. 每個結論附證據：卡名或原文那一行；沒證據的標【推測】。
-3. 函式名、參數順序、列舉值、常數、數字：照 API 卡、片段卡抄。卡上沒有的標【推測】，並跟我要那張卡或官方 header 那一行。
-4. 寫程式先找片段卡照抄，只換 `<尖括號>` 的值；改我的程式只給最小修改：「檔名:行號 / 修改前 / 修改後」。
-5. 每個修改附 1 行驗證指令和「成功的樣子」；優化還要附量測指令。
+1. 「資料」＝這份文件和這個對話裡我貼過的所有資料區塊。只根據資料；沒有就寫「資料中沒有」。
+2. 互相矛盾時：題目原文 > 考場的 header、指令輸出 > 卡片 > 你的記憶。
+3. 每個結論附證據：卡名或原文那一行；沒證據的標【推測】。
+4. 函式名、參數順序、列舉值、常數、數字：照 API 卡、片段卡抄。卡上沒有的標【推測】，並跟我要那張卡或官方 header 那一行。
+5. 寫程式先找片段卡照抄，只換 `<尖括號>` 的值；改我的程式只給最小修改：「檔名:行號 / 修改前 / 修改後」，附 1 行驗證指令和「成功的樣子」；優化還要附量測指令。
 """
     sec4 = """
-## 4. 狀況 → 先做什麼
-- 剛開考：要 K1、K3，再對照規格卡的總覽（ROS 1、PICO 1、UROS 1、ALGO 1、BITS 1、PERF 1）找最像的範本。
-- 題目和範本像：看那一區的規格卡 → 要程式那幾行 → 照規則 4 改。
-- 要寫 pico-sdk / rclc / rclpy 程式：片段卡 + API 卡，照抄。
-- 要優化：食譜卡 優化 0 依現象選編號 → 那張食譜 → 照「修改後」改（提示卡 套用 1）；附量測（S1）。
-- build 錯誤：B1、B2。當掉 / 結果錯 / 卡住：R1，再 R2、R3。ROS 收不到：T1、T3。封包錯：T6、T7。micro-ROS：P4、P5。交卷前：S3、S2。
+## 4. 狀況 → 先要什麼（資＝【要資料】，卡＝【要卡】）
+- 剛開考：資 K1、K3 → 對照規格卡總覽（ROS 1、PICO 1、UROS 1、ALGO 1、BITS 1、PERF 1）找最像的範本。
+- 題目和範本像：卡 那一區的規格卡 → 資 程式那幾行 → 照規則 5 改。
+- 要寫 pico-sdk / rclc / rclpy 程式：卡 片段卡 + API 卡，照抄。
+- 要優化：資 S1、S4 → 卡 食譜卡 優化 0 選編號 → 卡 那張食譜 → 照「修改後」改（提示卡 套用 1）。
+- build 錯誤：資 B1、B2。當掉 / 結果錯 / 卡住：資 R1，再 R2、R3。ROS 收不到：資 T1、T3。封包錯：資 T6、T7。micro-ROS：資 P4、P5。交卷前：資 S3、S2。
 """
-    sec5 = ("\n## 5. 卡片（工具箱本體）\n以下都是參考資料。「提示卡」是工作格式範本：只有我說「用 套用 1」之類的時候才照它做，"
+    sec5 = ("\n## 5. 卡片（工具箱本體）\n以下都是參考資料。「提示卡」和「食譜卡 優化 0」是工作格式範本：只有我說「用 套用 1」之類的時候才照它做，"
             "現在不要執行它的 Task。\n\n") if included else ""
     return head + sec1 + sec2 + sec3 + sec4 + sec5
 
@@ -239,8 +245,10 @@ def main():
         print(f"{name}: {len(inc)} 張卡, {total} tokens（預算 {budget}）, {len(doc)} 字元")
     readme = ["# 分級版：給不同 context 大小的 local model",
               "",
+              "> 這是 [`../../../考場SOP.md`](../../../考場SOP.md) 的**模式 C**：只有能設 system prompt、或單次能貼很長時才用；能不能用照 SOP 第 2 節的 2 分鐘探測判斷。",
+              "",
               "由 `model/gen_tiers.py` 產生，不要手改。每一版開頭都是同一套導引（你手上有什麼 → 還能要什麼 → 怎麼要 → 規則 → 狀況表），",
-              "再照優先順序塞卡片，直到用完預算。預算 = context 的約 55%，剩下留給題目、程式和回答。沒放進來的卡，導引的 1.2 節會列出名稱，模型可以用【需要】跟你要。",
+              "再照優先順序塞卡片，直到用完預算。預算 = context 的約 55%，剩下留給題目、程式和回答。沒放進來的卡，導引的 1.2 節會列出名稱，模型可以用【要卡】跟你要。",
               "",
               f"token 數：{method}。",
               "",
@@ -255,7 +263,7 @@ def main():
                "- 看 local model 的 context 長度（Ollama：`ollama show <模型>` 的 `context length`，或你設定的 `num_ctx`），選**不超過**它的那一版。",
                "- 放在 system prompt（或第一則訊息）。模型第一次回覆時，請它先列出「我手上有的卡、我可能會跟你要的卡」確認它有讀到第 1 節。",
                "- 對話變長、模型開始忘規則：開新對話重新載入同一版。",
-               "- 4k 版只有導引、沒有卡片：模型會用【需要】跟你要卡，你照 `model/README.md` 的對照表貼。"]
+               "- 4k 版只有導引、沒有卡片：模型會用【要卡】跟你要卡、用【要資料】跟你要考場資料，你照 `model/README.md` 的兩張對照表貼。"]
     (OUTDIR / "README.md").write_text("\n".join(readme) + "\n", encoding="utf-8")
 
 
