@@ -101,7 +101,7 @@ Task (EN): Act as a checklist host. Ask me ONE check at a time in the fixed orde
 4. 佔用：minicom、screen、agent、別的 python 有沒有開同一個 port
 5. 設定：CMake 有 `pico_enable_stdio_usb(t 1)`、程式有 `stdio_init_all()` 嗎
 6. 太早印：開頭有等 `stdio_usb_connected()` 嗎
-7. 建置：configure 印的是 `PICO_BOARD is 'pico2'` 嗎
+7. 建置：configure 印的是 `Target board (PICO_BOARD) is 'pico2'` 嗎
 8. Docker：容器有 `--device /dev/ttyACM0` 或 `--privileged` 嗎
 每次只輸出：
 檢查 n：要做的事（指令）
@@ -116,8 +116,8 @@ Task (EN): The table below was made by a script. Pick ONE cause A–H and say wh
 任務：看程式比對好的表，判斷原因。
 取得（3 步）：
 1 實際：先關掉其他用這個 port 的程式，`stty -F /dev/ttyACM0 raw -echo; timeout 2 cat /dev/ttyACM0 | xxd -p | head -5`
-2 預期：`python3 -c "from frame import encode;print(encode(0x02,1,bytes(4)).hex(' '))"`
-3 比對：`cd ros2 && python3 frame.py diff "預期hex" "實際hex"`，整段輸出貼下面
+2 預期（先 `cd` 到 frame.py 所在資料夾）：`python3 -c "from frame import encode;print(encode(0x02,1,bytes(4)).hex(' '))"`
+3 比對：`python3 frame.py diff "預期hex" "實際hex"`，整段輸出貼下面
 <<<資料 開始>>>
 {{貼 frame.py diff 的輸出}}
 [送出端] {{電腦 → Pico / Pico → 電腦}}

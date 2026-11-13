@@ -1,6 +1,7 @@
 # 貼上卡：考試當天前 30 分鐘
 > 用法：開考後照順序做 1 → 5。每張先在終端機跑「先跑」的指令，把輸出填進 `{{...}}`，再整張貼給模型。每張 ≤ 1200 字元，每張都能在新對話直接用。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
+> 題目太長：前幾段只貼資料區塊（開頭寫「第 k/N 段」，模型會回「收到」），最後一段才貼開考 3/5。
 > 貼上長度：指令都用 `head` / `sed -n` 限制行數。模型說「太長」或回答變怪，就把行數砍半分兩次貼（先貼的那次加一句「先不要分析，回覆『收到』」）。
 > 注意：`find` 不要用 `-not -path './.git*'`，它會把 `.gitlab-ci.yml` 也藏掉；下面的寫法只排除 `.git/` 資料夾。
 > 來源：`../預製程式碼/預測考題.md`（歷屆題型、2024 完成次序分）、`cards/git-env.md`、`cards/02-read-spec.md`｜最後更新 2026-11
@@ -11,7 +12,7 @@
 Task (EN): Classify every path into one category A–G. Use only the data. Answer in Traditional Chinese.
 任務：把每個檔案或資料夾分類。
 先跑（在題目 repo 根目錄）：
-`find . -maxdepth 3 -not -path './.git' -not -path './.git/*' -not -path '*/build/*' | sort | head -100`
+`find . -maxdepth 3 -not -path './.git' -not -path './.git/*' -not -path '*/build/*' -not -path '*/libmicroros/*' | sort | head -100`
 `git log --oneline -5`
 <<<資料 開始>>>
 {{貼 find 輸出}}
@@ -70,7 +71,6 @@ Task (EN): Fill the understanding card using only the problem text. Write 「資
 - 不能用的方法：
 - 範例輸入輸出在哪：
 - 最容易誤解的 2 點：
-題目太長分段貼時：前幾段只寫「第 k/N 段，先不要分析，回覆『收到』」，最後一段才貼這張卡。
 
 ---
 
@@ -104,11 +104,10 @@ Task (EN): Make a time plan table. Every sub-question first gets a working versi
 [現在時間 / 結束時間] {{HH:MM / HH:MM}}
 [小題、配分、類別、範本]（開考 3、4 的結果）
 {{貼}}
-[我的熟悉度] {{熟：… 不熟：…}}
 <<<資料 結束>>>
 規則：
 1. 計分可能有完成次序分（2024：分數 = 解題分 + (1 − 完成次序 / 考生數)）→ 每一小題先交「能動、正確」的版本，再優化。
-2. 先做最有把握、最快拿分的小題。
+2. 我所有主題都是第一次接觸 → 先做和範本最像、要改的地方最少的小題。
 3. 每列有時間上限；超時就交目前最好版本，換下一題。
 4. 最後 30 分鐘只確認：最終版已 push、pipeline 通過。
 5. push 一次就等 pipeline 結束再 push（不能同時提交多次）。

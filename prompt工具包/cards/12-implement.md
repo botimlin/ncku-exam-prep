@@ -43,7 +43,7 @@ Task (EN): Fill the offset table from the spec (offset = previous offset + previ
 {{貼}}
 [語言] {{Python / C}}
 <<<資料 結束>>>
-解析方式：A struct（欄位都是整 byte，Python）　B read_msb（有欄位不是整 byte，高位先、MSB-first、bit7 先；bitstream.c）　C read_lsb（有欄位不是整 byte，低位先、LSB-first、bit0 先；bitstream.c）　D load_be16 / load_be32 / load_le32（整 byte，C；packet_fields.c）
+解析方式：A struct（欄位都是整 byte，Python）　B read_msb（有欄位不是整 byte，高位先、MSB-first、bit7 先；bitstream.c）　C read_lsb（有欄位不是整 byte，低位先、LSB-first、bit0 先；bitstream.c）　D load_be16 / load_be32 / load_le32（整 byte，C；packet_fields.c；2 byte 小端沒有函式 → (uint16_t)(p[o] | p[o+1] << 8)）
 規則：
 1. 每個欄位一列，順序照規格；offset 寫「上一列 offset + 上一列大小 = 答案」，第一列 0（B、C 用 bit）；payload[len] 之後寫「數字 + len」。
 2. struct 字元只能填：1 byte B（有號 b）、2 byte H（h）、4 byte I（i）、8 byte Q（q）；解析方式選 B、C、D 時填「不用」。
@@ -62,7 +62,7 @@ Task (EN): Fill the offset table from the spec (offset = previous offset + previ
 
 【提示卡｜實作 3/9｜PIO 程式逐行解讀 + C 端要的設定】→ 實作 4
 Task (EN): A script already computed the cycles, autopull/autopush, the read shift and clkdiv. Copy its lines into the tables, take the shift direction from the spec, then compare each row with the C init. Answer in Traditional Chinese.
-任務：逐行解讀 PIO 程式，推出 C 端設定。先貼 `pio.md` 的 PIO 2/8、3/8，模型回「收到」再貼這張。
+任務：逐行解讀 PIO 程式，推出 C 端設定。（前面已貼 `pio.md` PIO 2/8、3/8）
 取得：建置後跑本檔開頭「PIO 檢查」那行 python3（換成你的 .pio.h、clk_sys、速率）。
 <<<資料 開始>>>
 [程式印出的幾行]
@@ -87,7 +87,7 @@ C 端要改的地方（每個 NG 列一行：第幾行 → 改成什麼；沒有
 
 【提示卡｜實作 4/9｜PIO 程式最小修改 + C init】→ 範本 7
 Task (EN): Using the pio.md cards pasted earlier, pick the change type(s), write the numbers of the places that type lists, output one patch per number only, then fill the checklist. Answer in Traditional Chinese.
-任務：照規格最小修改 PIO 程式，C 端一起改。先貼 `pio.md` 的 PIO 1/8、3/8，模型回「收到」再貼這張。
+任務：照規格最小修改 PIO 程式，C 端一起改。（前面已貼 `pio.md` PIO 1/8、3/8）
 <<<資料 開始>>>
 [要改成什麼] {{例如 一次送 2 bit、CPU 每次 put 1 個 byte、baud 改 9600}}
 [.pio 原文，帶行號]（第一行寫檔名；`cat -n x.pio`）
@@ -118,7 +118,7 @@ D 時序變了 → ⑧ 改 [n] 或加 nop；[n] ≤ 上限（3/8 的表）
 
 【提示卡｜實作 5/9｜DMA 設定：需求表 → pico-sdk 呼叫】→ 範本 7
 Task (EN): Using the pico-dma.md cards pasted earlier, fill the table, then the code template. Answer in Traditional Chinese.
-任務：先貼 `pico-dma.md` DMA 2/8（PIO 再加 4/8），模型回「收到」。
+任務：依規格填 DMA 設定表，再填程式樣板（前面已貼 DMA 2/8，PIO 另加 4/8）。
 <<<資料 開始>>>
 [規格] {{…}}
 [現在的程式，帶行號]（沒有寫「無」）
@@ -130,7 +130,7 @@ Task (EN): Using the pico-dma.md cards pasted earlier, fill the table, then the 
 | 1 read_addr（從哪讀） | | | |
 | 2 write_addr（寫到哪） | | | |
 | 3 每筆大小 DMA_SIZE_8/16/32 | | | |
-| 4 筆數 = 總 bytes ÷ 每筆 bytes（算式 = 數字；用 sizeof 而每筆 > 1 byte → NG） | | | |
+| 4 筆數 = 總 bytes ÷ 每筆 bytes（算式 = 數字；只寫 sizeof(陣列) 沒除以每筆大小 → NG） | | | |
 | 5 read_increment：讀陣列 true、讀 FIFO false | | | |
 | 6 write_increment：寫陣列 true、寫 FIFO false | | | |
 | 7 DREQ：記憶體↔記憶體 DREQ_FORCE；送進 PIO 用 pio_get_dreq(pio, sm, true) | | | |
@@ -151,7 +151,7 @@ dma_channel_unclaim(ch);
 
 【提示卡｜實作 6/9｜雙核分工：共享變數表 → 保護方式】→ 範本 7
 Task (EN): Using the multicore-sync.md cards pasted earlier, list every global variable, pick ONE protection A–F for each (first rule that matches, top to bottom), then output a minimal patch; for B fill the B template. Answer in Traditional Chinese.
-任務：找出兩核都會碰的變數，選保護方式，給最小修改。先貼 `multicore-sync.md` 多核同步 4/8、5/8，模型回「收到」。範本：`pico/app_multicore.c`。
+任務：找出兩核都會碰的變數，選保護方式，給最小修改。（前面已貼 `multicore-sync.md` 多核同步 4/8、5/8）範本：`pico/app_multicore.c`。
 <<<資料 開始>>>
 [規格：core0、core1 各做什麼] {{…}}
 [程式，帶行號]（第一行寫檔名；兩核會跑到的函式與全域變數）
@@ -185,7 +185,7 @@ F spin lock：其他兩核都會寫的資料（鎖內只放讀寫那幾行）
 
 【提示卡｜實作 7/9｜RISC-V 組語逐行解讀】→ 看到機器碼用實作 8
 Task (EN): Using the riscv-hazard3.md cards pasted earlier, explain each line, write each forward branch's condition reversed, find the loop, then write the equivalent C using the reversed conditions. Answer in Traditional Chinese.
-任務：逐行解讀 RV32 組語，寫出等價的 C。先貼 `riscv-hazard3.md` RISC-V 1/8、2/8，模型回「收到」。
+任務：逐行解讀 RV32 組語，寫出等價的 C。（前面已貼 `riscv-hazard3.md` RISC-V 1/8、2/8）
 <<<資料 開始>>>
 [組語，帶行號]（`cat -n f.S`，或 .dis 的一段）
 {{貼}}
@@ -241,7 +241,7 @@ imm：-4
 
 【提示卡｜實作 9/9｜從規格改 ROS 2 node（node_template.py）】→ 範本 7
 Task (EN): Fill the interface table, then fill the edit table for node_template.py (new code, or 不改). Subscription QoS must match the publisher. Answer in Traditional Chinese.
-任務：照規格改 `ros2/node_template.py`。先貼 `ros2.md` 的 ROS 2 3/8（QoS），模型回「收到」。
+任務：照規格改 `ros2/node_template.py`。（前面已貼 `ros2.md` ROS 2 3/8 QoS）
 <<<資料 開始>>>
 [規格原文]（node 名、topic、型別、QoS、參數、運算）
 {{貼}}

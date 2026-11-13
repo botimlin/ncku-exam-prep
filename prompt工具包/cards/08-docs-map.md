@@ -148,13 +148,13 @@ REP 2001（ROS 2 variants）：https://www.ros.org/reps/rep-2001.html
 - 問題寫在原文後面，一次只問一件事。
 範本 A（datasheet）：
 以下摘自 RP2350 datasheet §12.6.4.1 System DREQ table（官方文件，Release 8，2026-10-01）。晶片是 RP2350（Raspberry Pi Pico 2），不是 RP2040。若與你的記憶不同，以這段為準。表格是從 PDF 複製，排版可能被打散。
-＜原文開始＞
+<<<資料 開始>>>
 （貼原文）
-＜原文結束＞
+<<<資料 結束>>>
 問題：（一句話）
 範本 B（標頭檔）：
-以下摘自 pico-sdk 2.3.1 原始碼 src/rp2_common/hardware_pio/include/hardware/pio.h（官方標頭檔，含註解）。
-＜原文開始＞
+以下摘自 pico-sdk <考場版本，看 $PICO_SDK_PATH> 原始碼 src/rp2_common/hardware_pio/include/hardware/pio.h（官方標頭檔，含註解）。
+<<<資料 開始>>>
 （貼函式註解與宣告）
-＜原文結束＞
+<<<資料 結束>>>
 問題：（一句話，指定回答格式，例如「只列參數與一行說明」）

@@ -1,12 +1,12 @@
 # 軍火庫：優化食譜（量測 / 現象 → 食譜 → 修改前 / 修改後）
-> 用法：先貼「食譜卡 優化 0」，請模型照你的現象選食譜編號 → 貼那張食譜卡（模型回「收到」）→ 貼「提示卡 套用 1/1」，附你的程式（帶行號）和量測。一次貼一張；沒變快就 `git checkout -- 檔案` 還原。
+> 用法：「食譜卡 優化 0」是**任務**（直接貼、填好最下面的量測，不要包在資料區塊），模型回食譜編號 → 貼那張食譜卡（模型回「收到」）→ 貼「提示卡 套用 1/1」，附你的程式（帶行號）和量測。一次貼一張；沒變快就 `git checkout -- 檔案` 還原。
 > 來源與驗證：`預製程式碼/說明書/` 第 1～7 章的食譜（N.4）與實測（N.5）；修改後的程式在副本上重新套用：Pico 端用 pico-sdk 2.2.0（pico2、ARM）編譯 0 錯誤 0 警告，電腦端用 x86_64 Python 3.13 / gcc 13.3 執行；Pico 端都沒有上板｜最後更新 2026-11-13
 
 ---
 
 【食譜卡｜優化 0/14｜選哪個食譜：量測 / 現象 → 食譜編號】
-以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
-先量再選（沒有數字 → 先做提示卡 優化 1/6）。對到第一個符合的列，抄「食譜」那格。
+Task (EN): Match my measurement below to the FIRST fitting row; output its recipe number. Answer in Traditional Chinese.
+任務：對到第一個符合的列，抄「食譜」那格（沒有數字 → 先做提示卡 優化 1/6）。
 
 | 量測 / 現象 | 食譜 | 範本檔案 |
 |---|---|---|
@@ -15,20 +15,22 @@
 | micro-ROS 每則很小、`time=` 很長 | 3 | `micro-ros/host_driver.py` |
 | Pico 收資料時不能算、算的時候不能收 | 4 | `pico/app_multicore.c` |
 | Pico 兩核加鎖後沒變快 / 比單核慢 | 5 | `pico/app_multicore.c` |
-| 電腦多執行緒加鎖、atomic 後比單執行緒慢；`count[tid]` 加執行緒沒變快 | 6 | `linux-perf/parallel_template.c` |
+| 電腦多執行緒加鎖 / atomic 後變慢；`count[tid]` 沒變快 | 6 | `linux-perf/parallel_template.c` |
 | CPU 複製迴圈 `dst[i] = src[i]` 佔大部分時間 | 7 | `pico/app_dma.c` |
 | CRC 算很久，用的是逐位元（`for k<8`） | 8 | `algo/crc32.c` |
-| CRC 已查表還是慢、題目要硬體 CRC | 9 | `pico/app_dma.c` → `app_serial.c` |
+| CRC 已查表還是慢、題目要硬體 CRC | 9 | `pico/app_dma.c` |
 | 排序 qsort / insertion 很慢 | 10 | `algo/sort.c` |
 | 多段已排序要合併、k ≥ 8 | 11 | `algo/sort.c` |
-| ROS callback / 迴圈裡 print 很多；Pico 有 printf | 12 | `ros2/`、`pico/app_serial.c` |
-| 單執行緒本身慢、沒動過編譯選項；熱迴圈在 flash | 13 | `CMakeLists.txt`、`linux-perf/` |
+| 迴圈 / callback 裡 print、printf 很多 | 12 | `ros2/`、`pico/app_serial.c` |
+| 沒動過編譯選項；熱迴圈在 flash | 13 | `CMakeLists.txt`、`linux-perf/` |
 | BNN 推論慢（popcount） | 14 | `algo/bnn.h` |
-| 要 PIO 取代 CPU | 無 | 說明書沒有驗證過的 PIO 加速食譜 → 看 `snippets-pico.md` 的 PIO 片段卡 |
+| 要 PIO 取代 CPU | 無 | 沒有驗證過的食譜 → 片段卡 PICO-PIO |
 
+<<<資料 開始>>>
+[我的量測 / 現象] {{貼 S1 各階段時間，或描述現象}}
+<<<資料 結束>>>
 只輸出：現象：「照抄」／食譜：編號／範本檔案：
-前提：說明書第 1～7 章。
-驗證：選的食譜「適用」那行要和你的現象一樣；不一樣就回來重選。
+都不像就寫「食譜：無」。
 
 ---
 
@@ -265,7 +267,7 @@ uint32_t c = dma_crc32(f->payload, f->len);
 實測：速度**沒有**（要上板）。本次副本編譯連結 0 警告（text 27356 B）。
 ⚠️未上板：sniffer = zlib CRC32 只由暫存器文件推導 → 一定先看 `crc32("123456789") ... PASS`。
 陷阱：
-- FAIL 值 `0x649C2FD3` → `output_reverse` 改 false；`0x340BC6D9` → 最後的 `^ 0xFFFFFFFF` 多做了。
+- FAIL 值 `0x649C2FD3` → `output_reverse` 設定反過來（true ↔ false）；`0x340BC6D9` → 最後的 `^ 0xFFFFFFFF` 有就拿掉、沒有就加。
 - `dma_claim_unused_channel(true)` 沒通道會 panic；要保險改 `false`，失敗時呼叫 `crc32_update`。
 - ✗ 分段續算 → ✓ 一次 DMA 算完整段；全晶片只有一個 sniffer。
 - `dma_crc32` 裡不要 printf（app_serial 不能印字）。
@@ -414,11 +416,10 @@ target_compile_definitions(<app> PRIVATE BNN_SWAR_POPCOUNT)
 ---
 
 【提示卡｜套用 1/1｜把食譜 / 片段套到我的程式】
-Task (EN): Apply the recipe or snippet card below to my code. Output a minimal patch that changes only the <slots> or the lines the card marks (修改前 → 修改後), keep every name from the card verbatim, then 1 verify command, 1 measure command and what success looks like. Answer in Traditional Chinese.
+Task (EN): Apply the recipe or snippet card pasted earlier in this conversation to my code. Output a minimal patch that changes only the <slots> or the lines the card marks (修改前 → 修改後), keep every name from the card verbatim, then 1 verify command, 1 measure command and what success looks like. Answer in Traditional Chinese.
 任務：把卡片的「修改後」套到我的程式，只改卡片標出來的那幾行。
 <<<資料 開始>>>
-[食譜卡或片段卡原文]
-{{貼整張卡}}
+[卡名]（整張卡已在前面貼過）{{例如 食譜卡 優化 7/14}}
 [我的程式，帶行號]（`cat -n 檔名 | sed -n 起,迄p`）
 {{貼}}
 [量測]（改之前的數字和指令）

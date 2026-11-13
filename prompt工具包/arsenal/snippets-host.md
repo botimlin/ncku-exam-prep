@@ -22,7 +22,7 @@ ser.close()
 - cmd：`0x01` ECHO、`0x02` SUM_U32、`0x03` CRC32。
 ✗ 錯：`serial.Serial(port)`（timeout=None）→ 沒回覆時 `read` 永遠卡住，不會重送 → ✓ 對：`timeout=0.05`。
 ✗ 錯：一包 payload > `MAX_LEN`=8192 → Pico 丟包、不回 → ✓ 對：HOST-SERIAL 2/3 切包。
-前提：`frame.py` 放同資料夾；`pip install pyserial`；`import serial`。
+前提：`frame.py` 放同資料夾；要有 pyserial（`python3 -c "import serial"` 不報錯；考場不能自己裝，沒有就舉手問）。
 驗證：`python3 fake_pico.py --link /tmp/ttyFAKE` → `<PORT>`=`/tmp/ttyFAKE0`；`pack_u32([1, 2, 3, -1])` → `total == 5`（實跑通過）。
 
 ---
@@ -107,7 +107,7 @@ multi_device.py 怎麼做：
 - 有一塊逾時 → 丟 `RuntimeError("有 chunk 失敗，見上方訊息")`。
 - 會印 `每個 port 做了幾塊: {...}`。
 ✗ 錯：多條執行緒共用一個 `ser` → 回覆互搶 → ✓ 對：一個 port 一條執行緒、各自開。
-前提：`multi_device.py`、`frame.py` 同資料夾；`pip install pyserial`。
+前提：`multi_device.py`、`frame.py` 同資料夾；要有 pyserial（考場不能自己裝）。
 驗證：`python3 fake_pico.py -n 2 --link /tmp/ttyFAKE` → ports = `/tmp/ttyFAKE0`、`/tmp/ttyFAKE1`；5 萬個 u32 切 49 塊（24 + 25）→ `ans == sum(values) & 0xFFFFFFFF`（實跑通過）。
 
 ---

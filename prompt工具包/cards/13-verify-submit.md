@@ -95,7 +95,7 @@ done; echo "ALL PASS"
 Task (EN): Take the start and end line numbers from the two timer lines, then for each suspicious line decide if its number is between them. Answer in Traditional Chinese.
 任務：找出被計時、但不該計時的行（印出、sleep、讀寫檔、產生測資）。
 先跑（f.c 換成你的檔名；計時有好幾段就一次問一段）：
-`grep -nE 'time_us_64|absolute_time|clock_gettime|now_ns|perf_counter|time\.time' f.c`
+`grep -nE 'time_us_64|absolute_time|clock_gettime|now_ns|perf_counter|time\.time|PRINT_US|BENCH' f.c`（只留同一段的開始、結束 2 行）
 `grep -nE 'printf|print\(|puts|sleep|rand|fill_|open\(|read\(|write\(' f.c`
 <<<資料 開始>>>
 [計時的行]（第 1 個 grep 的輸出）
@@ -202,7 +202,7 @@ Task (EN): For each fixed row copy the rule and the actual value from the named 
 [git log --oneline @{u}..HEAD] {{貼}}
 [git diff --name-only @{u}..HEAD]
 {{貼}}
-[git diff @{u}..HEAD | grep -nE '^\+.*(printf|print\(|DEBUG)']
+[git diff @{u}..HEAD | grep -nE '^\+.*(DEBUG|fprintf\(stderr|// *debug|# *debug)']
 {{貼，沒輸出就寫「沒有輸出」}}
 [CI 規定]（可改的檔案、commit message 格式）{{貼}}
 [本地 build / 測試最後 3 行] {{貼}}
@@ -235,7 +235,7 @@ Task (EN): Scan the log from the top. The FIRST error decides the type; later fa
 A 建置錯（error:、undefined reference、CMake Error）→ 05 建置卡
 B 執行時崩潰（Segmentation fault、Aborted、core dumped、Traceback、exit code 139 / 134）→ 工具 1 / 2
 C 答案錯（Wrong Answer、expected … got、diff 有輸出、FAIL）→ 驗證 3 對拍
-D 超時（Timeout、timed out、TLE、exit code 124 / 137、Killed）→ 驗證 4 量測
+D 超時（Timeout、timed out、TLE、exit code 124 / 137、Killed）→ 工具 3（卡住）或食譜卡 優化 0（太慢）
 E 環境（pull image 失敗、no space left、runner system failure）→ 重跑或問助教
 F 沒評分（job skipped、commit message 不符）→ 照 CI 規定改 commit message
 規則：

@@ -219,7 +219,7 @@ QoS：
 - 開頭混了 printf 的 `\r\n` 時也會印 CRLF 那條 → 先處理「開頭不是 aa 55」。
 | 症狀 | 修法 |
 | `No module named 'frame'` | 在 `ros2/` 裡跑 |
-| `No module named 'serial'` | `apt install python3-serial` |
+| `No module named 'serial'` | 考場不能自己裝：舉手問；或在題目給的容器裡跑 |
 | `could not open port` | `ls /dev/ttyACM*`、`chmod 666`、Docker `--device` |
 | 一直 `逾時，重試 k/3` | 先對 fake 測；包 ≤ 8192；Pico 認得 cmd、沒 printf |
 | 回覆 167772160 不是 10 | 大小端反 → pack_u32 / unpack_u32 |

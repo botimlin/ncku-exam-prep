@@ -44,16 +44,17 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 [環境] pico-sdk {{2.2.0}}；PICO_BOARD={{pico2}}；PICO_PLATFORM={{rp2350-arm-s}}；最近改了 {{…}}
 <<<資料 結束>>>
 類別（比對錯誤裡的關鍵字）：A 找不到 SDK（SDK location、PICO_SDK_PATH）　B cache 殘留（CMakeCache … different、generator、換過 board）　C 語法或順序（Parse error、Unknown CMake command、pseudo-op .syntax = pico_sdk_import 在 project() 後）　D 找不到 header（No such file）　E undefined reference　F multiple definition（header 變數改 extern）　G overflowed（RAM / flash）　H 其他
-只輸出 4 行：
+只輸出 5 行：
 證據：「…」（照抄錯誤那 1 行）
 原因（1 句）：
-類別（照抄選項，例如「D 找不到 header」）：
+類別（照抄字母+文字）：
 要加的函式庫（D、E 必填：hardware/xxx.h → hardware_xxx；其他寫「無」）：
 要修的檔案與位置（B 一律 rm -rf build 重來）：
 範例（只示範格式，內容不要照抄）：
 證據：「fatal error: hardware/dma.h: No such file or directory」
 原因：app_dma 沒 link hardware_dma
 類別：D 找不到 header
+要加的函式庫：hardware_dma
 要修的檔案與位置：CMakeLists.txt 的 target_link_libraries(app_dma …)
 
 ---
