@@ -37,7 +37,7 @@ gcc -O2 -Wall -Wextra -std=c11 -pthread pipeline_template.c -o /tmp/pipe && /tmp
 工作：`work(x)` 加總。`run(fn)`（`:90-97`）開 T 條，第 t 條算 `[N*t/T, N*(t+1)/T)`。
 | 寫法 | 行 | 熱迴圈做什麼 | 快 / 慢（T=4） |
 |---|---|---|---|
-| serial | 117-118 | 同一個 `w_local` 跑全部 | 基準 1x |
+| serial | 117-119 | 同一個 `w_local` 跑全部 | 基準 1x |
 | local ★ | 45-50 | 區域變數 `s +=`，最後寫 `part[id]` 一次 | 3.89x 最快 |
 | mutex | 51-58 | 每元素 lock、`g_sum += v` | 0.13x |
 | spinlock | 59-66 | 每元素 spin_lock | 0.03x |
@@ -62,7 +62,7 @@ gcc -O2 -Wall -Wextra -std=c11 -pthread pipeline_template.c -o /tmp/pipe && /tmp
 常數：`CAP 1024u`（`:22`，必須 2 的次方）、`N_ITEMS 1u<<20`（`:23`）、`BATCH 64u`（`:24`）、`item_t` = `uint32_t`（`:25`）、`PROD_COST`/`COMP_COST` 64（`:29-30`）。
 | 名稱 | 行 | 做什麼 |
 |---|---|---|
-| A `mq_push/mq_pop` | 42-62 | mutex + condvar，每筆上鎖 |
+| A `mq_push/mq_pop` | 48-62 | mutex + condvar，每筆上鎖 |
 | B `spsc_push/spsc_pop` | 65-86 | 無鎖，回 bool（滿 / 空回 false） |
 | C `spsc_push_n/spsc_pop_n` | 88-103 | 一次多筆，回筆數；1 次 release |
 | `producer/consumer` | 109-143 | `mode` 0/1/2 = A/B/C；空或滿 `sched_yield()` |

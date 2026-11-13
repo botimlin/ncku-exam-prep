@@ -92,7 +92,7 @@ node 名 `serial_bridge`（:33）。
 - 例外（:69、:86）：接 `(TimeoutError, serial.SerialException)` → log error、不發布、node 繼續跑。port 打不開（:45）node 起不來。
 - `send()`（:54-57）：seq +1 取低 8 bit。spin 單執行緒（:98），不用鎖。
 執行：`python3 serial_bridge.py --ros-args -p port:=/dev/pts/N -p batch_size:=0`；pub `/numbers` `"{data: [1, 2, 3]}"` → /sum `data: 6`。
-要看程式：請操作者貼「cat -n serial_bridge.py | sed -n 31,91p」
+要看程式：請操作者貼「cat -n serial_bridge.py | sed -n 31,90p」
 
 ---
 
@@ -135,8 +135,8 @@ multi_device.py（不需 ROS）：
 | `run_parallel(ports, chunks, cmd)` | :51-66 | 依 chunk 順序的 reply list；有 None 丟 `RuntimeError` |
 | `merge_sum(replies)` | :69-72 | TODO(改這裡) u32 加總 & 0xFFFFFFFF |
 - 合併換法：最大值 `max(unpack_u32(r)[0] for r in replies)`；排序 `list(heapq.merge(*[unpack_u32(r) for r in replies]))`；CRC32 不能加。
-- 其他 TODO：:76 ports、:77 資料、:85 cmd（:80 `expect` 跟著改）。
-- 成功：`正確=True`，`每個 port 做了幾塊: {…: 98, …: 98}`，實測 882 ms → 442 ms。
+- 其他要改：:76 ports、:77 資料、:85 cmd（:80 `expect` 跟著改）。
+- 成功：`正確=True`，`每個 port 做了幾塊: {…: 98, …: 98}`，實測 836 ms → 420 ms。
 要看程式：請操作者貼「cat -n multi_device.py | sed -n 24,72p」
 
 ---

@@ -35,7 +35,7 @@
 | 檔案在容器裡要怎麼改、容器沒有編輯器 | [`vscode.md`](vscode.md) | §6 |
 | 不小心進了 vim 出不來 | [`vscode.md`](vscode.md) | §8：按 Esc，打 `:q!` Enter |
 
-## 考場工具 SOP（10 步）
+## 工具操作順序（10 步，只是工具細節；流程、提交方式以 `../../考場SOP.md` 為準）
 
 1. **開 repo**：`git clone` → `git log --oneline -5`（看出題者的 commit）→ `git tag start`（隨時可以回到原點）。
 2. **讀說明**：`README.md`（VS Code 裡 Ctrl+Shift+V）→ 題目要什麼輸入、什麼輸出、怎麼評分。
@@ -46,7 +46,7 @@
 7. **在本機重現評分**：照 `.gitlab-ci.yml` 的指令跑一遍，把輸出存檔，跟題目的範例比對：`diff -u expected.txt out.txt`。
 8. **除錯**：一次只改一個地方 → 重新 build → 重跑第 7 步。當掉用 gdb、結果怪用 sanitizer、卡住用 gdb+Ctrl-C/strace、ROS 用 `debug-ros2.md` §10。
 9. **commit**：`git status` 確認**沒有** `build/`、`log/`、`install/`、除錯用的檔案 → 拿掉 DEBUG 輸出 → `git add 要的檔案` → `git commit -m "說明"`。
-10. **push 一次、等 pipeline 結果**：看 job log 第一個錯誤 → 回到第 8 步。拿到分數的版本馬上 `git tag ok-v1`，之後再優化。
+10. **push 一次、等 pipeline 結果**：看 job log 第一個錯誤 → 回到第 8 步。拿到分數的版本馬上打 tag（SOP 的寫法：`git tag ok-<小題>-v1`，例 `ok-2-v1`），之後再優化。
 
 ## 驗證環境（2026-11 在這台電腦上）
 

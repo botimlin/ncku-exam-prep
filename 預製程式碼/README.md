@@ -6,7 +6,7 @@
 > **完整使用說明書**：[`說明書/`](說明書/00-總覽.md)（逐檔說明、每個 `TODO(改這裡)`、實測輸出、考場情境演練），可列印版 [`說明書/預製程式碼使用說明書.pdf`](說明書/預製程式碼使用說明書.pdf)。
 > 每份程式碼都有繁中註解，要改的地方都標了 `TODO(改這裡)`。
 
-## 考場用法（3 步）
+## 範本怎麼用（流程照 `../考場SOP.md`）
 1. **讀完題目和出題 repo 的 README**，判斷題目像下表的哪一種。
 2. 打開對應的檔案，**先看檔頭註解和 `TODO(改這裡)`**，照題目的規格改。
 3. 一定要先交一個**能動的版本**（有完成次序分），再回來優化。
@@ -42,13 +42,13 @@
 | 板子沒反應、序列埠監看、看 .dis/.map | `tools/debug-pico.md` |
 | ROS 2 進階除錯（doctor、log、rosbag、跨容器） | `tools/debug-ros2.md` |
 | 不能裝擴充套件的 VS Code、vim/nano 求生 | `tools/vscode.md` |
-| 考場工具 SOP（10 步） | `tools/README.md` |
+| 工具操作細節（流程照 `../考場SOP.md`） | `tools/README.md` |
 
 ## 驗證狀態（要誠實知道哪些沒試過）
 
 | 資料夾 | 驗證程度 |
 |---|---|
-| `ros2/` | ✅ 在 ROS 2 Jazzy 容器裡搭配模擬 Pico（`fake_pico.py`）實際跑過 |
+| `ros2/` | ✅ `frame.py`、`fake_pico.py`、`bench.py`、`multi_device.py` 搭配模擬 Pico（`fake_pico.py`）實際跑過；`serial_bridge.py` 用假的 rclpy 跑過 callback。⚠️ `node_template.py` 和在真的 ROS 2 裡執行都**沒有實測** |
 | `algo/`、`linux-perf/` | ✅ 電腦上的測試全部通過（含標準測試向量）；ARM 和 RISC-V 都能編譯 |
 | `bits-riscv/` | ✅ 電腦上測試通過；RISC-V 版在 qemu 模擬器上跑過 |
 | `tools/` | ✅ CMake、gdb、sanitizer、ROS 2 指令都實際跑過；燒錄、實體序列埠、Debug Probe 只對照官方文件（標「沒有實測」） |
