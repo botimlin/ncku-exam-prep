@@ -78,6 +78,7 @@ prompt工具包/
     ├── 05-給模型的說明書.md  model/ 給模型看的部分合成一份（給 local model 一次載入；gen_catalog.py 產生）
     ├── 06-軍火庫.pdf         arsenal/ 全部
     ├── 06-軍火庫.md          arsenal/ 合成一份（給 local model 一次載入；gen_catalog.py 產生）
+    ├── 分級版/               給 4k / 8k / 16k / 32k / 64k context 的合併版（model/gen_tiers.py 產生；05 + 06 全量約 10 萬 token，要 128k）
     └── build_print.py        重新產生 PDF（需 markdown-it-py + Node playwright 或 Chrome；`python3 print/build_print.py 05` 只做一本）
 ```
 

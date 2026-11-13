@@ -26,6 +26,8 @@
 | `spec-bits-riscv.md` | 模型 | 規格卡 BITS：`預製程式碼/bits-riscv/` |
 | `spec-linux-perf.md` | 模型 | 規格卡 PERF：`預製程式碼/linux-perf/` |
 | `gen_catalog.py` | 你 | 卡片改了就重跑：`python3 model/gen_catalog.py`（在 `prompt工具包/` 執行）；會重做目錄和合併版 |
+| `gen_tiers.py`、`count_tokens.js` | 你 | 產生分級版 `../print/分級版/給模型_{4k,8k,16k,32k,64k}.md`（`python3 model/gen_tiers.py`；token 計數方法見 `count_tokens.js` 開頭） |
+| `../print/分級版/` | local model | **依 context 大小選一份**：開頭的導引先告訴模型手上有什麼、還能要什麼、怎麼要，再放進預算內最重要的卡片。各版 token 數見那個資料夾的 README |
 | `../print/05-給模型的說明書.md` | local model | 上面給模型看的檔案合成一份（約 82,000 字元），給 context 夠大的 local model 一次載入（system prompt 或知識檔）。整份都載入時，模型不用再跟你要卡片，只會要程式、資料、指令輸出 |
 
 ## 開新對話的步驟
