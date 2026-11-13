@@ -48,7 +48,7 @@ for i in range(0, len(data), step):                  # serial_bridge.py:66-68
 ```
 要換：`values` = 你的 int 串列；Pico 用 `app_serial.c`。
 量測：log 的 `X ms`（`serial_bridge.py:73-74`）。
-實測（pty + `fake_pico.py`，20000 個 int32，沒有 USB）：文字一行一個 2049.7 ms；二進位一包一個 1576.9 ms；批次 3.5 ms。本次重跑：1503.2 → 3.6 ms（20 包）。
+實測（pty + `fake_pico.py`，20000 個 int32，沒有 USB）：文字一行一個 2049.7 ms；二進位一包一個 1576.9 ms；批次 3.5 ms。本次重跑：一包一個 1503.2 → 批次 3.6 ms（20 包）。
 陷阱：
 - ✗ 一包 > 8192 B → Pico 不回、3 次逾時 → ✓ `step` ≤ `CHUNK_BYTES`（4096）且是 4 的倍數。
 - ✗ Pico printf / 沒關 CRLF → ✓ `app_serial.c:61`、`CMakeLists.txt:31`。
@@ -353,7 +353,7 @@ def cb_after(msg):
     print(f"{len(msg)} 個, total {total}", file=out)   # 一個 callback 只印一行
     return total
 ```
-要換：`print` / `self.get_logger().info` 都一樣處理；要除錯就只在失敗時印。
+要換：`file=out` 是測試用（pty），你的程式拿掉；`self.get_logger().info` 一樣處理；除錯只在失敗時印。
 量測：callback 前後 `time.perf_counter()`（`serial_bridge.py:60`、`:73`）。
 實測（本卡自測：x86_64 Xeon、Python 3.13，20000 個元素，輸出到 pty 模擬終端機）：before 125.19～130.14 ms → after 0.19 ms。ROS logger 沒量（容器沒有 ROS 2）。
 陷阱：
