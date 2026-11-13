@@ -56,7 +56,7 @@ SDK：`dma_encode_transfer_count` 2.2.0 才有；`app_dma.c:21-24`、`app_dma_pi
 【規格卡｜PICO 3/13｜serial_proto.h/.c：封包、狀態機、CRC32】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 封包（小端）：`AA 55 | cmd u8 | seq u8 | len u16 | payload[len] | crc32 u32`，總長 10+len。crc32=zlib CRC-32，範圍 cmd～payload 尾（不含 AA 55）。回覆同 cmd、seq。
-`.h`：`SYNC0/1`（14-15）；`CMD_ECHO` 0x01、`CMD_SUM_U32` 0x02、`CMD_CRC32` 0x03（18-20，TODO）；`FRAME_MAX_PAYLOAD`=8192（23，TODO；len 是 u16，最大 65535）；`frame_t`（25-30）= cmd、seq、len、`payload[8192]`。
+`.h`：`SYNC0/1`（14-15）；`CMD_ECHO` 0x01、`CMD_SUM_U32` 0x02、`CMD_CRC32` 0x03（18-20；TODO 在 17）；`FRAME_MAX_PAYLOAD`=8192（23；TODO 在 22；len 是 u16）；`frame_t`（25-30）= cmd、seq、len、`payload[8192]`。
 | 函式（.c） | 行號 | 做什麼 |
 |---|---|---|
 | `crc32_make_table` | 14-22 | `constructor`：`main()` 前在 core0 建好表，兩核同時用也安全 |
