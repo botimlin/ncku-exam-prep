@@ -3,7 +3,7 @@
  * 編譯：gcc -O2 -Wall -Wextra -std=c11 -pthread parallel_template.c -o par && ./par 4
  *       （參數 = 執行緒數，預設 4）
  *
- * 比較 7 種寫法（同一個工作：把 N 個元素的 work(x) 加總）：
+ * 比較 8 種寫法（serial 基準 + 7 種平行；同一個工作：把 N 個元素的 work(x) 加總）：
  *   serial      單執行緒（基準）
  *   local       ★ 每個執行緒用區域變數累加，最後各寫一次 → 熱迴圈裡沒有任何鎖（最快、推薦）
  *   mutex       每個元素都 lock/unlock 一次 → 鎖的爭搶讓它比單執行緒還慢
