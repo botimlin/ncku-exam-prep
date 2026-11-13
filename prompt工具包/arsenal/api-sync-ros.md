@@ -44,7 +44,6 @@ static void core1_entry(void) {          // 型別 void (*)(void)
 - `void queue_add_blocking(queue_t *q, const void *data)`：滿就等
 - `void queue_remove_blocking(queue_t *q, void *data)`：空就等
 - `uint queue_get_level(queue_t *q)`：目前幾個
-- 另有 `queue_peek_blocking`、`queue_is_empty`、`queue_is_full`、`queue_free`
 ```c
 typedef struct { uint32_t id; int32_t val; } item_t;
 static queue_t q;                          // 全域 / static
@@ -54,7 +53,7 @@ static queue_t q;                          // 全域 / static
     if (queue_try_remove(&q, &b)) { }      // 空 → false
     uint n = queue_get_level(&q);          // 目前幾個
 ```
-- ✗ `queue_init(&q, 8, sizeof(item_t))` → ✓ `(&q, sizeof(item_t), 8)`（都是 uint，反了不報錯）
+- ✗ `queue_init(&q, 8, sizeof(item_t))` → ✓ `(&q, sizeof(item_t), 8)`（反了不報錯）
 - ✗ `queue_add_blocking(&q, a)` → ✓ `&a`
 - ✗ ISR 裡 `_blocking` → ✓ 只用 `queue_try_*`
 - `queue_init` 要在 launch core1 前。
@@ -254,7 +253,6 @@ micro-ROS jazzy，全部回傳 `rcl_ret_t`：`RCL_RET_OK`=0、`RCL_RET_ERROR`=1�
 - `rclc_node_init_default(rcl_node_t *node, const char *name, const char *namespace_, rclc_support_t *support)`
 ```c
 #define RCCHECK(fn) { rcl_ret_t rc_ = (fn); if (rc_ != RCL_RET_OK) error_loop(); }
-#define RCSOFTCHECK(fn) { rcl_ret_t rc_ = (fn); (void)rc_; }
 rclc_support_t support;
 rcl_node_t node;
 rcl_allocator_t allocator;
@@ -262,12 +260,10 @@ rcl_allocator_t allocator;
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
     RCCHECK(rclc_node_init_default(&node, "compute_node", "pico0", &support));
 ```
-要換：`"compute_node"` = node 名；`"pico0"` = namespace（多塊板子每塊不同；不要可給 `""`）。
-- `RCCHECK` / `RCSOFTCHECK` 要自己 `#define`（rclc.h 沒有）；`error_loop()` 自己寫（例：LED 快閃）。
-- 物件放全域（主 stack 只有 2 KB）。
+要換：`"compute_node"` = node 名；`"pico0"` = namespace（每塊板子不同；不要給 `""`）。
+- `RCCHECK` 要自己 `#define`（rclc.h 沒有）；`error_loop()` 自己寫（LED 快閃）；物件放全域。
 - ✗ `rclc_support_init(&support, &allocator)` → ✓ 四個參數 `(&support, 0, NULL, &allocator)`
 - ✗ `rclc_node_init_default(&node, "n", &support)` → ✓ namespace 在 support 前面
-- 先 `rmw_uros_set_custom_transport`（UROS 5/6），再 init。
 前提：`#include <rcl/rcl.h>`、`<rclc/rclc.h>`
 驗證：`ros2 node list` 看到 `/pico0/compute_node`。
 
@@ -284,22 +280,19 @@ rcl_allocator_t allocator;
     const rosidl_message_type_support_t *ts =
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray);
     RCCHECK(rclc_publisher_init_default(&pub, &node, ts, "output"));
-    RCCHECK(rclc_publisher_init_best_effort(&pub_be, &node, ts, "output_be"));
     RCCHECK(rclc_subscription_init_default(&sub, &node, ts, "input"));
 ```
 - `_default` = RELIABLE；`_best_effort` = BEST_EFFORT；電腦端 QoS 要配（RELIABLE 訂閱收不到 BEST_EFFORT 發佈）。
 - namespace `pico0` + `"input"` → `/pico0/input`；`"/input"` 開頭有 `/` 就不加 namespace。
 - ✗ `ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, Int32MultiArray)` → ✓ `(std_msgs, msg, Int32MultiArray)`
-- ✗ `std_msgs__msg__Int32MultiArray` 當 type support → ✓ 用巨集的結果
 前提：`#include <std_msgs/msg/int32_multi_array.h>`（型別 `Int32MultiArray` → 檔名 `int32_multi_array.h`）
-驗證：`ros2 topic info -v /pico0/input` 看到 1 個 subscription、QoS 正確。
+驗證：`ros2 topic info -v /pico0/input` 看 QoS。
 
 ---
 
 【API卡｜UROS 3/6｜timer 與 executor】
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 - `rclc_timer_init_default2(rcl_timer_t *timer, rclc_support_t *support, const uint64_t timeout_ns, const rcl_timer_callback_t callback, bool autostart)`
-- `rclc_executor_t rclc_executor_get_zero_initialized_executor(void)`
 - `rclc_executor_init(rclc_executor_t *executor, rcl_context_t *context, const size_t number_of_handles, const rcl_allocator_t *allocator)`
 - `rclc_executor_add_timer(rclc_executor_t *executor, rcl_timer_t *timer)`
 - `rclc_executor_spin_some(rclc_executor_t *executor, const uint64_t timeout_ns)`
@@ -311,11 +304,10 @@ rcl_allocator_t allocator;
     RCCHECK(rclc_executor_add_timer(&executor, &timer));
         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
 ```
-- handles 數 = timer 數 + subscription 數；不夠 → add 回錯誤。
+- handles 數 = timer 數 + sub 數；不夠 → add 回錯誤。
 - spin_some 沒資料回 `RCL_RET_TIMEOUT`（正常，不要當錯誤）。
 - ✗ `rclc_timer_init_default(...)`（4 參數）→ deprecated warning；✓ `_default2(..., true)`
 - ✗ `rclc_executor_init(&executor, &support, …)` → ✓ `&support.context`
-- ✗ timer 週期填 100 想要 100 ms → ✓ `RCL_MS_TO_NS(100)`
 前提：`#include <rclc/executor.h>`（rclc.h 不含）
 驗證：`ros2 topic hz` ≈ 10 Hz。
 
@@ -333,15 +325,13 @@ void sub_cb(const void *msgin) {                       // rclc_subscription_call
     if (m->data.size == 0) return;                     // 太長(>capacity)也會是 0
     RCSOFTCHECK(rcl_publish(&pub, &msg_out, NULL));    // 第 3 參數 NULL
 }
-void timer_cb(rcl_timer_t *t, int64_t last_call_time) { // rcl_timer_callback_t
     RCCHECK(rclc_executor_add_subscription(&executor, &sub, &msg_in, &sub_cb, ON_NEW_DATA));
 ```
-- `msg` 參數 = 收件用的訊息變數（全域），executor 反序列化進去。
+- `msg` = 收件用的全域訊息變數；`RCSOFTCHECK` = 忽略錯誤的自訂巨集。
 - ✗ `rcl_publish(&pub, &msg)` → ✓ `(&pub, &msg, NULL)`；回傳值不接有 warn_unused_result warning
 - ✗ callback 寫 `void cb(void *m)` → incompatible pointer warning；✓ `const void *`
-- ✗ timer callback 少 `int64_t` 參數 → ✓ `(rcl_timer_t *t, int64_t last_call_time)`
 前提：`#include <rclc/executor.h>`、`<std_msgs/msg/int32_multi_array.h>`
-驗證：`ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [1,2]}"` → output 有回覆。
+驗證：pub 到 `/pico0/input` → `/pico0/output` 有回覆。
 
 ---
 
@@ -349,11 +339,7 @@ void timer_cb(rcl_timer_t *t, int64_t last_call_time) { // rcl_timer_callback_t
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 - `rmw_ret_t rmw_uros_set_custom_transport(bool framing, void *args, open_custom_func open_cb, close_custom_func close_cb, write_custom_func write_cb, read_custom_func read_cb)`：順序 open、close、write、read
 - `rmw_ret_t rmw_uros_ping_agent(const int timeout_ms, const uint8_t attempts)`：agent 在 → `RMW_RET_OK`(0)，不在 → `RMW_RET_ERROR`(1)
-官方 Pico 傳輸檔 `pico_uart_transports.h` 的四個函式：
-- `bool pico_serial_transport_open(struct uxrCustomTransport *transport)`
-- `bool pico_serial_transport_close(struct uxrCustomTransport *transport)`
-- `size_t pico_serial_transport_write(struct uxrCustomTransport *transport, const uint8_t *buf, size_t len, uint8_t *err)`
-- `size_t pico_serial_transport_read(struct uxrCustomTransport *transport, uint8_t *buf, size_t len, int timeout, uint8_t *err)`
+官方 `pico_uart_transports.h` 提供四個函式：`pico_serial_transport_open` / `_close` / `_write` / `_read`（直接傳名字，不用自己寫）。
 ```c
     rmw_uros_set_custom_transport(true, NULL,
         pico_serial_transport_open, pico_serial_transport_close,
@@ -371,9 +357,8 @@ void timer_cb(rcl_timer_t *t, int64_t last_call_time) { // rcl_timer_callback_t
 【API卡｜UROS 6/6｜Int32MultiArray 的 sequence 欄位】
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 `std_msgs__msg__Int32MultiArray`（`int32_multi_array__struct.h`）：
-- `.layout`：`std_msgs__msg__MultiArrayLayout`，內有 `.dim`（sequence）、`.data_offset`
-- `.data`：`rosidl_runtime_c__int32__Sequence` = `{ int32_t *data; size_t size; size_t capacity; }`
-- size = 有效個數；capacity = buffer 大小（元素數，不是 bytes）
+- `.data`：`rosidl_runtime_c__int32__Sequence` = `{ int32_t *data; size_t size; size_t capacity; }`；size = 有效個數，capacity = buffer 元素數
+- `.layout`：`.dim`（同樣 data/size/capacity）、`.data_offset`
 ```c
 #define MAX_LEN 400
 std_msgs__msg__Int32MultiArray msg_in, msg_out;
@@ -385,9 +370,9 @@ static int32_t in_buf[MAX_LEN], out_buf[MAX_LEN];
     msg_in.layout.data_offset = 0;  msg_out.layout.data_offset = 0;
     msg_out.data.size = n;                             // size ≤ capacity
 ```
-要換：`MAX_LEN` = 最大元素數；`n` = 這次要發的個數。
-- micro-ROS 不 malloc：沒設 `.data/.capacity` 就收 → 收不到。
-- 收到元素數 > capacity → callback 照叫但 `size`=0 → 先檢查 `size`。
+要換：`MAX_LEN` = 最大元素數；`n` = 要發的個數。
+- micro-ROS 不 malloc：沒設 `.data/.capacity` → 收不到。
+- 收到 > capacity 個 → callback 照叫但 `size`=0。
 - ✗ 發佈 `size > capacity` → 越界；✓ 先夾到 capacity
 - ✗ `capacity = sizeof(in_buf)` → ✓ `MAX_LEN`（元素數）
 - dim capacity = 0 → 電腦端不要填 `layout.dim`。
@@ -399,7 +384,7 @@ static int32_t in_buf[MAX_LEN], out_buf[MAX_LEN];
 【API卡｜HOST-PY 1/4｜rclpy：publisher、subscription、timer、參數】
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 來源：repo 範本 `node_template.py`、`serial_bridge.py`、`host_driver.py` 原樣複製（之前在 Jazzy 跑過，這次沒實跑）。
-- `self.create_publisher(msg_type, topic, qos)`（qos 可寫 `10`）
+- `self.create_publisher(msg_type, topic, qos)`
 - `self.create_subscription(msg_type, topic, callback, qos)`
 - `self.create_timer(period_sec, callback)`：秒（float）
 - `self.declare_parameter(name, default)`；`self.get_parameter(name).value`
@@ -409,14 +394,11 @@ static int32_t in_buf[MAX_LEN], out_buf[MAX_LEN];
         self.pub = self.create_publisher(Int32, out_topic, QOS)
         self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
             self.timer = self.create_timer(period, self.on_timer)
-        self.pub_sum = self.create_publisher(UInt32, "/sum", 10)   # TODO(改這裡) 輸出 topic/型別
-                                     lambda msg, b=i: self.on_result(b, msg), qos)
 ```
-- 多個 subscription 共用 callback：`lambda msg, b=i:`（預設參數記住 i）。
+- qos 也可直接寫 `10`；多個 sub 共用 callback：`lambda msg, b=i: self.on_result(b, msg)`（host_driver.py）。
 - ✗ `create_subscription(Int32, cb, topic)` → ✓ `(Int32, topic, cb, qos)`
 - ✗ `create_timer(100, cb)` 想要 100 ms → ✓ `create_timer(0.1, cb)`
 - ✗ `get_parameter(name)` 直接當值 → ✓ `.value`
-- ✗ 參數沒 declare 就 get → 例外 ⚠️未驗證（例外名稱）
 前提：`import rclpy`、`from rclpy.node import Node`、`from std_msgs.msg import Int32`
 驗證：`ros2 topic pub --once /number std_msgs/msg/Int32 "{data: 21}"` → `/double` 得 42。
 
