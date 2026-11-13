@@ -4,7 +4,7 @@
 
 ---
 
-【規格卡｜PICO 1/13｜總覽：檔案、題型、驗證狀態】
+【規格卡｜PICO 1/14｜總覽：檔案、題型、驗證狀態】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 資料夾 `預製程式碼/pico/`（Pico 2 = RP2350，pico-sdk 2.x），下面檔名都相對於它。
 | 檔案 | 行數 | 做什麼 / 題型 |
@@ -28,7 +28,7 @@
 
 ---
 
-【規格卡｜PICO 2/13｜CMakeLists.txt：target 與編譯指令】
+【規格卡｜PICO 2/14｜CMakeLists.txt：target 與編譯指令】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 `add_app()`（:19-26）：連 `pico_stdlib`、stdio 走 USB、產生 .uf2/.dis。`PICO_BOARD` 預設 `pico2`（:9-11）。
 | target | 行 | 額外 |
@@ -53,7 +53,7 @@ SDK：`dma_encode_transfer_count` 2.2.0 才有；`app_dma.c:21-24`、`app_dma_pi
 
 ---
 
-【規格卡｜PICO 3/13｜serial_proto.h/.c：封包、狀態機、CRC32】
+【規格卡｜PICO 3/14｜serial_proto.h/.c：封包、狀態機、CRC32】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 封包（小端）：`AA 55 | cmd u8 | seq u8 | len u16 | payload[len] | crc32 u32`，總長 10+len。crc32=zlib CRC-32，範圍 cmd～payload 尾（不含 AA 55）。回覆同 cmd、seq。
 `.h`：`SYNC0/1`（14-15）；`CMD_ECHO` 0x01、`CMD_SUM_U32` 0x02、`CMD_CRC32` 0x03（18-20；TODO 在 17）；`FRAME_MAX_PAYLOAD`=8192（23；TODO 在 22；len 是 u16）；`frame_t`（25-30）= cmd、seq、len、`payload[8192]`。
@@ -70,7 +70,7 @@ SDK：`dma_encode_transfer_count` 2.2.0 才有；`app_dma.c:21-24`、`app_dma_pi
 
 ---
 
-【規格卡｜PICO 4/13｜app_serial.c：指令分派、加新指令】
+【規格卡｜PICO 4/14｜app_serial.c：指令分派、加新指令】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 不印任何文字（printf 會混進二進位）；除錯用 LED（:80）。全域 `static frame_t rx`、`reply[8192]`（:19-20）。
 | 段落 | 行號 | 內容 |
@@ -93,7 +93,7 @@ CRLF 關法：CMake :31、`stdio_set_translate_crlf(&stdio_usb,false)`（:61）�
 
 ---
 
-【規格卡｜PICO 5/13｜app_multicore.c：鎖、FIFO、queue pipeline】
+【規格卡｜PICO 5/14｜app_multicore.c：鎖、FIFO、queue pipeline】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 | 名稱 | 行號 | 內容 |
 |---|---|---|
@@ -111,7 +111,7 @@ pipeline（:114-134）：core0 填 `data_buf[sent%4]`→`q_job`→core1 算→`q
 
 ---
 
-【規格卡｜PICO 6/13｜app_dma.c：5 步、channel_config、count】
+【規格卡｜PICO 6/14｜app_dma.c：5 步、channel_config、count】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 `dma_xfer(to,from,count,size,rinc,winc)`（:31-45）＝claim→config→start→wait→unclaim，回 0/-1 沒通道/-2 太大：
 | 行 | 呼叫與說明 |
@@ -130,7 +130,7 @@ count=傳輸次數，不是 bytes。RP2350 TRANS_COUNT 低 28 bits=次數、[31:
 
 ---
 
-【規格卡｜PICO 7/13｜app_dma.c：sniffer CRC32、預期輸出】
+【規格卡｜PICO 7/14｜app_dma.c：sniffer CRC32、預期輸出】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 `dma_crc32(p,nbytes)`（:65-87）＝zlib `crc32`：
 1. nbytes==0 回 0（:66）
@@ -153,7 +153,7 @@ overlap: work=332833500, dma 搬完了 正確=OK
 
 ---
 
-【規格卡｜PICO 8/13｜app_dma_pio.c：DMA + PIO（DREQ）】
+【規格卡｜PICO 8/14｜app_dma_pio.c：DMA + PIO（DREQ）】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 | 行 | 內容 |
 |---|---|
@@ -174,7 +174,7 @@ echo 用 TX 和 RX→不能 `fifo_join`（各 4 格）。DMA_SIZE_32 配 echo �
 
 ---
 
-【規格卡｜PICO 9/13｜pio/echo.pio、bitstream_in.pio：逐條指令】
+【規格卡｜PICO 9/14｜pio/echo.pio、bitstream_in.pio：逐條指令】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 移位：OUT 左移（shift_right=false）從 bit31 拿=MSB 先，右移從 bit0。IN 左移新 bit 進 bit0，右移從 bit31 進。SDK 預設右移；範本都設左移。
 **echo.pio**（0x6020、0x4020、0x8020）
@@ -197,7 +197,7 @@ init（:19-34）：`sm_config_set_in_pins(&c,data_pin)`；`sm_config_set_in_shif
 
 ---
 
-【規格卡｜PICO 10/13｜pio/shift_out.pio：逐條指令】
+【規格卡｜PICO 10/14｜pio/shift_out.pio：逐條指令】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 32-bit 一位一位送到 DATA，side-set 在 CLK 產生時脈（簡單 SPI 輸出）。pioasm：0x6101、0xb142。
 | 行 | 指令 | 做什麼 / 何時停 |
@@ -221,7 +221,7 @@ init `shift_out_program_init(pio,sm,offset,data_pin,clk_pin,clkdiv)`（:18-33）
 
 ---
 
-【規格卡｜PICO 11/13｜app_pio.c：載入、echo 測試、回環】
+【規格卡｜PICO 11/14｜app_pio.c：載入、echo 測試、回環】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 固定流程：`pio_add_program`（回 offset）→`pio_claim_unused_sm`→`xxx_program_init`（.pio 檔的 c-sdk 區塊）→`pio_sm_put_blocking`/`pio_sm_get_blocking`→用完 `pio_sm_set_enabled(false)`+`pio_remove_program_and_unclaim_sm`。RP2350：3 個 PIO、每個 4 SM、32 條指令。
 | 名稱 | 行號 | 內容 |
@@ -245,7 +245,7 @@ loopback: 4/4 正確
 
 ---
 
-【規格卡｜PICO 12/13｜timing.h：ARM vs RISC-V 計時】
+【規格卡｜PICO 12/14｜timing.h：ARM vs RISC-V 計時】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 header-only，`#include "timing.h"`。平台用 `#if defined(__riscv)`（:22）選。
 | 名稱 | 行號 | 做什麼 |
@@ -268,7 +268,25 @@ CSR 寫數字 0x320：SDK 巨集會把參數直接貼進 `csrci`。SDK 不用 Sy
 
 ---
 
-【規格卡｜PICO 13/13｜陷阱與驗證】
+【規格卡｜PICO 13/14｜程式陷阱：看到這種寫法就照右邊改】
+以下是正確的參考資料（pico-sdk 2.2.0）。和你的記憶不同時，以這張為準。函式名照抄，不要自己換。
+| 程式長這樣 | 問題 | 改成 |
+|---|---|---|
+| 陣列複製卻 `set_write_increment(&c, false)` 或沒設 | 只寫到 dst[0] | `channel_config_set_write_increment(&c, true);` |
+| configure 的 count 是 `N * 4`、`sizeof(arr)` | count 是筆數，不是 bytes | 填元素個數 `N` 或 `count_of(arr)` |
+| `dma_claim_unused_channel(...)` 後面沒有 unclaim | 通道用完 → panic | wait 那行後面加 `dma_channel_unclaim(ch);`（沒有 dma_release_channel） |
+| `dma_channel_configure(ch, &c, src, dst, …)` | 參數順序反了 | 先寫入位址 dst，再讀取 src |
+| 兩核都 `total += …`，沒有鎖 | race，每次結果不同 | 迴圈裡加到區域變數 `uint64_t local`，迴圈後鎖一次加進 total |
+| 鎖包住耗時的計算 | 另一核一直等 | 計算移到鎖外，鎖只包 `total += local;` |
+| 用鎖 | — | 全域 `static spin_lock_t *lk;`，main 開頭 `lk = spin_lock_init(spin_lock_claim_unused(true));`，加總 `uint32_t s = spin_lock_blocking(lk); total += local; spin_unlock(lk, s);` |
+| `scanf` / `printf` 逐筆收送數字 | 文字＋一筆一來回太慢 | 二進位批次：Pico `getchar_timeout_us` 每 4 byte 組一個 u32；電腦 `struct.pack("<%dI" % n, *nums)` 一次送 |
+| 二進位回覆混了 `printf` | 電腦解不出 | 回覆用 `putchar_raw` 逐 byte 送 |
+| PIO 開 autopush 又手動 `push` | 每字收兩次 | `sm_config_set_in_shift` 第 3 參數 false |
+編譯錯誤看 L19-06；看不懂就【要卡】。
+
+---
+
+【規格卡｜PICO 14/14｜建置、通訊錯誤與驗證】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 | 症狀 | 原因 | 修法 |
 |---|---|---|

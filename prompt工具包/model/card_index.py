@@ -20,6 +20,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent          # prompt工具包
 SERIES = [
     ("G01", "總說明", "", "model/00-總說明.md"),
     ("G02", "提示卡", "開題", "model/00-總說明.md"),
+    ("G04", "提示卡", "檢查", "model/00-總說明.md"),
+    ("G05", "提示卡", "修改", "model/00-總說明.md"),
     ("G03", "開場", "", "cards/00-starter.md"),
     ("H01", "要資料", "", "model/02-要資料.md"),
     ("M01", "目錄", "", "model/01-資源目錄.md"),
