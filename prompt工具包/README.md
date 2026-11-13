@@ -56,11 +56,20 @@ prompt工具包/
 │   ├── 12-implement.md       實作：位元欄位、封包、PIO 解讀 / 修改、DMA 設定、雙核分工、RISC-V、ROS 2 node
 │   ├── 13-verify-submit.md   驗證與提交：歧義、邊界測資、對拍、量測、micro-ROS、解釋程式、push 前檢查、CI log、git 救援
 │   └── <主題>.md             16 個領域的參考卡（與 domain/ 同名）
+├── model/                    給模型的說明書：模型自己說要哪張卡、哪段程式、哪個指令輸出（見 model/README.md）
+│   ├── README.md             操作者用：怎麼回應模型的【需要】、卡名 → 檔案對照
+│   ├── 00-總說明.md          總說明 1/2（角色、規則、請求格式）、2/2（資料代號、狀況 → 先要什麼）
+│   ├── 01-資源目錄.md        目錄 1～8：所有規格卡、參考卡、提示卡的名稱（gen_catalog.py 產生）
+│   ├── 02-要資料.md          資料代號 K/B/R/T/P/S 的取法（要跑的指令、貼多少）
+│   ├── spec-*.md             規格卡 57 張：預製範本的函式、行號、常數、TODO、陷阱、驗證（ROS、PICO、UROS、ALGO、BITS、PERF）
+│   └── gen_catalog.py        卡片改了就重跑，重做目錄
 └── print/                    紙本（官方允許帶紙本筆記進場）
     ├── 01-考場隨身手冊.pdf   lite 全部 + 導航圖精簡版
     ├── 02-官方文件導航圖.pdf full/08
     ├── 03-流程詳細版.pdf     full/00、02–07
-    └── build_print.py        重新產生 PDF（需 markdown-it-py + Chrome）
+    ├── 04-提示詞卡.pdf       cards/ 的提示卡
+    ├── 05-給模型的說明書.pdf model/ 全部
+    └── build_print.py        重新產生 PDF（需 markdown-it-py + Node playwright 或 Chrome；`python3 print/build_print.py 05` 只做一本）
 ```
 
 ## 考場條件（官方 2026-11-10 常見問題信）
@@ -79,7 +88,8 @@ prompt工具包/
 ## 使用方式
 
 1. 考前：填好開場卡（`cards/00-starter.md` 卡 1）的 `{{…}}`；`lite/00-starter.md`、`full/01-context.md` 也一起填。列印 `print/` 的 PDF，把 `08-docs-map.md` 的連結存成書籤並逐一測試。
-2. 開考：開新對話 → 貼開場卡 1（要用範本再貼 `09-template-adapt.md` 範本 1/7）→ 照 `10-exam-day-flow.md` 開考 1→5 走完前 30 分鐘。
+2. 開考：開新對話 → 貼開場卡 1（要用範本再貼 `09-template-adapt.md` 範本 1/7）→ 照 `10-exam-day-flow.md` 開考 1→5 走完
+   - **另一種用法：讓模型自己要資料**。開新對話貼 `model/00-總說明.md` 的總說明 1/2、2/2，模型會用「【需要】規格卡 PICO 6」「【需要】資料 B1」這種格式跟你要東西，照 `model/README.md` 的對照表去拿。規格卡寫了每個範本函式的行號，模型只會要那幾行程式。（這一套沒有壓力測試過。）前 30 分鐘。
    - 問硬體 / ROS / SDK 的事：**先貼對應的參考卡**（模型回「收到」），再貼 `11-ask-reference.md` 查詢 1/2。實測貼了參考卡，卡上沒有的事模型 94～100% 會說「資料中沒有」。
    - 對話短的模型：每做完一小步就用開場卡 3/3 狀態卡開新對話（4k context 貼 5～6 張卡就會溢出）。
    - 壓力測試的成績與「哪張卡要多核對」：`stress-test/RESULTS.md`。

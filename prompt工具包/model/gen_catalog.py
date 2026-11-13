@@ -37,12 +37,12 @@ GROUPS = [
 TITLE = re.compile(r"^【([^｜】]+)｜([^｜】]+)｜([^】]+)】", re.M)
 
 
-def cards_in(path):
+def cards_in(path, topic_max=TOPIC_MAX):
     text = (ROOT / path).read_text(encoding="utf-8")
     out = []
     for kind, name, topic in TITLE.findall(text):
         topic = re.sub(r"\s+", " ", topic.split("】")[0]).strip()
-        out.append((kind.strip(), name.strip(), topic[:TOPIC_MAX] + ("…" if len(topic) > TOPIC_MAX else "")))
+        out.append((kind.strip(), name.strip(), topic[:topic_max] + ("…" if len(topic) > topic_max else "")))
     return out
 
 
@@ -54,7 +54,7 @@ def group_lines(entries):
             lines.append(f"- （{path} 還沒有）")
             continue
         series = {}
-        for kind, name, topic in cards_in(path):
+        for kind, name, topic in cards_in(path, 34 if path.startswith("model/") else TOPIC_MAX):
             m = re.match(r"(.+?)\s*(\d+)/(\d+)$", name)
             base, num = (m.group(1), m.group(2)) if m else (name, "")
             label = prefix or f"{kind} {base}"
