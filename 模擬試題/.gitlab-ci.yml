@@ -1,0 +1,45 @@
+# 模擬試題的 CI 設定（讀題練習用：這個檔案不在 repo 根目錄，所以不會真的觸發 CI）
+#
+# 真的考試時，先讀懂 CI：哪個 job 在什麼條件下跑、跑什麼指令、分數印在哪裡。
+# 這份的規則：commit message 裡有 [Q1] / [Q2-1] / [Q2-2] / [Q2-3] 才會評那一題。
+# 本地要重現，就照 script 那一行自己跑：python3 judge.py q1
+
+stages:
+  - judge
+
+.judge_template: &judge
+  stage: judge
+  image: srecruit-exam:latest
+  timeout: 10 minutes
+  artifacts:
+    when: always
+    paths: [judge-report.txt]
+
+judge-q1:
+  <<: *judge
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /\[Q1\]/'
+  script:
+    - python3 judge.py q1 | tee judge-report.txt
+
+judge-q2-1:
+  <<: *judge
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /\[Q2-1\]/'
+  script:
+    - source /opt/ros/jazzy/setup.bash
+    - python3 judge.py q2-1 | tee judge-report.txt
+
+judge-q2-2:
+  <<: *judge
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /\[Q2-2\]/'
+  script:
+    - python3 judge.py q2-2 | tee judge-report.txt
+
+judge-q2-3:
+  <<: *judge
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /\[Q2-3\]/'
+  script:
+    - python3 judge.py q2-3 | tee judge-report.txt

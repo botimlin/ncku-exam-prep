@@ -1,0 +1,25 @@
+; unpack8.pio — 把 CPU 送進來的 32-bit word 拆成 4 個 byte，每個 byte 單獨推回 RX FIFO
+;
+; 規格（見 q2-2/README.md §B-1）：
+;   - 每個 TX word 拆成 4 個 byte，順序是「低位元組先」：bits 7..0、15..8、23..16、31..24
+;   - 每個 RX word 的 bits 7..0 = 那個 byte，其他 bit 一律是 0
+;
+; 這支程式「能跑」，但輸出不符合規格。修好它（可以改指令，也可以改下面 c-sdk 區塊的設定）。
+
+.program unpack8
+.wrap_target
+    out x, 8
+    in  x, 8
+.wrap
+
+% c-sdk {
+static inline void unpack8_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = unpack8_program_get_default_config(offset);
+    //                         shift_right, autopull, pull_threshold
+    sm_config_set_out_shift(&c, false,       true,     32);
+    //                         shift_right, autopush, push_threshold
+    sm_config_set_in_shift(&c,  true,        true,     8);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

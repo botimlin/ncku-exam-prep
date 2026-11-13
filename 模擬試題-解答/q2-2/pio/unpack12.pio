@@ -1,0 +1,41 @@
+; 解答：unpack12.pio（20 條指令、每 8 個樣本 20 cycle = 2.5 cycle/樣本）
+;
+; 關鍵：autopull 只在「OSR 用完」時補新 word，OSR 剩 8 bit 時做 out x, 12，
+; 不夠的 4 bit 是 0，不會自動接到下一個 word 的開頭。所以 s2、s5 這兩個跨 word 的樣本要分兩次 out。
+;
+; 跨 word 的樣本：先 out 低位那段到 y，再 out 高位那段到 x，然後 in shift_left 時
+; 「先 in 高位、再 in 低位」，ISR 才會是 (高 << 低的寬度) | 低。
+; 3 個 word 正好 96 bit = 8 個樣本，每輪結束 OSR 剛好用完，所以可以直接 .wrap。
+.program unpack12
+.wrap_target
+    out x, 12       ; s0
+    in  x, 12
+    out x, 12       ; s1
+    in  x, 12
+    out y, 8        ; s2 低 8 bit（word0 的 31..24）
+    out x, 4        ; s2 高 4 bit（autopull 補 word1，取 3..0）
+    in  x, 4
+    in  y, 8        ; ISR = 高4 << 8 | 低8 → autopush
+    out x, 12       ; s3
+    in  x, 12
+    out x, 12       ; s4
+    in  x, 12
+    out y, 4        ; s5 低 4 bit（word1 的 31..28）
+    out x, 8        ; s5 高 8 bit（autopull 補 word2，取 7..0）
+    in  x, 8
+    in  y, 4
+    out x, 12       ; s6
+    in  x, 12
+    out x, 12       ; s7
+    in  x, 12
+.wrap
+
+% c-sdk {
+static inline void unpack12_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = unpack12_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true,  true, 32);   // 低位元先出
+    sm_config_set_in_shift(&c,  false, true, 12);   // shift_left：最後 in 的在最低位元
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

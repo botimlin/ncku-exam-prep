@@ -1,0 +1,23 @@
+; 另一種解法（正確但慢：約 39 cycle/樣本，只拿正確分、拿不到效能分）
+; 一次搬 1 bit 就不用管跨 word。in shift_right 時第一個 bit 最後會在 bit 20，
+; 收完 12 bit 再 in null, 20 把它推到 bits 11..0，然後手動 push。
+.program unpack12_bitloop
+.wrap_target
+    set y, 11
+bit:
+    out x, 1
+    in  x, 1
+    jmp y-- bit
+    in  null, 20
+    push
+.wrap
+
+% c-sdk {
+static inline void unpack12_bitloop_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = unpack12_bitloop_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true, true,  32);
+    sm_config_set_in_shift(&c,  true, false, 32);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}

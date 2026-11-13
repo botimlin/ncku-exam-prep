@@ -1,0 +1,19 @@
+; 解答：unpack8.pio
+; bug 1：out_shift 設成 left → 先取到最高的 byte（31..24），順序反了。改成 shift_right = true。
+; bug 2：in_shift 設成 right → 新資料從 ISR 的高位元進來，8 bit 推出去時落在 bits 31..24。
+;        改成 shift_left（false），8 bit 才會在 bits 7..0。
+.program unpack8
+.wrap_target
+    out x, 8
+    in  x, 8
+.wrap
+
+% c-sdk {
+static inline void unpack8_program_init(PIO pio, uint sm, uint offset) {
+    pio_sm_config c = unpack8_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true,  true, 32);
+    sm_config_set_in_shift(&c,  false, true, 8);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
