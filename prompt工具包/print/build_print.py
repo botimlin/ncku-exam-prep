@@ -2,7 +2,8 @@
 """把工具包的 Markdown 排成可列印的 A4 PDF（需要 markdown-it-py 與 Google Chrome / Chromium）。
 
 用法（在工具包根目錄）：
-    python3 print/build_print.py
+    python3 print/build_print.py          # 全部重做
+    python3 print/build_print.py 05       # 只做檔名開頭是 05 的那本
 輸出：print/*.pdf
 """
 import html
@@ -89,6 +90,23 @@ BOOKS = [
             "cards/07-unknown-tech.md",
         ],
     ),
+    (
+        "05-給模型的說明書.pdf",
+        "給模型的說明書",
+        "總說明、資源目錄、要資料（代號與指令）、預製範本規格卡",
+        [
+            "model/README.md",
+            "model/00-總說明.md",
+            "model/02-要資料.md",
+            "model/01-資源目錄.md",
+            "model/spec-ros2.md",
+            "model/spec-pico.md",
+            "model/spec-micro-ros.md",
+            "model/spec-algo.md",
+            "model/spec-bits-riscv.md",
+            "model/spec-linux-perf.md",
+        ],
+    ),
 ]
 
 CSS = r"""
@@ -158,7 +176,7 @@ def build_html(title: str, subtitle: str, files: list[str], flow: bool) -> str:
         md = path.read_text(encoding="utf-8")
         t = chapter_title(md, rel)
         toc.append(f"<li>{html.escape(t)} <span class='src'>（{html.escape(rel)}）</span></li>")
-        if rel.startswith("cards/"):
+        if rel.startswith(("cards/", "model/")) and not rel.endswith("README.md"):
             # 貼上卡要「逐行照原樣」：每張卡用 <pre> 排，不讓 Markdown 把換行合併、把 * 當斜體
             chunks = re.split(r"\n---\n", md)
             body = md_to_html(chunks[0]) + "".join(
@@ -190,19 +208,44 @@ def find_chrome() -> str:
     sys.exit("找不到 Chrome / Chromium")
 
 
+RENDER_JS = r"""
+const { chromium } = require('playwright');
+(async () => {
+  const [src, dst] = process.argv.slice(1);
+  const b = await chromium.launch();
+  const p = await b.newPage();
+  await p.goto('file://' + src, { waitUntil: 'load' });
+  await p.pdf({ path: dst, preferCSSPageSize: true, printBackground: true });
+  await b.close();
+})();
+"""
+
+
+def have_node_playwright() -> bool:
+    node = shutil.which("node")
+    return bool(node) and subprocess.run([node, "-e", "require('playwright')"], capture_output=True).returncode == 0
+
+
 def main() -> None:
-    chrome = find_chrome()
+    only = sys.argv[1] if len(sys.argv) > 1 else ""
+    use_pw = have_node_playwright()          # 有 playwright 就用它（headless Chrome 的 --print-to-pdf 在某些容器會卡住）
+    chrome = None if use_pw else find_chrome()
     OUT.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         for fname, title, subtitle, files in BOOKS:
+            if only and not fname.startswith(only):
+                continue
             src = pathlib.Path(tmp) / (fname + ".html")
             src.write_text(build_html(title, subtitle, files, flow=fname.startswith("01-")), encoding="utf-8")
             dst = OUT / fname
-            subprocess.run(
-                [chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer",
-                 f"--user-data-dir={tmp}/profile", f"--print-to-pdf={dst}", src.as_uri()],
-                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
+            if use_pw:
+                subprocess.run(["node", "-e", RENDER_JS, str(src), str(dst)], check=True)
+            else:
+                subprocess.run(
+                    [chrome, "--headless=new", "--disable-gpu", "--no-sandbox", "--no-pdf-header-footer",
+                     f"--user-data-dir={tmp}/profile", f"--print-to-pdf={dst}", src.as_uri()],
+                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
             print(f"{dst.relative_to(ROOT)}")
 
 
