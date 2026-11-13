@@ -44,7 +44,7 @@
 | 症狀 | 可能原因 | 解法 |
 |---|---|---|
 | agent 一直沒反應、LED 不亮 | port 錯 / 權限 / 被別的程式占用 | `ls /dev/serial/by-id/`、加 dialout 群組、關 minicom |
-| agent 連上但 topic 沒出現 | create 某步失敗（名字錯、超過實體數上限） | 每步用 RCCHECK（LED 快閃）；上限：1 node、10 pub、5 sub、1 service、1 client |
+| agent 連上但 topic 沒出現 | create 某步失敗（名字錯、超過實體數上限） | 每步用 RCCHECK（陣列版、雙核版 LED 快閃；pingpong 的 RCCHECK 是 return false → 回去等 agent，LED 不閃）；上限：1 node、10 pub、5 sub、1 service、1 client |
 | topic 有但 echo 不到 | QoS 不合（best_effort vs reliable） | `--qos-reliability best_effort`；兩端用同 QoS |
 | 小訊息 OK、大訊息不見 | 超過傳輸上限（板子收不到）或 > capacity（callback 收到 size=0） | 見 §4；host 切小塊 |
 | `rclc_executor_add_*` 失敗 | executor handle 數 < timer + sub 數 | `rclc_executor_init(..., N, ...)` 的 N 加大 |

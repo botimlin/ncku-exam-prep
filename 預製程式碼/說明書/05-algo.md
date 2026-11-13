@@ -13,7 +13,7 @@
 - 題目出現 **Adler-32、Fletcher、XOR 校驗、NMEA `*hh`、LRC、IP/UDP checksum** → `checksum_misc.c`，整段複製需要的函式。
 - 板子上要「邊搬資料邊算 CRC」→ DMA sniffer，見第 3 章 `app_dma.c` 一節與食譜 5.4.2；**先用本章的 `crc32_update` 驗證硬體結果**。
 - 最常改的 3 個地方：`crc_generic` 的參數（5.2.4 表格整列照抄）、`bnn_test.c:15-22` 的網路尺寸與權重、`sort_test.c` / 你的程式裡切幾段給 `kway_merge`（段數沒有上限；段數很多時改用兩兩合併比較快，見 5.4.3）。
-- 全部 `TODO(改這裡)`：`grep -n "TODO(改這裡)" *.c *.h`（在 `algo/` 執行，共 6 處：`crc32.c:10`、`crc32_test.c:7`、`sort.c:6`、`sort.c:69`、`sort_test.c:7`、`bnn_test.c:14`）。
+- 全部 `TODO(改這裡)`：`grep -n "TODO(改這裡)" *.c *.h`（在 `algo/` 執行，共 5 處：`crc32.c:10`、`crc32_test.c:7`、`sort.c:6`、`sort_test.c:7`、`bnn_test.c:14`）。
 
 ## 5.1 檔案總表
 
@@ -223,7 +223,7 @@ SHA-0 是 1993 年的版本，因為有弱點，1995 年改成 SHA-1（就是加
 | 合併排序（bottom-up） | `merge_sort_u32` | O(n log n) | n 個 `uint32_t`（`tmp`） | 是（`<=`，`sort.c:20`） | 要穩定、資料不是整數鍵 |
 | LSD radix sort | `radix_sort_u32` | O(4n + 4×256) | n 個 `tmp` + 1 KB 計數陣列（在 stack） | 是（計數排序依序搬） | 大量 `uint32`，通常最快 |
 | 2 路合併 | `merge_two_sorted` | O(na + nb) | 輸出陣列 | 是（相等時先拿 a） | 兩塊板子 / 兩核各排一半 |
-| k 路合併 | `kway_merge` | O(n × k) | 輸出陣列 + stack 上 k 個 `size_t` | 是（相等時拿編號小的那段） | k ≤ 8 段 |
+| k 路合併 | `kway_merge` | O(n × k) | 輸出陣列 + stack 上 k 個 `size_t` | 是（相等時拿編號小的那段） | k 小（≤ 8 段）時最划算；k 沒有上限，段數很多時兩兩合併比較快 |
 
 **radix sort 怎麼做**（`sort.c:41-57`）：把 32-bit 整數切成 4 個 byte，從最低 byte 到最高 byte 各做一次「計數排序」：
 
@@ -408,7 +408,7 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
 | `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | CRC-32C（check `0xE3069283`） | O(n)；`TC` 1 KB | 只有查表版 |
 | `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | `crc`：**第一段傳 `0xFFFF`**，之後傳上次結果 | CRC-16/IBM-3740（check `0x29B1`） | O(n)；`T16` 512 byte | 傳 0 開始 = CRC-16/XMODEM（沒有 xorout，所以 init 0 就是 XMODEM） |
 | `crc_param_t` | `width`、`poly`、`init`、`refin`、`refout`、`xorout` | 結構（M33 上 20 byte） | — | 欄位順序固定，照 5.2.4 表格填 |
-| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | 參數、資料 | 照參數算出的 CRC | O(8n) 次位移（refin 時每 byte 再加 8 次反轉）；不用表；M33 stack 32 byte | **width 只能 8..32**；**不能分段**（每次呼叫都重新套 init、xorout） |
+| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | 參數、資料 | 照參數算出的 CRC | O(8n) 次位移（refin 時每 byte 再加 8 次反轉）；不用表；M33 stack 32 byte | width 1..32；**不能分段**（每次呼叫都重新套 init、xorout） |
 
 `crc32_bitwise` / `table` / `slice4` / `update` / `crc32c_update` 的分段規則跟 zlib 一樣：`c = f(0, a, na); c = f(c, b, nb);` 等於 `f(0, a+b, na+nb)`。原理：函式開頭 `crc = ~crc`、結尾 `return ~crc`（`crc32.c:44,50`），把 init 和 xorout 都藏在裡面，所以傳 0 進去 = 從 `0xFFFFFFFF` 開始。
 
@@ -883,7 +883,7 @@ gcc -O2 -march=native -Wall -Wextra -std=c11 bnn.c bnn_test.c -o $B/bnn_nat && $
 | `bnn_test.c:18-19` | `W1` 4 列 | 第一層權重 bits | 換成題目的權重（每列 `BNN_WORDS(N_IN)` 個 word，順序見 5.2.8） |
 | `bnn_test.c:20` | `W2 = {1},{2},{4},{8}` | 輸出層權重 | 同上 |
 | `bnn_test.c:73` | `bnn_fold_bn(1.0f, 0.0f, 20.0f, 1.0f, 0.0f, ...)` | 每個隱藏神經元的 BN 參數 | 換成題目的 gamma、beta、mean、`sqrtf(var+eps)`、bias（每個 j 不同）；若題目直接給整數門檻，跳過這行直接填 `thr1` |
-| `bnn_test.c:75-81` | 原型加 0~3 bit 雜訊的自我測試（`:77` 選類別、`:78` 取原型、`:79` 加雜訊、`:80` 比對） | 範例網路專用的檢查 | 換成題目的測試資料與答案。**`:78` 的 `uint32_t x[2]` 是寫死 2 個 word**，改 `N_IN` 後要改成 `x[BNN_WORDS(N_IN)]` 並複製整列 |
+| `bnn_test.c:75-81` | 原型加 0~3 bit 雜訊的自我測試（`:77` 選類別、`:78` 取原型、`:79` 加雜訊、`:80` 比對） | 範例網路專用的檢查 | 換成題目的測試資料與答案。`:78` 的 `x[BNN_WORDS(N_IN)]` 大小會跟著 `N_IN` 變 |
 
 #### 實際執行輸出
 本次實測（host gcc 13.3、x86_64）：
@@ -1616,7 +1616,7 @@ bnn 每層 12.26 us
 |---|---|---|
 | CRC 測試 | `gcc -O2 -Wall -Wextra -std=c11 crc32.c crc32_test.c -o $B/crc && $B/crc` | `結果：全部通過`（17 PASS） |
 | SHA 測試 | `gcc -O2 -Wall -Wextra -std=c11 sha1_sha0.c sha256.c sha_test.c -o $B/sha && $B/sha` | 10 PASS |
-| 排序測試 | `gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort` | 5 PASS |
+| 排序測試 | `gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort` | 6 PASS（含 `kway_merge (k=20)`） |
 | BNN 測試 | `gcc -O2 -Wall -Wextra -std=c11 bnn.c bnn_test.c -o $B/bnn && $B/bnn` | 4 PASS |
 | 校驗碼測試 | `gcc -O2 -Wall -Wextra -std=c11 -DTEST_MAIN checksum_misc.c -o $B/ck && $B/ck` | 13 PASS |
 | 用 sanitizer 再跑 | 把 `-O2` 換成 `-O1 -g -fsanitize=address,undefined` | 同上、沒有 `runtime error` |

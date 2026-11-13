@@ -404,10 +404,11 @@ Downloading Picotool
 
 ```text
 pico_pingpong.c:33:5: warning: this 'if' clause does not guard... [-Wmisleading-indentation]
-   32 |     if (t_ == -1) t_ = now_; if (now_ - t_ > (MS)) { X; t_ = now_; } } while (0)
+   33 |     if (t_ == -1) t_ = now_; if (now_ - t_ > (MS)) { X; t_ = now_; } } while (0)
 pico_pingpong.c:142:13: note: in expansion of macro 'EVERY_N_MS'
-（同一個警告在 146:13 再出現一次）
+（同一個警告在 149:13 再出現一次）
 ```
+（2026-11-13 用目前的檔案重編得到的輸出。）
 
 `pico_array_compute.c`、`pico_dualcore_micro_ros.c`：0 個警告。
 
@@ -509,7 +510,7 @@ callback 細節：
 |---|---|---|---|
 | `pico_pingpong.c:23` | `#define LED_PIN 25` | 板載 LED 腳位 | Pico / Pico 2 不用改；Pico W / Pico 2 W 的 LED 接在無線晶片上，不是 GP25（要改用 `pico_cyw43_arch` 的 API，⚠️未驗證） |
 | `pico_pingpong.c:25` | `#define PING_PERIOD_MS 2000` | ping 週期（毫秒） | 題目指定頻率時改，例如 10 Hz → `100` |
-| `pico_pingpong.c:84`（實際值在 84） | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | node 名稱 / namespace | 多塊板子時改成不同 node 名稱（例如 `"pingpong_pico0"`），避免 ROS 2 出現同名 node；topic 是絕對名稱，不受 namespace 影響 |
+| `pico_pingpong.c:84`（TODO 註解；呼叫在 85） | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | node 名稱 / namespace | 多塊板子時改成不同 node 名稱（例如 `"pingpong_pico0"`），避免 ROS 2 出現同名 node；topic 是絕對名稱，不受 namespace 影響 |
 
 #### 實際執行輸出
 
