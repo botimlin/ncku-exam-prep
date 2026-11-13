@@ -21,10 +21,10 @@
 | `README.md` | 166 | 概念、流程、錯誤排查表、訊息大小限制、加速清單、Pico 2 支援狀態、去年題目簡答、審查紀錄 | 卡住時先查 §3 排查表、§4 大小限制 | 文件；數字對過官方標頭檔 |
 | `agent_cheatsheet.md` | 81 | 啟動 agent（docker / colcon / snap）、多板子、權限、`ros2 topic` 檢查指令 | 開 agent、找序列埠、topic 看不到時 | ⚠️ 指令全部沒有實測（容器裡沒有 ROS 2） |
 | `CMakeLists.txt` | 61 | 官方 CMakeLists 加上 `PICO_BOARD` 預設、`APP_SRC` 選檔、`pico_multicore` | 每次 build | ✅ 本 session 3 支程式都編譯、連結成功 |
-| `pico_pingpong.c` | 157 | `/microROS/ping`、`/microROS/pong`（`std_msgs/Header`）+ agent 斷線重連狀態機 | 去年的 Ping-Pong 題；要抄重連機制時 | ✅ 編譯、連結；⚠️ 沒在板子上跑 |
+| `pico_pingpong.c` | 160 | `/microROS/ping`、`/microROS/pong`（`std_msgs/Header`）+ agent 斷線重連狀態機 | 去年的 Ping-Pong 題；要抄重連機制時 | ✅ 編譯、連結；⚠️ 沒在板子上跑 |
 | `pico_array_compute.c` | 123 | 收 `Int32MultiArray` → `compute()`（範例：插入排序）→ 發回；示範 sequence 記憶體配置 | 「電腦送資料、Pico 算、送回」的主範本 | ✅ 編譯、連結；`compute()` 在 host 測過；⚠️ 沒在板子上跑 |
-| `pico_dualcore_micro_ros.c` | 112 | core0 跑 micro-ROS，core1 用 queue 幫忙算後半（範例：平方） | 運算時間遠大於傳輸時間時 | ✅ 編譯、連結；`compute_range()` 在 host 測過；⚠️ 沒在板子上跑 |
-| `host_driver.py` | 129 | 電腦端 rclpy 節點：切塊、分給 N 塊板子、照 `job_id` 合併、計時、對答案 | 搭配上面兩支陣列程式 | ⚠️ 沒有用真的 rclpy 跑；用假 rclpy 跑過 7 種情境（4.3.7） |
+| `pico_dualcore_micro_ros.c` | 113 | core0 跑 micro-ROS，core1 用 queue 幫忙算後半（範例：平方） | 運算時間遠大於傳輸時間時 | ✅ 編譯、連結；`compute_range()` 在 host 測過；⚠️ 沒在板子上跑 |
+| `host_driver.py` | 131 | 電腦端 rclpy 節點：切塊、分給 N 塊板子、照 `job_id` 合併、計時、對答案 | 搭配上面兩支陣列程式 | ⚠️ 沒有用真的 rclpy 跑；用假 rclpy 跑過 7 種情境（4.3.7） |
 
 ## 4.2 先懂這些概念
 
@@ -69,7 +69,7 @@
 - **reliable**（可靠）：要 ACK，掉了會重送；板子端 `rcl_publish` 會等 agent 確認才返回（`pico_array_compute.c:68` 的註解，依據 rmw_microxrcedds `rmw_publish.c`）。可以傳比較大的訊息（多個 MTU 片段）。`rclc_*_init_default()` = reliable。
 - **best_effort**（盡力而為）：不等 ACK，掉了就掉了；比較快，但一則只能放 1 個 MTU。`rclc_*_init_best_effort()`。
 - 配對規則：**reliable 發佈 → best_effort 訂閱：可以收**；**best_effort 發佈 → reliable 訂閱：收不到**（QoS 不相容）。所以兩端最好用同一種。
-- `host_driver.py:48` 用 `ReliabilityPolicy.RELIABLE`，配合板子的 `_default`。
+- `host_driver.py:50` 用 `ReliabilityPolicy.RELIABLE`，配合板子的 `_default`。
 
 ### 4.2.5 訊息大小限制（`README.md` §4）
 
@@ -349,7 +349,7 @@ cp app.uf2 /media/$USER/RP2350/                # 舊 Pico 是 RPI-RP2
 | `APP_SRC` | 28 | `pico_array_compute.c` | 要編的程式 |
 | `link_directories(libmicroros)` | 30 | — | 找 `libmicroros.a` |
 | `add_executable(app ${APP_SRC} pico_uart_transport.c)` | 31–34 | — | transport 檔名是單數 `transport.c`，header 是複數 `transports.h` |
-| `target_link_libraries` | 35–39 | `pico_stdlib`、`pico_multicore`、`microros` | `microros` = `libmicroros/libmicroros.a`；`pico_multicore` 非雙核心版連了也沒差 |
+| `target_link_libraries` | 35–39 | `pico_stdlib`、`pico_unique_id`（pingpong 的板子序號）、`pico_multicore`、`microros` | `microros` = `libmicroros/libmicroros.a`；`pico_multicore` 非雙核心版連了也沒差 |
 | `target_include_directories` | 40 | `libmicroros/include` | rcl/rclc/std_msgs 標頭都在這 |
 | `-ffunction-sections -fdata-sections` | 42–43 | — | 搭配連結時 `--gc-sections` 丟掉沒用到的函式（例如需要 `__atomic_*_4` 的 `rcl_timer_exchange_callback`） |
 | `pico_enable_stdio_usb(app 1)` / `_uart(app 0)` | 46–47 | — | micro-ROS 走 USB CDC |
@@ -403,9 +403,9 @@ Downloading Picotool
 加 `-Wall -Wextra` 的結果（`CFLAGS="-Wall -Wextra" cmake -DPICO_BOARD=pico2 ..`，只編 app 的 `.o`；注意：用 `-DCMAKE_C_FLAGS=` 會蓋掉 SDK 的 `-mcpu` 旗標，組譯器會報 `mcrr` 指令錯誤，要用 `CFLAGS` 環境變數）：
 
 ```text
-pico_pingpong.c:32:5: warning: this 'if' clause does not guard... [-Wmisleading-indentation]
+pico_pingpong.c:33:5: warning: this 'if' clause does not guard... [-Wmisleading-indentation]
    32 |     if (t_ == -1) t_ = now_; if (now_ - t_ > (MS)) { X; t_ = now_; } } while (0)
-pico_pingpong.c:139:13: note: in expansion of macro 'EVERY_N_MS'
+pico_pingpong.c:142:13: note: in expansion of macro 'EVERY_N_MS'
 （同一個警告在 146:13 再出現一次）
 ```
 
@@ -441,30 +441,30 @@ pico_pingpong.c:139:13: note: in expansion of macro 'EVERY_N_MS'
 
 | 名稱 | 行號 | 型別 / 參數 | 效果 / 注意 |
 |---|---|---|---|
-| `LED_PIN` | 22 | 25 | Pico / Pico 2 板載 LED = GP25（pico-sdk `boards/pico2.h:38` 也是 25） |
-| `STR_CAP` | 23 | 50 | `frame_id` buffer 大小，最多 49 字元 + `'\0'` |
-| `PING_PERIOD_MS` | 24 | 2000 | ping 週期 |
-| `RCCHECK(fn)` | 27 | — | 出錯 `return false`（給 `create_entities` 用，讓狀態機回去等 agent） |
-| `RCSOFTCHECK(fn)` | 29 | — | 忽略錯誤 |
-| `EVERY_N_MS(MS, X)` | 31–32 | — | 每隔 `MS` 毫秒才執行 `X` 一次；每個展開處有自己的 `static t_`；第一次呼叫只記時間，`MS` 毫秒後才第一次執行 |
-| 全域物件 | 35–41 | `support`、`node`、`allocator`、`executor`、`timer`、`ping_pub`、`pong_pub`、`ping_sub`、`pong_sub` | 放全域避免 2 KB stack 不夠 |
-| 訊息與 buffer | 45–46 | `out_ping`、`in_ping`、`in_pong` + 3 個 `char[STR_CAP]` | `frame_id` 字串要先綁 buffer |
-| `state` | 49 | `WAITING_AGENT` / `AGENT_AVAILABLE` / `AGENT_CONNECTED` / `AGENT_DISCONNECTED` | 重連狀態機 |
-| `ping_timer_cb(rcl_timer_t *t, int64_t last_call_time)` | 52 | timer callback | 填 `frame_id` 和時間戳，發 ping |
-| `ping_sub_cb(const void *msgin)` | 67 | subscription callback | 不是自己的 ping → 發 pong |
-| `pong_sub_cb(const void *msgin)` | 74 | subscription callback | 是自己 ping 的 pong → 計數 |
-| `bool create_entities(void)` | 80 | 回傳是否全部成功 | 建立 support → node → 2 pub → 2 sub → timer → executor |
-| `void destroy_entities(void)` | 104 | — | 全部 fini |
+| `LED_PIN` | 23 | 25 | Pico / Pico 2 板載 LED = GP25（pico-sdk `boards/pico2.h:38` 也是 25） |
+| `STR_CAP` | 24 | 50 | `frame_id` buffer 大小，最多 49 字元 + `'\0'` |
+| `PING_PERIOD_MS` | 25 | 2000 | ping 週期 |
+| `RCCHECK(fn)` | 28 | — | 出錯 `return false`（給 `create_entities` 用，讓狀態機回去等 agent） |
+| `RCSOFTCHECK(fn)` | 30 | — | 忽略錯誤 |
+| `EVERY_N_MS(MS, X)` | 32–33 | — | 每隔 `MS` 毫秒才執行 `X` 一次；每個展開處有自己的 `static t_`；第一次呼叫只記時間，`MS` 毫秒後才第一次執行 |
+| 全域物件 | 36–42 | `support`、`node`、`allocator`、`executor`、`timer`、`ping_pub`、`pong_pub`、`ping_sub`、`pong_sub` | 放全域避免 2 KB stack 不夠 |
+| 訊息與 buffer | 46–47 | `out_ping`、`in_ping`、`in_pong` + 3 個 `char[STR_CAP]` | `frame_id` 字串要先綁 buffer |
+| `state` | 50 | `WAITING_AGENT` / `AGENT_AVAILABLE` / `AGENT_CONNECTED` / `AGENT_DISCONNECTED` | 重連狀態機 |
+| `ping_timer_cb(rcl_timer_t *t, int64_t last_call_time)` | 53 | timer callback | 填 `frame_id` 和時間戳，發 ping |
+| `ping_sub_cb(const void *msgin)` | 68 | subscription callback | 不是自己的 ping → 發 pong |
+| `pong_sub_cb(const void *msgin)` | 75 | subscription callback | 是自己 ping 的 pong → 計數 |
+| `bool create_entities(void)` | 81 | 回傳是否全部成功 | 建立 support → node → 2 pub → 2 sub → timer → executor |
+| `void destroy_entities(void)` | 105 | — | 全部 fini |
 
 #### 程式流程
 
-`main()`（`pico_pingpong.c:118`）：
+`main()`（`pico_pingpong.c:119`）：
 
-1. `rmw_uros_set_custom_transport(true, NULL, pico_serial_transport_open, ...)`（120–122）：設定 USB 序列埠傳輸，開 framing。
-2. LED 腳位設輸出（123–124）。
-3. 把 3 個 Header 的 `frame_id` 綁到靜態 buffer（127–129）：`.data = buf; .capacity = STR_CAP; .size = 0`。只做一次，重連不用重做。
-4. `device_id = time_us_64() & 0x7fff`、`srand(device_id)`（130–131）：用開機到這裡的微秒數當 ID。⚠️ 兩塊板子同時上電時可能拿到相近或相同的值（只是「不太一樣」，不是保證不同）。
-5. 狀態機（135–155），每圈最後 `gpio_put(LED_PIN, state == AGENT_CONNECTED)`：
+1. `rmw_uros_set_custom_transport(true, NULL, pico_serial_transport_open, ...)`（121–123）：設定 USB 序列埠傳輸，開 framing。
+2. LED 腳位設輸出（124–125）。
+3. 把 3 個 Header 的 `frame_id` 綁到靜態 buffer（128–130）：`.data = buf; .capacity = STR_CAP; .size = 0`。只做一次，重連不用重做。
+4. 讀板子出廠的 8 byte 唯一序號（`pico_get_unique_board_id()`），算成 `device_id`，再 `srand(device_id)`（131–134）：每塊板子的 ID 一定不同。2026-11-12 前是用開機微秒數，兩塊板子同時上電時可能撞號。
+5. 狀態機（138–158），每圈最後 `gpio_put(LED_PIN, state == AGENT_CONNECTED)`：
 
 ```text
 WAITING_AGENT ──每 500 ms ping(100 ms, 1 次) 成功──> AGENT_AVAILABLE
@@ -475,41 +475,41 @@ AGENT_CONNECTED ──每 200 ms ping(100 ms, 1 次)；成功就保持──> �
 AGENT_DISCONNECTED ──destroy_entities()──> WAITING_AGENT
 ```
 
-- 第 139 行：`EVERY_N_MS(500, state = (rmw_uros_ping_agent(100, 1) == RMW_RET_OK) ? AGENT_AVAILABLE : WAITING_AGENT);`
-- 第 146–147 行：每 200 ms 檢查一次 agent；只要還連著，**每圈**都 `rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10))`（`if` 在巨集外面）。
+- 第 142 行：`EVERY_N_MS(500, state = (rmw_uros_ping_agent(100, 1) == RMW_RET_OK) ? AGENT_AVAILABLE : WAITING_AGENT);`
+- 第 149–150 行：每 200 ms 檢查一次 agent；只要還連著，**每圈**都 `rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10))`（`if` 在巨集外面）。
 
-`create_entities()`（80–102），照順序：
+`create_entities()`（81–103），照順序：
 
 | 行 | 呼叫 | 說明 |
 |---|---|---|
-| 81 | `allocator = rcl_get_default_allocator()` | 預設記憶體配置器 |
-| 82 | `rclc_support_init(&support, 0, NULL, &allocator)` | 建立 context / session |
-| 84 | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | namespace 空字串 |
-| 85 | `ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Header)` | 訊息型別 |
-| 87 | `rclc_publisher_init_default(&ping_pub, ..., "/microROS/ping")` | ping 用 reliable 發 |
-| 88 | `rclc_publisher_init_best_effort(&pong_pub, ..., "/microROS/pong")` | pong 用 best_effort 發 |
-| 89–90 | `rclc_subscription_init_best_effort(&ping_sub / &pong_sub, ...)` | 兩個訂閱都 best_effort（BE 訂閱可以收 reliable 發佈）；QoS 安排照官方 freertos_apps ping_pong |
-| 92–93 | `rclc_timer_init_default2(&timer, &support, RCL_MS_TO_NS(PING_PERIOD_MS), ping_timer_cb, true)` | 最後的 `true` = 建立後立刻開始計時；舊的 `rclc_timer_init_default` 在 jazzy 已 deprecated（`rclc/timer.h:61`） |
-| 95 | `executor = rclc_executor_get_zero_initialized_executor()` | — |
-| 96 | `rclc_executor_init(&executor, &support.context, 3, &allocator)` | **handle 數 3 = 1 timer + 2 subscription** |
-| 97–99 | `add_timer`、`add_subscription(&ping_sub, &in_ping, &ping_sub_cb, ON_NEW_DATA)`、`add_subscription(&pong_sub, &in_pong, ...)` | `ON_NEW_DATA` = 有新資料才呼叫 |
-| 100 | `(void)rmw_uros_sync_session(1000)` | 跟 agent 對時，失敗也沒關係；成功後 `rmw_uros_epoch_millis()` 才是真實時間 |
+| 82 | `allocator = rcl_get_default_allocator()` | 預設記憶體配置器 |
+| 83 | `rclc_support_init(&support, 0, NULL, &allocator)` | 建立 context / session |
+| 85 | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | namespace 空字串 |
+| 86 | `ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Header)` | 訊息型別 |
+| 88 | `rclc_publisher_init_default(&ping_pub, ..., "/microROS/ping")` | ping 用 reliable 發 |
+| 89 | `rclc_publisher_init_best_effort(&pong_pub, ..., "/microROS/pong")` | pong 用 best_effort 發 |
+| 90–91 | `rclc_subscription_init_best_effort(&ping_sub / &pong_sub, ...)` | 兩個訂閱都 best_effort（BE 訂閱可以收 reliable 發佈）；QoS 安排照官方 freertos_apps ping_pong |
+| 93–94 | `rclc_timer_init_default2(&timer, &support, RCL_MS_TO_NS(PING_PERIOD_MS), ping_timer_cb, true)` | 最後的 `true` = 建立後立刻開始計時；舊的 `rclc_timer_init_default` 在 jazzy 已 deprecated（`rclc/timer.h:61`） |
+| 96 | `executor = rclc_executor_get_zero_initialized_executor()` | — |
+| 97 | `rclc_executor_init(&executor, &support.context, 3, &allocator)` | **handle 數 3 = 1 timer + 2 subscription** |
+| 98–100 | `add_timer`、`add_subscription(&ping_sub, &in_ping, &ping_sub_cb, ON_NEW_DATA)`、`add_subscription(&pong_sub, &in_pong, ...)` | `ON_NEW_DATA` = 有新資料才呼叫 |
+| 101 | `(void)rmw_uros_sync_session(1000)` | 跟 agent 對時，失敗也沒關係；成功後 `rmw_uros_epoch_millis()` 才是真實時間 |
 
 callback 細節：
 
-- `ping_timer_cb`（52–63）：`snprintf(out_ping.frame_id.data, STR_CAP, "%d_%d", rand(), device_id)`；`.size = strlen(...)`（不含 `'\0'`，要自己設）；`stamp` 由 `rmw_uros_epoch_millis()` 換成秒 + 奈秒；`pong_count = 0`；`rcl_publish(&ping_pub, &out_ping, NULL)`。
-- `ping_sub_cb`（67–72）：`size == 0` 就 return（字串超過 capacity 時 typesupport 會把 size 設 0，但 callback 照叫）；`strcmp` 跟自己最後一次發的 `frame_id` 不同 → 把收到的訊息原封不動 `rcl_publish(&pong_pub, m, NULL)`。板子會收到自己的 ping（同一個 topic），靠這個 `strcmp` 不回自己。
-- `pong_sub_cb`（74–78）：`frame_id` 和自己的一樣 → `pong_count++`。`pong_count` 只計數，**沒有送出或顯示**；題目要回報時要自己加（例如另開一個 publisher）。
+- `ping_timer_cb`（53–64）：`snprintf(out_ping.frame_id.data, STR_CAP, "%d_%d", rand(), device_id)`；`.size = strlen(...)`（不含 `'\0'`，要自己設）；`stamp` 由 `rmw_uros_epoch_millis()` 換成秒 + 奈秒；`pong_count = 0`；`rcl_publish(&ping_pub, &out_ping, NULL)`。
+- `ping_sub_cb`（68–73）：`size == 0` 就 return（字串超過 capacity 時 typesupport 會把 size 設 0，但 callback 照叫）；`strcmp` 跟自己最後一次發的 `frame_id` 不同 → 把收到的訊息原封不動 `rcl_publish(&pong_pub, m, NULL)`。板子會收到自己的 ping（同一個 topic），靠這個 `strcmp` 不回自己。
+- `pong_sub_cb`（75–79）：`frame_id` 和自己的一樣 → `pong_count++`。`pong_count` 只計數，**沒有送出或顯示**；題目要回報時要自己加（例如另開一個 publisher）。
 
-`destroy_entities()`（104–116）：先 `rmw_uros_set_context_entity_destroy_session_timeout(rmw_ctx, 0)`（agent 已經不在，不要等），再依序 fini：2 pub → 2 sub → timer → executor → node → support。
+`destroy_entities()`（105–117）：先 `rmw_uros_set_context_entity_destroy_session_timeout(rmw_ctx, 0)`（agent 已經不在，不要等），再依序 fini：2 pub → 2 sub → timer → executor → node → support。
 
 #### 要改的地方
 
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
-| `pico_pingpong.c:22` | `#define LED_PIN 25` | 板載 LED 腳位 | Pico / Pico 2 不用改；Pico W / Pico 2 W 的 LED 接在無線晶片上，不是 GP25（要改用 `pico_cyw43_arch` 的 API，⚠️未驗證） |
-| `pico_pingpong.c:24` | `#define PING_PERIOD_MS 2000` | ping 週期（毫秒） | 題目指定頻率時改，例如 10 Hz → `100` |
-| `pico_pingpong.c:83`（實際值在 84） | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | node 名稱 / namespace | 多塊板子時改成不同 node 名稱（例如 `"pingpong_pico0"`），避免 ROS 2 出現同名 node；topic 是絕對名稱，不受 namespace 影響 |
+| `pico_pingpong.c:23` | `#define LED_PIN 25` | 板載 LED 腳位 | Pico / Pico 2 不用改；Pico W / Pico 2 W 的 LED 接在無線晶片上，不是 GP25（要改用 `pico_cyw43_arch` 的 API，⚠️未驗證） |
+| `pico_pingpong.c:25` | `#define PING_PERIOD_MS 2000` | ping 週期（毫秒） | 題目指定頻率時改，例如 10 Hz → `100` |
+| `pico_pingpong.c:84`（實際值在 84） | `rclc_node_init_default(&node, "pingpong_node", "", &support)` | node 名稱 / namespace | 多塊板子時改成不同 node 名稱（例如 `"pingpong_pico0"`），避免 ROS 2 出現同名 node；topic 是絕對名稱，不受 namespace 影響 |
 
 #### 實際執行輸出
 
@@ -525,7 +525,7 @@ callback 細節：
 | LED 亮一下又滅、反覆 | `create_entities()` 某步失敗 → 拆掉重來；或 ping 不穩 | agent 開 `-v6` 看哪個 create 失敗 |
 | 收得到 ping、看不到 pong | 只有一塊板子時，板子不回自己的 ping | 用 `ros2 topic pub --once /microROS/ping ...` 從電腦送一則 |
 | `ros2 topic echo /microROS/pong` 收不到 | pong 是 best_effort；echo 先開時預設 reliable | `--qos-reliability best_effort` |
-| 改了 executor handle 數以外的東西後 `add_*` 失敗 → 一直重連 | 新增 sub / timer 卻沒把第 96 行的 3 加大 | handle 數 = timer + subscription 數 |
+| 改了 executor handle 數以外的東西後 `add_*` 失敗 → 一直重連 | 新增 sub / timer 卻沒把第 97 行的 3 加大 | handle 數 = timer + subscription 數 |
 | `-Wall` 出現 `misleading-indentation` | `EVERY_N_MS` 巨集寫在一行（外觀問題，不影響功能） | 可忽略；要消掉就把巨集裡第一個 `if` 加大括號 |
 
 ### 4.3.5 `pico_array_compute.c`
@@ -651,21 +651,21 @@ cap=4 n=4: -3 0 5 9                         ← cap=4：只排前 4 個輸入，
 | `q_task` | 35 | `queue_t` | core0 → core1，元素 `task_t`，深度 4 |
 | `q_done` | 36 | `queue_t` | core1 → core0，元素 `uint32_t`（做完的 `hi`），當完成訊號 |
 | `in_buf`、`out_buf` | 38 | `static int32_t[MAX_LEN]` | 兩核心共用（SRAM 共享） |
-| `compute_range(in, out, lo, hi)` | 44–46 | 處理 `in[lo..hi)` 寫到 `out[lo..hi)` | 兩核心都會呼叫 → **不能用全域暫存變數** |
-| `core1_main()` | 50–57 | — | 無限迴圈：等工作 → 算 → 回報 |
-| `sub_cb()` | 59–74 | — | 切半、派工、自己算、等、publish |
+| `compute_range(in, out, lo, hi)` | 44–47 | 處理 `in[lo..hi)` 寫到 `out[lo..hi)` | 兩核心都會呼叫 → **不能用全域暫存變數** |
+| `core1_main()` | 51–58 | — | 無限迴圈：等工作 → 算 → 回報 |
+| `sub_cb()` | 60–75 | — | 切半、派工、自己算、等、publish |
 
 #### 程式流程
 
-`main()`（76–111）：
+`main()`（77–112）：
 
-1. transport（77–79）、LED（80–81）。
-2. `queue_init(&q_task, sizeof(task_t), 4)`、`queue_init(&q_done, sizeof(uint32_t), 4)`（84–85）。
-3. `multicore_launch_core1(core1_main)`（86）：**queue 要先 init 好才能啟動 core1**。
-4. 綁 sequence 記憶體、dim capacity 0（89–93），和陣列版 `alloc_msgs()` 一樣。
-5. 等 agent（95）→ support（98）→ `rclc_node_init_default(&node, "dual_node", BOARD_NS, &support)`（99）→ sub `"input"`（102）、pub `"output"`（103）→ executor handle 數 1（105）→ add_subscription（106）→ LED 亮（108）→ spin_some 1 ms（109）。
+1. transport（78–80）、LED（81–82）。
+2. `queue_init(&q_task, sizeof(task_t), 4)`、`queue_init(&q_done, sizeof(uint32_t), 4)`（85–86）。
+3. `multicore_launch_core1(core1_main)`（87）：**queue 要先 init 好才能啟動 core1**。
+4. 綁 sequence 記憶體、dim capacity 0（90–94），和陣列版 `alloc_msgs()` 一樣。
+5. 等 agent（96）→ support（99）→ `rclc_node_init_default(&node, "dual_node", BOARD_NS, &support)`（100）→ sub `"input"`（103）、pub `"output"`（104）→ executor handle 數 1（106）→ add_subscription（107）→ LED 亮（109）→ spin_some 1 ms（110）。
 
-`sub_cb()` 的切分（59–74）：
+`sub_cb()` 的切分（60–75）：
 
 ```text
 msg_in.data.data == in_buf
@@ -676,18 +676,18 @@ index:  0        1 ........ mid-1 | mid ........ n
 
 | 行 | 做什麼 |
 |---|---|
-| 61 | `size < 1` → return |
-| 62–63 | `n = size - 1`；`mid = 1 + n / 2` |
-| 66–67 | `task_t t = { .lo = mid, .hi = 1 + n }`；`queue_add_blocking(&q_task, &t)` 把後半交給 core1 |
-| 68 | `compute_range(in_buf, out_buf, 1, mid)`：core0 自己算前半 |
-| 70 | `queue_remove_blocking(&q_done, &done)`：等 core1 做完 |
-| 71 | `out_buf[0] = m->data.data[0]`：job_id 帶回 |
-| 72 | `msg_out.data.size = n + 1`（≤ capacity，因為收進來時就 ≤ MAX_LEN） |
-| 73 | `rcl_publish` — 在 core0 |
+| 62 | `size < 1` → return |
+| 63–64 | `n = size - 1`；`mid = 1 + n / 2` |
+| 67–68 | `task_t t = { .lo = mid, .hi = 1 + n }`；`queue_add_blocking(&q_task, &t)` 把後半交給 core1 |
+| 69 | `compute_range(in_buf, out_buf, 1, mid)`：core0 自己算前半 |
+| 71 | `queue_remove_blocking(&q_done, &done)`：等 core1 做完 |
+| 72 | `out_buf[0] = m->data.data[0]`：job_id 帶回 |
+| 73 | `msg_out.data.size = n + 1`（≤ capacity，因為收進來時就 ≤ MAX_LEN） |
+| 74 | `rcl_publish` — 在 core0 |
 
 - callback 在 core0 裡等 core1 做完才返回，executor 不會在中途收下一則 → `in_buf` 不會被覆寫（65 行註解）。
 - pico-sdk 注意事項（9–13 行，已對 pico-sdk 2.2.0）：`pico/util/queue.h` 是跨核心安全佇列（內部 spinlock）；core1 stack 預設 `PICO_CORE1_STACK_SIZE` = `0x800`（2 KB，本 session 核對 `pico_multicore/include/pico/multicore.h:32`–`37`）→ core1 裡不要開大陣列；只有寫 flash 才需要 `multicore_lockout`；USB（TinyUSB）中斷在 core0。
-- 47–48 行提示：排序題 → 兩核各排一半，core0 最後 merge（要多一個暫存陣列）；加總 / CRC → 各算部分結果，用 `q_done` 傳回再合併。
+- 48–49 行提示：排序題 → 兩核各排一半，core0 最後 merge（要多一個暫存陣列）；加總 / CRC → 各算部分結果，用 `q_done` 傳回再合併。
 
 #### 要改的地方
 
@@ -695,19 +695,26 @@ index:  0        1 ........ mid-1 | mid ........ n
 |---|---|---|---|
 | `pico_dualcore_micro_ros.c:24` | `#define BOARD_NS "pico0"` | namespace | 每塊板子不同（同陣列版） |
 | `pico_dualcore_micro_ros.c:25` | `#define MAX_LEN 400` | capacity（含 job_id） | 同陣列版的上限 |
-| `pico_dualcore_micro_ros.c:43`（函式在 44–46） | `out[i] = in[i] * in[i]` | 純運算 | 換成題目的逐元素運算；不是逐元素的（排序、加總）照 47–48 行的提示改 `sub_cb` |
+| `pico_dualcore_micro_ros.c:43`（函式在 44–47） | `out[i] = (int32_t)((uint32_t)in[i] * (uint32_t)in[i])` | 純運算 | 換成題目的逐元素運算；不是逐元素的（排序、加總）照 48–49 行的提示改 `sub_cb`。乘法用無號數算，溢位時照 int32 繞回（`host_compute` 也一樣） |
 
 #### 實際執行輸出
 
 - 編譯、連結：✅（`app.uf2` 225,280 B，`-Wall -Wextra` 0 警告）。
-- `compute_range()` 在 host 上測（同 `$S/ch04/ctest/t.c`，host gcc 13.3.0、`-fsanitize=undefined`）：
+- `compute_range()` 在 host 上測（host gcc 13.3.0、`-fsanitize=undefined`）。**修正前**（`in[i] * in[i]`）：
 
 ```text
 t.c:15:55: runtime error: signed integer overflow: 46341 * 46341 cannot be represented in type 'int'
 square: 2147395600 -2147479015 1000000      ← 輸入 {46340, 46341, -1000}
 ```
 
-46340² = 2,147,395,600 還在 int32 內；46341² 溢位（未定義行為，實際得到負數）。見 4.6 已知問題 5。
+**修正後**（2026-11-12，用無號乘法，結果照 int32 繞回），UBSan 沒有任何錯誤，和 `host_compute` 的 Python 算法逐一相同：
+
+```text
+C      : 2147395600 2147395600 -2147479015 1000000 1 0      ← 輸入 {46340, -46340, 46341, 1000, -2147483647, 65536}
+Python : 2147395600 2147395600 -2147479015 1000000 1 0
+```
+
+46340² = 2,147,395,600 還在 int32 內；46341² 超過 int32，現在**固定**繞回成 −2,147,479,015（兩邊一樣），不再是未定義行為。題目要「真正的平方」時，int32 裝不下，要換訊息型別（例如 `Int64MultiArray`）。
 
 - 雙核心實際加速：沒有實測（沒有板子）。
 
@@ -718,7 +725,7 @@ square: 2147395600 -2147479015 1000000      ← 輸入 {46340, 46341, -1000}
 | 隨機當機、封包壞掉 | 在 core1 呼叫了 rcl / rmw / printf | 所有 micro-ROS 呼叫移回 core0 |
 | core1 當機（HardFault） | core1 裡開大區域陣列，爆 2 KB stack | 用全域 / static，或放大 `PICO_CORE1_STACK_SIZE` |
 | 卡死、不回覆 | `queue_init` 放在 `multicore_launch_core1` 之後，或自己改的派工次數和等待次數不一致 | 每派 1 個 task 就要 remove 1 次 done |
-| `correct=False`，數值很大時 | `in[i]*in[i]` int32 溢位 | 用 `int64_t` 算，或確認資料範圍；4.6 問題 5 |
+| 結果和「真正的平方」不同，數值很大時 | int32 裝不下，照 int32 繞回（板子和 `host_compute` 一樣，所以還是 `correct=True`） | 題目要真正的值就換 `Int64MultiArray`；4.6 問題 3 |
 | 雙核心沒有變快 | 瓶頸在 USB 傳輸，不在運算（112 行註解） | 先優化傳輸（`README.md` §5） |
 
 ### 4.3.7 `host_driver.py`
@@ -742,7 +749,7 @@ python3 host_driver.py
 python3 -c 'import host_driver as h; h.CHUNK=399; h.N_BOARDS=3; h.main()'
 ```
 
-預期輸出格式（`host_driver.py:122`–`123`；格式是本 session 用假 rclpy 跑出來的，數字要在考場實測）：
+預期輸出格式（`host_driver.py:124`–`125`；格式是本 session 用假 rclpy 跑出來的，數字要在考場實測）：
 
 ```text
 [INFO] 等板子上線中…（ros2 topic list 看看）      ← 板子還沒上線時每 0.5 秒一次
@@ -766,38 +773,38 @@ boards=2 n=3000 chunk=300 time=<實測> ms throughput=<實測> KiB/s correct=Tru
 | 名稱 | 行號 | 參數 | 回傳 / 效果 | 注意 |
 |---|---|---|---|---|
 | `make_data()` | 31–35 | — | `random.seed(0)` 後 3000 個 −1000..1000 的整數 | 換成題目輸入 |
-| `host_compute(data)` | 38–40 | 全部資料 | `MERGE == "concat"` → 每個平方；否則 `sorted(data)` | 對答案用；要和板子運算一致 |
-| `Driver.__init__()` | 44–55 | — | node 名 `host_driver`；QoS depth 10 RELIABLE；對每塊板子建 `/pico{i}/input` publisher 和 `/pico{i}/output` subscription；`busy`、`job_of`（每塊板子手上那一塊的 `(job_id, 送出時間)`） | lambda 用 `b=i` 預設參數記住板子編號（54–55） |
-| `on_result(board, msg)` | 57–63 | 板子編號、訊息 | 空訊息忽略；`results[job_id] = data[1:]`；**回的是這塊板子手上那一塊**才把它標成空閒 | 重送之後才到的舊回覆只存結果，不會把板子誤標成空閒 |
-| `send(board, job_id, chunk)` | 65–70 | — | `msg.data = [job_id] + chunk`，publish，`busy[board] = True`，記下 `job_of[board]` | 不填 `layout.dim` |
-| `wait_boards()` | 72–80 | — | 等到每塊板子的 input 有訂閱者、且 output 有發佈者 | 只等 input 不夠：output 還沒配對時板子回的第一則會掉（volatile QoS 不補發） |
-| `run(data)` | 82–112 | 全部資料 | `(out, dt)`：合併後的結果、秒數 | 見下面流程 |
-| `main()` | 115–125 | — | init → `Driver` → `wait_boards` → `make_data` → `run` → 比對 → print → shutdown | — |
+| `host_compute(data)` | 38–42 | 全部資料 | `MERGE == "concat"` → 每個平方；否則 `sorted(data)` | 對答案用；要和板子運算一致 |
+| `Driver.__init__()` | 46–57 | — | node 名 `host_driver`；QoS depth 10 RELIABLE；對每塊板子建 `/pico{i}/input` publisher 和 `/pico{i}/output` subscription；`busy`、`job_of`（每塊板子手上那一塊的 `(job_id, 送出時間)`） | lambda 用 `b=i` 預設參數記住板子編號（56–57） |
+| `on_result(board, msg)` | 59–65 | 板子編號、訊息 | 空訊息忽略；`results[job_id] = data[1:]`；**回的是這塊板子手上那一塊**才把它標成空閒 | 重送之後才到的舊回覆只存結果，不會把板子誤標成空閒 |
+| `send(board, job_id, chunk)` | 67–72 | — | `msg.data = [job_id] + chunk`，publish，`busy[board] = True`，記下 `job_of[board]` | 不填 `layout.dim` |
+| `wait_boards()` | 74–82 | — | 等到每塊板子的 input 有訂閱者、且 output 有發佈者 | 只等 input 不夠：output 還沒配對時板子回的第一則會掉（volatile QoS 不補發） |
+| `run(data)` | 84–114 | 全部資料 | `(out, dt)`：合併後的結果、秒數 | 見下面流程 |
+| `main()` | 117–127 | — | init → `Driver` → `wait_boards` → `make_data` → `run` → 比對 → print → shutdown | — |
 
 #### 程式流程
 
 `run()` 的排程（流量控制：每塊板子同時最多 1 塊工作；回覆遺失會重送）：
 
 ```text
-chunks = [data[0:300], data[300:600], ...]      # 3000 / 300 = 10 塊，job_id 0..9（83 行）
-todo = deque([0, 1, ..., 9])；t0；deadline = t0 + TIMEOUT_S（84–86 行）
-while 還沒收齊 且 沒逾時：（88 行）
-    for b in 0..N_BOARDS-1:                     # 90 行
+chunks = [data[0:300], data[300:600], ...]      # 3000 / 300 = 10 塊，job_id 0..9（85 行）
+todo = deque([0, 1, ..., 9])；t0；deadline = t0 + TIMEOUT_S（86–88 行）
+while 還沒收齊 且 沒逾時：（90 行）
+    for b in 0..N_BOARDS-1:                     # 92 行
         板子 b 忙、而且這一塊送出超過 RESEND_S 秒 → 印 [WARN]、把板子標成空閒、
-            這塊還沒有結果就放回 todo 最前面（91–96 行）
-        todo 前面已經有結果的丟掉（97–98 行）
-        板子 b 空閒 且 todo 還有 → send(b, todo.popleft())（99–101 行）
-    rclpy.spin_once(timeout 1 ms)               # 102 行：處理回覆 → on_result 存結果、把板子標成空閒
-dt = perf_counter() - t0                        # 103 行
-沒收齊 → log error「逾時！只收到 x/y 塊」          # 104–105 行
-parts = 依 job_id 排序後的各塊結果                 # 107 行
-MERGE == "sorted" → heapq.merge(*parts)         # 108–109 行：k-way merge，各塊已排序 → 全體排序
-否則              → 依序串接                       # 110–111 行
+            這塊還沒有結果就放回 todo 最前面（93–98 行）
+        todo 前面已經有結果的丟掉（99–100 行）
+        板子 b 空閒 且 todo 還有 → send(b, todo.popleft())（101–103 行）
+    rclpy.spin_once(timeout 1 ms)               # 104 行：處理回覆 → on_result 存結果、把板子標成空閒
+dt = perf_counter() - t0                        # 105 行
+沒收齊 → log error「逾時！只收到 x/y 塊」          # 106–107 行
+parts = 依 job_id 排序後的各塊結果                 # 109 行
+MERGE == "sorted" → heapq.merge(*parts)         # 110–111 行：k-way merge，各塊已排序 → 全體排序
+否則              → 依序串接                       # 112–113 行
 ```
 
 - 計時從第一塊送出前開始，**不含** `wait_boards()` 等板子上線的時間。
 - `throughput = len(data) * 4 / dt / 1024`（KiB/s，只算單向的輸入資料量，不含 job_id 和回傳）。
-- `correct = (out == host_compute(data))`（121 行）：Python 整數比對，所以板子端 int32 溢位會被抓出來。
+- `correct = (out == host_compute(data))`（123 行）：Python 整數比對。`host_compute` 的平方照 int32 繞回（40–41 行），跟板子的 `Int32MultiArray` 一致。
 - 排程是「誰空就給誰」：板子一樣快時等於輪流（round-robin）；某塊比較快就會拿到比較多塊。
 - **`RESEND_S` 要比「板子算一塊的時間」長**：板子還在算就被判定逾時的話，同一塊會重算一次（結果還是對的，只是浪費時間）。考場先用預設 1.0 秒，看到很多 `[WARN] … 重送` 而且最後都對，就把它調大。
 
@@ -810,7 +817,7 @@ MERGE == "sorted" → heapq.merge(*parts)         # 108–109 行：k-way merge�
 | `host_driver.py:24` | `MERGE = "sorted"` | 合併方式 | 板子是排序 → `"sorted"`；板子是逐元素運算 → `"concat"`；**跟 `CMakeLists.txt:28` 一起改** |
 | `host_driver.py:28` | `RESEND_S = 1.0` | 幾秒沒回就重送 | 板子算一塊要超過 1 秒時調大（例如 3.0）；想更快發現遺失就調小 |
 | `host_driver.py:32`（函式 31–35） | 3000 個亂數 | 輸入資料 | 換成題目給的輸入（讀檔等） |
-| `host_driver.py:39`（函式 38–40） | 平方或 `sorted` | 正確答案 | 換成題目運算的 Python 版；注意要和「每塊各自算再合併」的結果形狀一樣（4.4.1） |
+| `host_driver.py:39`（函式 38–42） | 平方或 `sorted` | 正確答案 | 換成題目運算的 Python 版；注意要和「每塊各自算再合併」的結果形狀一樣（4.4.1） |
 
 #### 實際執行輸出
 
@@ -844,7 +851,8 @@ sent per board: {'pico0': 3, 'pico1': 3}
 
 7 N_BOARDS=3                                       → correct=True，分配 pico0:4、pico1:3、pico2:3
 
-8 板子 int32 平方、資料 [46340, -46340, 46341, 1000]、MERGE="concat" → correct=False
+8 板子 int32 平方、資料 [46340, -46340, 46341, 1000]、MERGE="concat" → correct=True（修正前 False：host 用 Python 大整數）
+8b 板子 int32 平方、3000 個 int32 全範圍亂數、MERGE="concat"   → correct=True
 ```
 
 - 修正前（同一個情境 5）：`[ERROR] 逾時！只收到 9/10 塊`、`time=2000.1 ms`、`correct=False`，而且 pico1 之後再也拿不到工作。
@@ -857,7 +865,7 @@ sent per board: {'pico0': 3, 'pico1': 3}
 |---|---|---|
 | 一直印「等板子上線中…」 | 某塊板子的 agent 沒開 / namespace 不是 `pico{i}` / `N_BOARDS` 比實際多 | `ros2 topic list` 對照 `/pico0/input`…`/pico{N-1}/input` |
 | `ModuleNotFoundError: rclpy` | 沒 `source /opt/ros/jazzy/setup.bash` | 先 source |
-| `correct=False`、沒有逾時訊息 | `MERGE` 和板子程式不配；或 `host_compute` 和板子運算不一致；或板子 int32 溢位 | 4.6 問題 1、5 |
+| `correct=False`、沒有逾時訊息 | `MERGE` 和板子程式不配；或 `host_compute` 和板子運算不一致 | 4.6 問題 1 |
 | 偶爾 `[WARN] pico… 第 n 塊 … 重送`，最後 `correct=True` | 回覆遺失一次，或 `RESEND_S` 比板子算一塊的時間短 | 不影響正確性；很多次就把 `RESEND_S` 調大 |
 | 同一塊一直 `重送`，最後 `逾時！只收到 x/y 塊` | 板子每次都不回：`CHUNK + 1` > `MAX_LEN`；訊息超過 MTU；板子當掉 | 4.4.6；看 `[WARN]` 是哪塊板子 |
 | 全部板子都收到同一塊 | 板子燒了同一個 `BOARD_NS` | 每塊不同 namespace |
@@ -887,7 +895,7 @@ sent per board: {'pico0': 3, 'pico1': 3}
 1. `compute()` 回傳 1：`int32_t s = 0; for (...) s += in[i]; out[0] = s; return 1;`（CRC32 演算法見第 5 章）。
 2. `MERGE = "concat"` → host 拿到的是「每塊一個值」的串列。
 3. `host_compute` 也要照塊算：`return [sum(data[i:i + CHUNK]) for i in range(0, len(data), CHUNK)]`；最後總和在 `main()` 裡再 `sum(out)`。
-4. 雙核心版要改 `sub_cb`：core1 的部分結果用 `q_done` 傳回（`pico_dualcore_micro_ros.c:48`）。
+4. 雙核心版要改 `sub_cb`：core1 的部分結果用 `q_done` 傳回（`pico_dualcore_micro_ros.c:49`）。
 
 驗證：先 `ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [0, 1, 2, 3]}"` + `ros2 topic echo /pico0/output` 看單塊對不對，再跑 `host_driver.py`。成功的樣子：`correct=True`。
 
@@ -920,14 +928,14 @@ sent per board: {'pico0': 3, 'pico1': 3}
 
 ### 4.4.4 題目：「訊息小、要更快」→ reliable 改 best_effort
 
-1. 板子（`pico_array_compute.c:111`–`112` 或 `pico_dualcore_micro_ros.c:102`–`103`）：
+1. 板子（`pico_array_compute.c:111`–`112` 或 `pico_dualcore_micro_ros.c:103`–`104`）：
 
    ```c
    RCCHECK(rclc_subscription_init_best_effort(&sub, &node, ts, "input"));
    RCCHECK(rclc_publisher_init_best_effort(&pub, &node, ts, "output"));
    ```
 
-2. host（`host_driver.py:48`）：`qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)`。
+2. host（`host_driver.py:50`）：`qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)`。
 3. `CHUNK ≤ 120`（`host_driver.py:22`），因為 best_effort 一則只能 500 B。
 4. 風險：best_effort 掉了不會重送；`host_driver.py` 會在 `RESEND_S`（預設 1 秒）後自己重送那一塊（4.3 的 `run()` 流程），所以掉一則只多等約 1 秒。掉得很頻繁時反而更慢，題目沒要求極限速度時，維持 reliable。
 5. 驗證：`ros2 topic info /pico0/input -v` 顯示 BEST_EFFORT；`ros2 topic echo --qos-reliability best_effort /pico0/output`；跑 `host_driver.py` 比較 `time=`。⚠️ best_effort 比較快是文件說法（`README.md:67`、`82`），本 session 沒有實測。
@@ -989,13 +997,13 @@ sent per board: {'pico0': 3, 'pico1': 3}
 
 1. **`APP_SRC` 和 `MERGE` 要成對改**（審查已知問題 1）。
    - `CMakeLists.txt:27` 和 `host_driver.py:25`–`26` 都有註明。沒一起改 → `correct=False`（假 rclpy 測試 3、4 重現）。
-   - **回覆遺失不會重送（已修，2026-11-12）**：原本送出後 `busy[b] = True` 只有收到回覆才清掉，回覆遺失時那塊永遠不重送、那塊板子也不再被派工，最後等到 `TIMEOUT_S` 才報逾時、`correct=False`。現在 `run()` 記錄每塊的送出時間，超過 `RESEND_S`（`host_driver.py:28`，預設 1.0 秒）沒回就收回來重送（`host_driver.py:91`–`96`）；`on_result` 只在回的是「手上那一塊」時才把板子標成空閒（`:62`–`63`）。假 rclpy 測試 5 從 `correct=False`（2000 ms 逾時）變成 `correct=True`（約 1000 ms）。板子每次都不回的情況（測試 5b、6）重送救不了，還是會逾時。
-2. **`pico_pingpong.c:31`–`32` 的 `EVERY_N_MS` 在 `-Wall` 下觸發 `-Wmisleading-indentation`**（審查已知問題 4）。本 session 實測：第 139、146 行展開處各一次。外觀問題，不影響功能；SDK 預設 build 不開 `-Wall`，所以平常看不到。
-3. **`pico_dualcore_micro_ros.c:45` 的 `in[i] * in[i]` 在 |x| > 46340 時 int32 溢位**（審查已知問題 5）。有號整數溢位是 C 的未定義行為；host 端 `host_compute` 用 Python 大整數，所以會 `correct=False`（host 測試：46341² 得到 −2147479015；假 rclpy 測試 8 → `correct=False`）。範本資料 ±1000 沒事。題目資料可能很大時改成 `int64_t` 算並決定輸出格式（例如拆成兩個 int32）。
+   - **回覆遺失不會重送（已修，2026-11-12）**：原本送出後 `busy[b] = True` 只有收到回覆才清掉，回覆遺失時那塊永遠不重送、那塊板子也不再被派工，最後等到 `TIMEOUT_S` 才報逾時、`correct=False`。現在 `run()` 記錄每塊的送出時間，超過 `RESEND_S`（`host_driver.py:28`，預設 1.0 秒）沒回就收回來重送（`host_driver.py:93`–`98`）；`on_result` 只在回的是「手上那一塊」時才把板子標成空閒（`:64`–`65`）。假 rclpy 測試 5 從 `correct=False`（2000 ms 逾時）變成 `correct=True`（約 1000 ms）。板子每次都不回的情況（測試 5b、6）重送救不了，還是會逾時。
+2. **`pico_pingpong.c:32`–`33` 的 `EVERY_N_MS` 在 `-Wall` 下觸發 `-Wmisleading-indentation`**（審查已知問題 4）。本 session 實測：第 142、149 行展開處各一次（修正前的行號是 139、146）。外觀問題，不影響功能；SDK 預設 build 不開 `-Wall`，所以平常看不到。
+3. **（已修）`pico_dualcore_micro_ros.c` 的 `in[i] * in[i]` 在 |x| > 46340 時 int32 溢位**（審查已知問題 5）：有號整數溢位是 C 的未定義行為，host 端 `host_compute` 又用 Python 大整數，所以會 `correct=False`。2026-11-12 起板子用無號乘法、照 int32 繞回（`pico_dualcore_micro_ros.c:45-46`），`host_compute` 也照 int32 繞回（`host_driver.py:40-41`），兩邊結果一致：UBSan 無錯誤，假 rclpy 測試 8、8b（int32 全範圍亂數）都 `correct=True`。題目要「真正的平方」時 int32 裝不下，要換訊息型別。
 4. **文件不一致（已修）**：`CMakeLists.txt:58`–`59` 的註解原本寫「推論（未實際連結驗證）」，和檔頭矛盾；2026-11-12 已改成實測結果。
 5. **陣列版沒有重連**：板子或 agent 重開後要按 reset（`pico_array_compute.c:7`）。
-6. **`pico_pingpong.c:130` 的 `device_id`** 用開機微秒數，兩塊板子不保證不同；`pong_count` 沒有輸出。
-7. **`pico_pingpong.c:143`**：`create_entities()` 中途失敗時對「還沒建立的物件」呼叫 fini（照官方 reconnection 範例的寫法，錯誤被 `RCSOFTCHECK` 忽略）。⚠️ 在板子上的行為沒有驗證。
+6. **（已修）`pico_pingpong.c` 的 `device_id`** 原本用開機微秒數，兩塊板子不保證不同。2026-11-12 起改用板子出廠的唯一序號（`pico_get_unique_board_id()`，`pico_pingpong.c:131-133`；`CMakeLists.txt` 連 `pico_unique_id`），每塊板子一定不同；3 支程式重新編譯連結通過。`pong_count` 仍然只計數、沒有輸出（USB 被 agent 佔用，不能 printf；要回報就自己加一個 publisher）。
+7. **`pico_pingpong.c:146`**：`create_entities()` 中途失敗時對「還沒建立的物件」呼叫 fini（照官方 reconnection 範例的寫法，錯誤被 `RCSOFTCHECK` 忽略）。⚠️ 在板子上的行為沒有驗證。
 
 **沒驗證的地方：**
 
@@ -1039,7 +1047,7 @@ sent per board: {'pico0': 3, 'pico1': 3}
 | `CMakeLists.txt:28` `APP_SRC = pico_dualcore_micro_ros.c` | `host_driver.py:24` `MERGE = "concat"` |
 | `BOARD_NS` = `pico0`..`pico{N-1}`（`pico_array_compute.c:17`） | `host_driver.py:21` `N_BOARDS = N` |
 | `MAX_LEN`（`pico_array_compute.c:27`） | `host_driver.py:22` `CHUNK + 1 ≤ MAX_LEN` |
-| `rclc_*_init_default` / `_best_effort` | `host_driver.py:48` `RELIABLE` / `BEST_EFFORT` |
+| `rclc_*_init_default` / `_best_effort` | `host_driver.py:50` `RELIABLE` / `BEST_EFFORT` |
 | `compute()` / `compute_range()` | `host_driver.py:38` `host_compute()` |
 
 **常數：**
@@ -1074,7 +1082,7 @@ sent per board: {'pico0': 3, 'pico1': 3}
 
 | 症狀 | 第一個檢查 |
 |---|---|
-| `correct=False` | `APP_SRC` ↔ `MERGE`；int32 溢位 |
+| `correct=False` | `APP_SRC` ↔ `MERGE`；`host_compute` 和板子運算不一致 |
 | 逾時 `只收到 x/y 塊` | `CHUNK + 1` vs `MAX_LEN` / 傳輸上限；板子當掉（偶爾遺失會自動重送，看 `[WARN]`） |
 | topic 沒出現 | LED、agent `-v6`、`ROS_DOMAIN_ID`、handle 數 |
 | echo 收不到 | QoS（`--qos-reliability best_effort`） |

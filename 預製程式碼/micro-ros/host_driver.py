@@ -37,7 +37,9 @@ def make_data():
 
 def host_compute(data):
     # TODO(改這裡) 用來對答案的「電腦端正確版本」
-    return [x * x for x in data] if MERGE == "concat" else sorted(data)
+    # 平方照 int32 繞回（跟板子的 Int32MultiArray 一樣）；題目要大於 int32 的結果就要換訊息型別
+    sq = [((x * x + 2**31) % 2**32) - 2**31 for x in data]
+    return sq if MERGE == "concat" else sorted(data)
 
 
 class Driver(Node):

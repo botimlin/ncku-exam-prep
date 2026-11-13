@@ -51,7 +51,11 @@ int main(void) {
     // ---- DMA：要兩個通道 ----
     int ch_tx = dma_claim_unused_channel(false);
     int ch_rx = dma_claim_unused_channel(false);
-    if (ch_tx < 0 || ch_rx < 0) { printf("DMA 通道不夠\n"); while (1) tight_loop_contents(); }
+    if (ch_tx < 0 || ch_rx < 0) {                             // 要到的那個先還回去，再停
+        if (ch_tx >= 0) dma_channel_unclaim((uint)ch_tx);
+        if (ch_rx >= 0) dma_channel_unclaim((uint)ch_rx);
+        printf("DMA 通道不夠\n"); while (1) tight_loop_contents();
+    }
 
     dma_channel_config ctx = dma_channel_get_default_config((uint)ch_tx);
     channel_config_set_transfer_data_size(&ctx, DMA_SIZE_32);

@@ -42,7 +42,8 @@ std_msgs__msg__Int32MultiArray msg_in, msg_out;
 
 // TODO(改這裡) 純運算：處理 in[lo..hi) 寫到 out[lo..hi)。兩核心都會呼叫，不能用全域暫存變數！
 static void compute_range(const int32_t *in, int32_t *out, uint32_t lo, uint32_t hi) {
-    for (uint32_t i = lo; i < hi; i++) out[i] = in[i] * in[i];   // 範例：平方（逐元素，好切）
+    for (uint32_t i = lo; i < hi; i++)   // 範例：平方（逐元素，好切）。用無號乘：|x| > 46340 時照 int32 繞回，不是未定義行為
+        out[i] = (int32_t)((uint32_t)in[i] * (uint32_t)in[i]);   // host_driver.py 的 host_compute 也照 int32 繞回
 }
 // 若題目是「排序」：兩核各排一半 → core0 最後 merge 兩段（要多一個暫存陣列）
 // 若題目是「加總 / CRC」：各算部分結果 → 用 q_done 傳回部分結果再合併

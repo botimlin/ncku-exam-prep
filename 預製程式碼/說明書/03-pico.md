@@ -24,8 +24,8 @@
 | `app_serial.c` | 88 | USB 二進位封包伺服器：ECHO / SUM_U32 / CRC32 | 電腦送資料、Pico 算 | ✅ 電腦上模擬測過；⚠️ 沒上板 |
 | `app_multicore.c` | 137 | race 示範 + spinlock / critical_section 修法 + queue 派工 | 雙核心、鎖、pipeline | ✅ 編譯；⚠️ 沒上板 |
 | `app_dma.c` | 141 | DMA copy / fill / sniffer CRC32 / 跟 CPU 比速度 | DMA、硬體 CRC | ✅ 編譯；sniffer 設定用 Python 模型驗證；⚠️ 沒上板 |
-| `app_dma_pio.c` | 95 | DMA 依 DREQ 餵 PIO、收 PIO | DMA + PIO 串接 | ✅ 編譯；⚠️ 沒上板 |
-| `app_pio.c` | 102 | PIO echo 測試 + shift_out → bitstream_in 自我回環 | PIO 題 | ✅ 編譯；⚠️ 沒上板 |
+| `app_dma_pio.c` | 99 | DMA 依 DREQ 餵 PIO、收 PIO | DMA + PIO 串接 | ✅ 編譯；⚠️ 沒上板 |
+| `app_pio.c` | 110 | PIO echo 測試 + shift_out → bitstream_in 自我回環 | PIO 題 | ✅ 編譯；⚠️ 沒上板 |
 | `timing.h` | 69 | `PRINT_US`、`cycles_init/now/since`（ARM SysTick / RISC-V mcycle）、`speedup` | 量時間 | ✅ 兩種架構都編譯並看過反組譯；⚠️ 沒上板 |
 | `pio/echo.pio` | 26 | TX FIFO → OSR → X → ISR → RX FIFO | PIO 入門、DMA+PIO | ✅ pioasm 2.2.0 組譯 |
 | `pio/bitstream_in.pio` | 35 | CLK 上升沿取樣 DATA，每 32 bit 自動 push | 收位元流 | ✅ pioasm 組譯；⚠️ 沒上板 |
@@ -959,13 +959,13 @@ cd 預製程式碼/pico/build && make -j4 app_dma_pio
 1. 等 USB、填 `src[i] = i * 0x9E3779B9`（`:39-41`）。
 2. 載入 echo：`pio_add_program` 檢查 `< 0`（`:45-47`）、`pio_claim_unused_sm(pio, true)`（`:48`）、`echo_program_init`（`:49`）。
 3. 要兩個 DMA 通道（`:52-54`），任一個失敗就印 `DMA 通道不夠` 停住。
-4. **ch_tx**（`:56-62`）：32-bit、讀遞增、寫不遞增、DREQ = TX；configure 時 `trigger=false`（先不開始）。
-5. **ch_rx**（`:64-69`）：32-bit、讀不遞增、寫遞增、DREQ = RX；也先不開始。
-6. `dma_start_channel_mask((1u << ch_tx) | (1u << ch_rx))`（`:73`）同時啟動。
-7. 先等 ch_rx（資料全回來），再等 ch_tx（確認 BUSY=0 才 unclaim）（`:75-76`）。
-8. 印 DMA 時間與 `memcmp` 結果（`:79-80`）。
-9. 對照組：清 `dst`，CPU 一次 `pio_sm_put_blocking` 一次 `pio_sm_get_blocking`（`:82-87`）。
-10. 收拾：unclaim 兩個通道、停 SM、`pio_remove_program_and_unclaim_sm`（`:90-93`）。
+4. **ch_tx**（`:60-66`）：32-bit、讀遞增、寫不遞增、DREQ = TX；configure 時 `trigger=false`（先不開始）。
+5. **ch_rx**（`:68-73`）：32-bit、讀不遞增、寫遞增、DREQ = RX；也先不開始。
+6. `dma_start_channel_mask((1u << ch_tx) | (1u << ch_rx))`（`:77`）同時啟動。
+7. 先等 ch_rx（資料全回來），再等 ch_tx（確認 BUSY=0 才 unclaim）（`:79-80`）。
+8. 印 DMA 時間與 `memcmp` 結果（`:83-84`）。
+9. 對照組：清 `dst`，CPU 一次 `pio_sm_put_blocking` 一次 `pio_sm_get_blocking`（`:86-91`）。
+10. 收拾：unclaim 兩個通道、停 SM、`pio_remove_program_and_unclaim_sm`（`:94-97`）。
 
 **為什麼一定要兩個通道一起開**：只開 TX → RX FIFO 滿 → SM 卡在 `push` → OSR 不再 pull → TX FIFO 滿 → ch_tx 永遠 BUSY（`:16-17` 註解）。
 
@@ -983,7 +983,7 @@ CPU put/get 4096 words: <t> us (DMA 快 x<倍數>) 結果 OK
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
 | `app_dma_pio.c:34` | `4096` | 搬幾個 u32 | 依題目；必須 < 2^28 |
-| `app_dma_pio.c:74` | 註解 | DMA 搬運時 CPU 可以做的事 | 放題目的計算，展示 CPU 空出來 |
+| `app_dma_pio.c:78` | 註解 | DMA 搬運時 CPU 可以做的事 | 放題目的計算，展示 CPU 空出來 |
 
 #### 實際執行輸出
 
@@ -1025,7 +1025,7 @@ cd 預製程式碼/pico/build && make -j4 app_pio
 | `DATA_PIN` / `CLK_PIN` | — | 2 / 3（`app_pio.c:21-22`） | **CLK 必須 = DATA + 1**（bitstream_in 規定） |
 | `load(pio, prog, &sm, &offset)` | | 載入程式 + 要 SM；失敗回 false（`:25-33`） | SM 要不到時會把程式拿掉 |
 | `test_echo()` | — | `:35-57` | 用完會 remove + unclaim |
-| `test_loopback()` | — | `:59-81` | **用完沒有釋放**（已知問題 6） |
+| `test_loopback()` | — | `:59-89` | 第二個 `load()` 失敗時把第一個還回去（`:63-66`）；用完停 SM 並歸還兩個程式（`:85-88`）。2026-11-12 前都沒有釋放（已知問題 6，已修） |
 
 SDK 函式（`hardware_pio/include/hardware/pio.h`，SDK 2.2.0）：
 
@@ -1042,9 +1042,9 @@ SDK 函式（`hardware_pio/include/hardware/pio.h`，SDK 2.2.0）：
 
 #### 程式流程
 
-1. 等 USB，印 `clk_sys`（`:84-87`）。
+1. 等 USB，印 `clk_sys`（`:92-95`）。
 2. `test_echo()`：載入 → `echo_program_init` → 4 個測試值各 put 再 get，印出（`:41-46`）→ 10000 個字 put/get 量時間，印 xor（`:49-53`）→ 停 SM、remove + unclaim（`:55-56`）。
-3. `test_loopback()`：pio1 載入 `bitstream_in`（先開接收端）和 `shift_out`（clkdiv 10）（`:62-66`）→ 4 個訊息各 put 到 SM_tx，最多等 100 ms 等 SM_rx 的 RX FIFO 有東西（`:71-75`）→ 印每個結果與 `n/4 正確`。
+3. `test_loopback()`：pio1 載入 `bitstream_in`（先開接收端）和 `shift_out`（clkdiv 10）（`:62-69`）→ 4 個訊息各 put 到 SM_tx，最多等 100 ms 等 SM_rx 的 RX FIFO 有東西（`:74-78`）→ 印每個結果與 `n/4 正確`。
 
 #### 預期輸出（⚠️ 沒有上板，依程式碼推算）
 
@@ -1074,7 +1074,7 @@ loopback: 4/4 正確
 | `app_pio.c:21` | `DATA_PIN 2` | 資料腳 | 題目規定的腳位 |
 | `app_pio.c:22` | `CLK_PIN 3` | 時脈腳 | 必須 = DATA_PIN + 1；不想受限就把 `bitstream_in.pio` 改成 `wait 1 gpio N`（絕對編號） |
 | `app_pio.c:41` | 4 個測試值 | echo 測試資料 | 題目的測試向量 |
-| `app_pio.c:66` | `10.0f` | shift_out 的 clkdiv | 位元速率 = clk_sys / clkdiv / 4；配 bitstream_in 時 clkdiv 建議 ≥ 2（`bitstream_in.pio:25-26`） |
+| `app_pio.c:69` | `10.0f` | shift_out 的 clkdiv | 位元速率 = clk_sys / clkdiv / 4；配 bitstream_in 時 clkdiv 建議 ≥ 2（`bitstream_in.pio:25-26`） |
 
 #### 實際執行輸出
 
@@ -1087,7 +1087,7 @@ loopback: 4/4 正確
 | `echo: 載入失敗` / `loopback: 載入失敗` | 指令空間（32 條）不夠或 SM 用完 | 換一個 PIO 區塊（pio0/1/2），或先 remove 舊的 |
 | loopback 全部 `錯` | 腳位沒 `pio_gpio_init`；CLK ≠ DATA+1 | 檢查 `bitstream_in_program_init` 的腳位 |
 | loopback 值整個錯位（例如左移了幾 bits） | 接收端在送端開始前抓到假的 CLK 邊緣 | 先開接收端（現在就是）；確認腳位初值是 0 |
-| `pio_sm_get_blocking` 永遠卡住 | RX FIFO 沒資料（push 沒發生、門檻不對） | 用有 timeout 的寫法（`:73-75`） |
+| `pio_sm_get_blocking` 永遠卡住 | RX FIFO 沒資料（push 沒發生、門檻不對） | 用有 timeout 的寫法（`:76-78`） |
 
 ### 3.3.11 `pio/echo.pio`
 
@@ -1281,7 +1281,7 @@ C 設定（`:18-33`）：
 
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
-| `shift_out.pio:25` | `sm_config_set_clkdiv(&c, clkdiv)` | 速度由呼叫端給（`app_pio.c:66` 傳 10） | 位元速率 = clk_sys / clkdiv / 4 |
+| `shift_out.pio:25` | `sm_config_set_clkdiv(&c, clkdiv)` | 速度由呼叫端給（`app_pio.c:69` 傳 10） | 位元速率 = clk_sys / clkdiv / 4 |
 | `shift_out.pio:23` | 左移、門檻 32 | MSB 先、一次 32 bits | 8-bit 一組見食譜 3.4.5；LSB 先送改 `true`（右移） |
 
 #### 實際執行輸出
@@ -1536,7 +1536,7 @@ assert r == sorted(vals), r
 |---|---|---|
 | 一段程式（毫秒級以上） | `time_us_64()` 前後相減、`PRINT_US` | `app_dma.c:103-108`、`app_multicore.c:103-110` |
 | 很短的程式（< 0.1 秒） | `cycles_init` / `cycles_now` / `cycles_since` | `app_dma.c:117-120` |
-| 加速倍數 | `speedup(慢, 快)` | `app_dma.c:126`、`app_dma_pio.c:87` |
+| 加速倍數 | `speedup(慢, 快)` | `app_dma.c:126`、`app_dma_pio.c:91` |
 | 電腦 ↔ Pico 傳輸 | 電腦端 `ros2/bench.py`（第 2 章） | — |
 | 某行 C 變成幾條指令 | 看 `build/app_xxx.dis` | 3.2.5 |
 
@@ -1566,7 +1566,7 @@ assert r == sorted(vals), r
 | # | 問題 | 核對結果 | 影響 / 怎麼處理 |
 |---|---|---|---|
 | 2 | `README.md:143` 原本說電腦端 `serial_bridge.py` 的 `on_bytes()`「沒有切包…未改」 | **確認過時，2026-11-12 已更新 README**。現在 `ros2/serial_bridge.py:81` 會拒絕 `len(msg.data) > CHUNK_BYTES`（`frame.py:19`，4096）並印錯誤。 | 電腦端上限 4096 比 Pico 的 8192 嚴。題目 CRC 資料 4097～8192 bytes 時 Pico 收得了，但電腦端先擋掉。要放寬就把 `CHUNK_BYTES` 改成 8192（≤ `FRAME_MAX_PAYLOAD`） |
-| 6 | `app_pio.c` 的 `test_loopback` / `load()`：狀態機和程式沒釋放；第二次 load 失敗時第一個一直占著 | **確認**。`app_pio.c:62-63`：`bitstream_in` 載入成功、`shift_out` 失敗時直接 return，`sm_rx` 和 `off_rx` 沒有 remove；成功跑完（`:80`）也沒有 `pio_sm_set_enabled(false)` / `pio_remove_program_and_unclaim_sm` | 目前 `main` 只呼叫一次，不影響輸出；但把 `test_loopback` 拿去重複呼叫或在同一個 pio1 再載別的程式，會遇到指令空間 / SM 不夠。修法：失敗分支與結尾都對已載入的那個呼叫 `pio_remove_program_and_unclaim_sm(&prog, pio, sm, off)` |
+| 6 | `app_pio.c` 的 `test_loopback` / `load()`：狀態機和程式沒釋放；第二次 load 失敗時第一個一直占著 | **已修（2026-11-12）**。原本 `bitstream_in` 載入成功、`shift_out` 失敗時直接 return，用完也沒有歸還。現在失敗時歸還第一個（`app_pio.c:63-66`）、跑完停 SM 並 `pio_remove_program_and_unclaim_sm` 兩個程式（`:85-88`）；SDK 2.2.0、2.1.1 編譯 0 警告 | 自己寫的 PIO 程式也照這樣：claim 了就要還 |
 | 9 | DMA sniffer 的 zlib CRC32 等價（CRC32R + OUT_REV + 軟體 XOR）只從暫存器文件推得 | **確認仍未上板**。暫存器說明（`regs/dma.h` SNIFF_CTRL、SNIFF_DATA）與 SDK 函式（`dma.h:965-1055`）都核對過；Python 模型 200/200 組等於 zlib（3.3.8）；但模型是依文件寫的，不能取代硬體 | 考場先跑 `app_dma`，看 `PASS`；FAIL 照 3.3.8 的對照表改；正式答案保留軟體 CRC 當備案 |
 | 10 | pico-sdk 版本差異 | `dma_encode_transfer_count`：SDK 2.2.0 有（`dma.h:531`），2.1.1 沒有 → `app_dma.c:21-24`、`app_dma_pio.c:27-29` 的補丁在 2.1.1 實際編譯通過。RISC-V：SDK 2.2.0 的 `pico_riscv_gcc.cmake` 固定 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`、**沒有** `-mstrict-align`；2.3.x 的 `pico_riscv_gcc.cmake` 會依序試 `-mcpu=hazard3-rp2350`、含 `zcb_zcmp` 的 `-march`、最後才退回同一組，；`-mstrict-align` 是 2.3.1 才預設加（2.3.0 還沒有，已對照兩版原始碼；可用 `PICO_NO_STRICT_ALIGN` 關） | 補丁版本在 2.0/2.1 直接回傳 n、不遮 MODE bits，所以 count 必須自己保證 < 2^28（`dma_xfer` 有檢查）。RISC-V 在 SDK 2.2.0 沒有 `-mstrict-align`：Hazard3 遇到不對齊存取的行為 ⚠️未驗證；考場用 ARM 最穩 |
 
@@ -1575,7 +1575,7 @@ assert r == sorted(vals), r
 | 檔案:行號 | 問題 | 嚴重度 | 建議 |
 |---|---|---|---|
 | `serial_proto.c:14` | （已修）CRC 表原本在第一次呼叫時才建，沒有鎖；兩核第一次同時呼叫會同時寫表 | — | 2026-11-12 改成 constructor，`main()` 之前就建好 |
-| `app_dma_pio.c:52-54` | `ch_tx` 要到、`ch_rx` 失敗時直接停住，沒有 unclaim `ch_tx` | 低（程式本來就停住） | 改寫成可恢復時要先 unclaim |
+| `app_dma_pio.c:52-58` | （已修）原本 `ch_tx` 要到、`ch_rx` 失敗時直接停住，沒有 unclaim `ch_tx` | — | 2026-11-12 起先把要到的通道 unclaim 再停（`:54-58`） |
 | `app_multicore.c:109` | `%-18s` 以 byte 對齊，中文那行對不齊 | 外觀 | 不用改 |
 | `serial_proto.c:10` | （已修）註解原本寫「快約 8 倍」，電腦上實測 4.1～4.6 倍 | — | 註解已改成實測值 |
 | RISC-V 工具鏈 | `README.md:26` 說 Ubuntu 的 riscv64 工具鏈連結會失敗：實測確認（`nosys.specs`）；另外 SDK 2.2.0 預設只找 `riscv32-*` 名稱 | 環境 | 用 ARM；或用 SDK 官方 riscv32 工具鏈 |

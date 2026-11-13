@@ -66,7 +66,7 @@ class SerialBridge(Node):
             for i in range(0, len(data), step):          # 切成好幾包，每包一來一回
                 reply = self.send(CMD_SUM_U32, data[i:i + step])
                 total = (total + unpack_u32(reply)[0]) & 0xFFFFFFFF   # TODO(改這裡) 合併方式
-        except TimeoutError as e:
+        except (TimeoutError, serial.SerialException) as e:   # 沒回覆，或拔線 / port 壞掉
             self.get_logger().error(str(e))
             return
         self.pub_sum.publish(UInt32(data=total))
@@ -83,7 +83,7 @@ class SerialBridge(Node):
             return
         try:
             reply = self.send(CMD_CRC32, bytes(msg.data))   # UInt8MultiArray.data -> bytes
-        except TimeoutError as e:
+        except (TimeoutError, serial.SerialException) as e:   # 沒回覆，或拔線 / port 壞掉
             self.get_logger().error(str(e))
             return
         crc = unpack_u32(reply)[0]

@@ -59,8 +59,11 @@ static void test_echo(void) {
 static void test_loopback(void) {
     PIO pio = pio1;                       // 送和收放同一個 PIO 區塊（共用腳位設定比較單純）
     uint sm_rx, off_rx, sm_tx, off_tx;
-    if (!load(pio, &bitstream_in_program, &sm_rx, &off_rx) ||
-        !load(pio, &shift_out_program, &sm_tx, &off_tx)) { printf("loopback: 載入失敗\n"); return; }
+    if (!load(pio, &bitstream_in_program, &sm_rx, &off_rx)) { printf("loopback: 載入失敗\n"); return; }
+    if (!load(pio, &shift_out_program, &sm_tx, &off_tx)) {           // 第二個失敗：把第一個還回去
+        pio_remove_program_and_unclaim_sm(&bitstream_in_program, pio, sm_rx, off_rx);
+        printf("loopback: 載入失敗\n"); return;
+    }
 
     bitstream_in_program_init(pio, sm_rx, off_rx, DATA_PIN);          // 先開接收端
     shift_out_program_init(pio, sm_tx, off_tx, DATA_PIN, CLK_PIN, 10.0f);  // TODO(改這裡) clkdiv
@@ -78,6 +81,11 @@ static void test_loopback(void) {
         ok += (r == msg[i]);
     }
     printf("loopback: %d/4 正確\n", ok);
+
+    pio_sm_set_enabled(pio, sm_tx, false);                           // 用完歸還（跟 test_echo 一樣）
+    pio_sm_set_enabled(pio, sm_rx, false);
+    pio_remove_program_and_unclaim_sm(&shift_out_program, pio, sm_tx, off_tx);
+    pio_remove_program_and_unclaim_sm(&bitstream_in_program, pio, sm_rx, off_rx);
 }
 
 int main(void) {

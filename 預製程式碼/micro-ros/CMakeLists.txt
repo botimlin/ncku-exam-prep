@@ -33,7 +33,7 @@ add_executable(app
     pico_uart_transport.c                # 官方檔名（單數 transport.c，header 是複數 transports.h）
 )
 target_link_libraries(app
-    pico_stdlib
+    pico_stdlib pico_unique_id           # unique_id：pico_pingpong.c 用板子序號當 ID
     pico_multicore                       # 雙核心版需要（其他版本連了也沒差）
     microros                             # = libmicroros/libmicroros.a（官方沒有別的 CMake target）
 )

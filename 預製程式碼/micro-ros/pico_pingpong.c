@@ -17,6 +17,7 @@
 #include <rmw_microros/rmw_microros.h>
 #include <std_msgs/msg/header.h>
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"               // 板子出廠序號（pingpong 用它當 ID）
 #include "pico_uart_transports.h"
 
 #define LED_PIN 25            // TODO(改這裡) Pico / Pico 2 板載 LED = GP25（Pico W / 2 W 不是！）
@@ -127,7 +128,9 @@ int main(void) {
     out_ping.frame_id.data = out_buf;    out_ping.frame_id.capacity = STR_CAP; out_ping.frame_id.size = 0;
     in_ping.frame_id.data = in_ping_buf; in_ping.frame_id.capacity = STR_CAP;  in_ping.frame_id.size = 0;
     in_pong.frame_id.data = in_pong_buf; in_pong.frame_id.capacity = STR_CAP;  in_pong.frame_id.size = 0;
-    device_id = (int)(time_us_64() & 0x7fff);   // 簡單當 ID 用（開機時間 → 每塊板子不太一樣）
+    pico_unique_board_id_t uid;                 // 每塊板子出廠就不同的 8 byte 序號 → ID 不會撞（舊版用開機時間，可能撞）
+    pico_get_unique_board_id(&uid);
+    for (int k = 0; k < PICO_UNIQUE_BOARD_ID_SIZE_BYTES; k++) device_id = (int)(((uint32_t)device_id * 131u + uid.id[k]) & 0x7fffffff);
     srand(device_id);
 
     // 3) 重連狀態機：等 agent → 建立 → 連線中 spin → 斷線就拆掉重來
