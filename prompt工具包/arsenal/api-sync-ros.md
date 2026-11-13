@@ -13,7 +13,7 @@
 - `bool multicore_fifo_pop_timeout_us(uint64_t timeout_us, uint32_t *out)`：逾時回 false
 - `bool multicore_fifo_rvalid(void)`：有資料可讀
 - `bool multicore_fifo_wready(void)`：還有空位
-- `void multicore_fifo_drain(void)`
+- `void multicore_fifo_drain(void)`：清空讀端
 FIFO 每方向 32 bit × **4 格**（RP2040 是 8）。launch 也用 FIFO → 傳資料優先用 `queue_t`。
 ```c
 static void core1_entry(void) {          // 型別 void (*)(void)
@@ -239,7 +239,7 @@ pico_enable_stdio_uart(app 0)
 ```
 - micro-ROS 另要 `link_directories(libmicroros)`（放在 `add_executable` 前）。
 - ✗ 寫 `hardware_multicore` / `pico_queue` → 不存在；✓ `pico_multicore`，queue 在 `pico_stdlib`
-- ✗ 漏 `pico_multicore` → `pico/multicore.h: No such file`
+- ✗ 漏 `pico_multicore` → 連結錯 `undefined reference to 'multicore_launch_core1'`（標頭照樣找得到）
 前提：`pico_sdk_init()` 之後寫
 驗證：`make` 0 錯誤，產生 `app.uf2`。
 
@@ -248,7 +248,7 @@ pico_enable_stdio_uart(app 0)
 【API卡｜UROS 1/6｜support、node 初始化】
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 micro-ROS jazzy，全部回傳 `rcl_ret_t`：`RCL_RET_OK`=0、`RCL_RET_ERROR`=1、`RCL_RET_TIMEOUT`=2。
-- `rcl_allocator_t rcl_get_default_allocator()`
+- `rcl_get_default_allocator()`：巨集，回 `rcl_allocator_t`
 - `rclc_support_init(rclc_support_t *support, int argc, char const * const *argv, rcl_allocator_t *allocator)`
 - `rclc_node_init_default(rcl_node_t *node, const char *name, const char *namespace_, rclc_support_t *support)`
 ```c
@@ -260,7 +260,7 @@ rcl_allocator_t allocator;
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
     RCCHECK(rclc_node_init_default(&node, "compute_node", "pico0", &support));
 ```
-要換：`"compute_node"` = node 名；`"pico0"` = namespace（每塊板子不同；不要給 `""`）。
+要換：`"compute_node"` = node 名；`"pico0"` = namespace（每塊板子不同；不用就給 `""`）。
 - `RCCHECK` 要自己 `#define`（rclc.h 沒有）；`error_loop()` 自己寫（LED 快閃）；物件放全域。
 - ✗ `rclc_support_init(&support, &allocator)` → ✓ 四個參數 `(&support, 0, NULL, &allocator)`
 - ✗ `rclc_node_init_default(&node, "n", &support)` → ✓ namespace 在 support 前面
@@ -326,7 +326,7 @@ void sub_cb(const void *msgin) {                       // rclc_subscription_call
 }
     RCCHECK(rclc_executor_add_subscription(&executor, &sub, &msg_in, &sub_cb, ON_NEW_DATA));
 ```
-- `msg` = 收件用全域變數；`RCSOFTCHECK` 自訂（忽略錯誤）。
+- `msg` = 收件用全域變數；`RCSOFTCHECK` 自訂。
 - ✗ `rcl_publish(&pub, &msg)` → ✓ `(&pub, &msg, NULL)`；回傳值不接會 warning
 - ✗ `void cb(void *m)` → warning；✓ `const void *`
 前提：`#include <rclc/executor.h>`
@@ -357,7 +357,7 @@ void sub_cb(const void *msgin) {                       // rclc_subscription_call
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
 `std_msgs__msg__Int32MultiArray`：
 - `.data`：`rosidl_runtime_c__int32__Sequence` = `{ int32_t *data; size_t size; size_t capacity; }`（size = 有效個數）
-- `.layout.dim`（同 data/size/capacity）、`.layout.data_offset`
+- `.layout.dim`（同上三欄）、`.layout.data_offset`
 ```c
 #define MAX_LEN 400
 std_msgs__msg__Int32MultiArray msg_in, msg_out;
@@ -371,17 +371,17 @@ static int32_t in_buf[MAX_LEN], out_buf[MAX_LEN];
 ```
 要換：`MAX_LEN` = 最大元素數；`n` = 發幾個。
 - 不 malloc：沒設 `.data/.capacity` → 收不到。
-- 收到 > capacity 個 → callback 照叫但 `size`=0。
+- 收到 > capacity 個 → callback 照叫、`size`=0。
 - ✗ `capacity = sizeof(in_buf)` → ✓ `MAX_LEN`（元素數，非 bytes）
-- dim capacity=0 → 電腦端別填 `layout.dim`。
+- dim capacity=0 → 電腦端別填 dim。
 前提：`#include <std_msgs/msg/int32_multi_array.h>`
-驗證：pub `{data: [1,2,3]}` → `size` == 3。
+驗證：pub `{data: [1,2,3]}` → size==3。
 
 ---
 
 【API卡｜HOST-PY 1/4｜rclpy：publisher、subscription、timer、參數】
 以下是驗證過的參考（照抄，不要憑記憶改名稱、參數順序、數值）。
-從 repo 範本 `node_template.py`、`host_driver.py` 原樣複製（這次沒實跑）。
+從 repo 範本 `node_template.py`、`serial_bridge.py`、`host_driver.py` 原樣複製（這次沒實跑）。
 - `self.create_publisher(msg_type, topic, qos)`
 - `self.create_subscription(msg_type, topic, callback, qos)`
 - `self.create_timer(period_sec, callback)`：秒（float）
@@ -393,7 +393,7 @@ static int32_t in_buf[MAX_LEN], out_buf[MAX_LEN];
         self.sub = self.create_subscription(Int32, in_topic, self.on_msg, QOS)
             self.timer = self.create_timer(period, self.on_timer)
 ```
-- qos 也可直接寫 `10`；多個 sub 共用 callback：`lambda msg, b=i: self.on_result(b, msg)`（host_driver.py）。
+- qos 也可直接寫 `10`（serial_bridge.py）；多個 sub 共用 callback：`lambda msg, b=i: self.on_result(b, msg)`（host_driver.py）。
 - ✗ `create_subscription(Int32, cb, topic)` → ✓ `(Int32, topic, cb, qos)`
 - ✗ `create_timer(100, cb)` 想要 100 ms → ✓ `create_timer(0.1, cb)`
 - ✗ `get_parameter(name)` 直接當值 → ✓ `.value`
@@ -427,7 +427,6 @@ def main():
 - 自己控迴圈：`rclpy.spin_once(self, timeout_sec=0.001)`；條件 `rclpy.ok()`；結尾 `rclpy.shutdown()`（host_driver.py）。
 - `ReliabilityPolicy.BEST_EFFORT`、`DurabilityPolicy.TRANSIENT_LOCAL`：範本只在註解出現 ⚠️未驗證
 - `from rclpy.qos import qos_profile_sensor_data`（BEST_EFFORT、depth 5）⚠️未驗證
-- ✗ `QoSProfile(10)` → ✓ `QoSProfile(depth=10)`（關鍵字）
 - ✗ 沒 `rclpy.spin` → callback 永遠不跑
 前提：`from rclpy.executors import ExternalShutdownException`
 驗證：Ctrl+C 結束沒有 traceback。
