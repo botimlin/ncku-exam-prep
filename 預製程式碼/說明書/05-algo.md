@@ -12,7 +12,7 @@
 - 題目出現 **eBNN、BNN、二值化、XNOR、popcount、權重、門檻、BatchNorm** → `bnn.c`。先讀 5.2.8，再把 `bnn_test.c:14` 的範例網路換成題目的權重。
 - 題目出現 **Adler-32、Fletcher、XOR 校驗、NMEA `*hh`、LRC、IP/UDP checksum** → `checksum_misc.c`，整段複製需要的函式。
 - 板子上要「邊搬資料邊算 CRC」→ DMA sniffer，見第 3 章 `app_dma.c` 一節與食譜 5.4.2；**先用本章的 `crc32_update` 驗證硬體結果**。
-- 最常改的 3 個地方：`crc_generic` 的參數（5.2.4 表格整列照抄）、`bnn_test.c:15-22` 的網路尺寸與權重、`sort.h:31` 的 `KWAY_MAX`（超過 16 段會**靜悄悄漏資料**，見 5.6）。
+- 最常改的 3 個地方：`crc_generic` 的參數（5.2.4 表格整列照抄）、`bnn_test.c:15-22` 的網路尺寸與權重、`sort_test.c` / 你的程式裡切幾段給 `kway_merge`（段數沒有上限；段數很多時改用兩兩合併比較快，見 5.4.3）。
 - 全部 `TODO(改這裡)`：`grep -n "TODO(改這裡)" *.c *.h`（在 `algo/` 執行，共 6 處：`crc32.c:10`、`crc32_test.c:7`、`sort.c:6`、`sort.c:69`、`sort_test.c:7`、`bnn_test.c:14`）。
 
 ## 5.1 檔案總表
@@ -30,7 +30,7 @@
 | `sha_test.c` | 82 | 7 組標準向量、一百萬個 `a`、300 組隨機切段、測速 | 改了 SHA 之後驗證 | ✅ 本次實跑 |
 | `sort.h` | 34 | 5 個排序 / 合併函式、`KWAY_MAX`、選用建議 | 要排序或合併 | ✅ |
 | `sort.c` | 78 | insertion、bottom-up merge sort、LSD radix sort、2-way merge、k-way merge | 同上 | ✅ host、qemu-rv32 PASS |
-| `sort_test.c` | 74 | 與 `qsort` 比對（11 種 n × 4 種分布）、合併測試、測速 | 改了 `sort.c` 之後驗證 | ✅ 本次實跑 |
+| `sort_test.c` | 82 | 與 `qsort` 比對（11 種 n × 4 種分布）、合併測試、測速 | 改了 `sort.c` 之後驗證 | ✅ 本次實跑 |
 | `bnn.h` | 66 | eBNN 原理註解、位元排列規則、BN 折門檻公式、`bnn_layer_t`、`bnn_popcount` | 做 BNN 題先讀這個檔頭 | ✅ |
 | `bnn.c` | 63 | 打包、XNOR-popcount 內積、隱藏層、輸出層、argmax、BN 折門檻 | BNN 推論 | ✅ host、qemu-rv32 PASS；Python 獨立實作一致 |
 | `bnn_test.c` | 94 | 與笨方法比對、20000 組 BN 參數、2 層範例網路、784×256 測速 | 換權重時當範本 | ✅ 本次實跑 |
@@ -94,7 +94,7 @@ crc = init
 - 題目只寫「多項式 0xEDB88320」時，那是**反轉後**的寫法（`0x04C11DB7` 反轉 32 位），`crc_generic` 要填 `0x04C11DB7` 加 `refin=refout=1`。對照表在 `crc32.h:55-57`：`0x04C11DB7 ↔ 0xEDB88320`、`0x1EDC6F41 ↔ 0x82F63B78`、`0x8005 ↔ 0xA001`。
 - 「多項式 x^16+x^12+x^5+1」= 把指數 15..0 的位設 1：`0x1021`（x^16 那項省略）。
 - refin 和 refout 可以不同（例如 CRC-12/UMTS：refin=0、refout=1），`crc_generic` 支援。
-- **width 一定要 8..32**（`crc32.h:33` 註解）。width < 8（CRC-5、CRC-7）會觸發未定義行為，見 5.6 與食譜 5.4.1 的替代函式。
+- **width 可以是 1..32**（`crc32.h:33` 註解）。2026-11-12 前只支援 8..32，width < 8（CRC-5、CRC-7）會觸發未定義行為；現在 `crc_generic` 一次處理一個 bit，CRC-3～CRC-7 也算得對（5.6 第 1 點）。
 
 ### 5.2.4 常見 CRC 規格表（全部用 `crc_generic` 實測過）
 
@@ -139,7 +139,7 @@ crc = init
 | CRC-8/BLUETOOTH | `{8, 0xA7, 0x00, 1, 1, 0x00}` | `0x26` |
 | CRC-8/NRSC-5 | `{8, 0x31, 0xFF, 0, 0, 0x00}` | `0xF7` |
 
-width 小於 8 的規格要用食譜 5.4.1 的 `crc_bits`（ch05 自寫，本次實測）：CRC-7/MMC `crc_bits(7, 0x09, 0x00, 0, 0, 0x00, ...)` = `0x75`、CRC-5/USB `crc_bits(5, 0x05, 0x1F, 1, 1, 0x1F, ...)` = `0x19`、CRC-4/G-704 `crc_bits(4, 0x3, 0x0, 1, 1, 0x0, ...)` = `0x7`、CRC-3/GSM `crc_bits(3, 0x3, 0x0, 0, 0, 0x7, ...)` = `0x4`。
+width 小於 8 的規格現在直接用 `crc_generic`（2026-11-12 修正後實測，UBSan 無錯誤）：CRC-3/GSM `{3, 0x3, 0x0, 0, 0, 0x7}` = `0x4`、CRC-3/ROHC `{3, 0x3, 0x7, 1, 1, 0x0}` = `0x6`、CRC-4/G-704 `{4, 0x3, 0x0, 1, 1, 0x0}` = `0x7`、CRC-4/INTERLAKEN `{4, 0x3, 0xF, 0, 0, 0xF}` = `0xB`、CRC-5/USB `{5, 0x05, 0x1F, 1, 1, 0x1F}` = `0x19`、CRC-5/EPC-C1G2 `{5, 0x09, 0x09, 0, 0, 0x00}` = `0x00`、CRC-6/G-704 `{6, 0x03, 0x00, 1, 1, 0x00}` = `0x06`、CRC-7/MMC `{7, 0x09, 0x00, 0, 0, 0x00}` = `0x75`、CRC-7/ROHC `{7, 0x4F, 0x7F, 1, 1, 0x00}` = `0x53`（和 CRC RevEng 目錄的 check 值、另寫的 Python 版都一致）。加上上表 34 列，共 43 列全部 PASS。食譜 5.4.1 的 `crc_bits` 是同一個演算法的獨立版本，仍可用來對答案。
 
 ### 5.2.5 CRC 的三種寫法：逐位元、查表、slice-by-4
 
@@ -223,7 +223,7 @@ SHA-0 是 1993 年的版本，因為有弱點，1995 年改成 SHA-1（就是加
 | 合併排序（bottom-up） | `merge_sort_u32` | O(n log n) | n 個 `uint32_t`（`tmp`） | 是（`<=`，`sort.c:20`） | 要穩定、資料不是整數鍵 |
 | LSD radix sort | `radix_sort_u32` | O(4n + 4×256) | n 個 `tmp` + 1 KB 計數陣列（在 stack） | 是（計數排序依序搬） | 大量 `uint32`，通常最快 |
 | 2 路合併 | `merge_two_sorted` | O(na + nb) | 輸出陣列 | 是（相等時先拿 a） | 兩塊板子 / 兩核各排一半 |
-| k 路合併 | `kway_merge` | O(n × k) | 輸出陣列 + stack 上 16 個 `size_t` | 是（相等時拿編號小的那段） | k ≤ 8 段 |
+| k 路合併 | `kway_merge` | O(n × k) | 輸出陣列 + stack 上 k 個 `size_t` | 是（相等時拿編號小的那段） | k ≤ 8 段 |
 
 **radix sort 怎麼做**（`sort.c:41-57`）：把 32-bit 整數切成 4 個 byte，從最低 byte 到最高 byte 各做一次「計數排序」：
 
@@ -400,11 +400,11 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
 
 | 名稱 | 參數 | 回傳 / 效果 | 複雜度 / 記憶體 | 注意 |
 |---|---|---|---|---|
-| `void crc32_init(void)` | 無 | 建 `T[4][256]`、`TC[256]`、`T16[256]` 三組表，設 `inited = 1` | 一次約 256×(8+8+8) 步；表在 `.bss` 共 5636 byte（M33 `size` 實測） | 不呼叫也會在第一次查表時自動呼叫；**雙核心時要在 `multicore_launch_core1` 前呼叫**（見 5.6） |
+| `void crc32_init(void)` | 無 | 建 `T[4][256]`、`TC[256]`、`T16[256]` 三組表，設 `inited = 1` | 一次約 256×(8+8+8) 步；表在 `.bss` 共 5636 byte（M33 `size` 實測） | 是 `__attribute__((constructor))`：`main()` 之前自動跑（pico-sdk 在 core0 的 `runtime_init()`、電腦上由 C runtime），所以雙核心不會同時第一次建表；自己再呼叫一次也沒關係 |
 | `uint32_t crc32_bitwise(uint32_t crc, const uint8_t *p, size_t n)` | `crc`：第一段傳 0，之後傳上次結果；`p`、`n`：資料 | zlib CRC-32 | O(8n)；不用表；M33 stack 4 byte | 最慢但最不容易錯，適合當對照組 |
 | `uint32_t crc32_table(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上 | O(n)；用 `T[0]` 1 KB | 第一次呼叫會建表 |
 | `uint32_t crc32_slice4(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上 | O(n)，每 4 byte 一次迴圈；用 `T[0..3]` 4 KB | `p` 不用對齊 |
-| `uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上（= `crc32_slice4`） | 同 slice4 | **跟 `pico/serial_proto.c:25` 同名**，兩個檔放同一個執行檔會連結失敗（見 5.6、食譜 5.4.6） |
+| `uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | 同上（= `crc32_slice4`） | 同 slice4 | 跟 `pico/serial_proto.c:25` 同名；那一份是弱符號（weak），兩個檔放同一個執行檔時用這一份，不會衝突（食譜 5.4.6） |
 | `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | 同上 | CRC-32C（check `0xE3069283`） | O(n)；`TC` 1 KB | 只有查表版 |
 | `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | `crc`：**第一段傳 `0xFFFF`**，之後傳上次結果 | CRC-16/IBM-3740（check `0x29B1`） | O(n)；`T16` 512 byte | 傳 0 開始 = CRC-16/XMODEM（沒有 xorout，所以 init 0 就是 XMODEM） |
 | `crc_param_t` | `width`、`poly`、`init`、`refin`、`refout`、`xorout` | 結構（M33 上 20 byte） | — | 欄位順序固定，照 5.2.4 表格填 |
@@ -432,8 +432,8 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
     - `:104-105` `top` = 最高位遮罩、`mask` = width 位全 1（width = 32 時特別處理，避免 `1u << 32`）。
     - `:106` `crc = init & mask`。
     - `:109` refin 時先反轉輸入 byte。
-    - `:110` `crc ^= b << (c->width - 8)` 把 byte 放到最高 8 位（**width < 8 時位移量是負數 → 未定義行為**）。
-    - `:111-112` 8 次左移步驟、`:113` 遮罩。
+    - `:110-112` 一次處理輸入 byte 的一個 bit（高位先）：`fb` = 「目前最高位」XOR「這個輸入 bit」，左移後 `fb` 是 1 就 XOR `poly`。這樣 width 1..32 都對（2026-11-12 前是先把整個 byte XOR 到最高 8 位，width < 8 時位移量是負數 → 未定義行為）。
+    - `:113` 遮罩回 width 位。
     - `:115-116` refout 時反轉整個 width 位，再 XOR `xorout`。
 
 #### 要改的地方
@@ -456,9 +456,9 @@ arm-none-eabi-gcc -mcpu=cortex-m33 -mthumb -O2 -Wall -Wextra -std=c11 -c crc32.c
 | 結果是正確值的 `~`（例如 `0x340BC6D9`） | 多做或少做最後的 XOR | 對照 5.2.4：`0x340BC6D9` 是 JAMCRC = zlib 少 XOR |
 | 分段算的結果跟一次算不同 | 第二段又傳 0 | 第二段要傳第一段的回傳值 |
 | `crc16_ccitt_false` 結果是 `0x31C3` | 第一段傳了 0 | CCITT-FALSE 要傳 `0xFFFF`；`0x31C3` 是 XMODEM |
-| `crc_generic` 回傳 0 或亂數（width 5、7） | width < 8 未定義行為（本次 UBSan：`crc32.c:110:18: runtime error: shift exponent -1 is negative`，回傳 0） | 改用食譜 5.4.1 的 `crc_bits` |
+| `crc_generic` 回傳 0 或亂數（width 5、7） | 2026-11-12 前的版本 width < 8 是未定義行為（UBSan：`shift exponent -1 is negative`，回傳 0） | 用目前版本；或食譜 5.4.1 的 `crc_bits` |
 | 用 `crc_generic` 分兩段算錯 | `crc_generic` 每次都重套 init/xorout | 整份一次算，或用食譜 5.4.1 的 `crcf_start/feed/finish` |
-| 連結錯誤 `multiple definition of 'crc32_update'` | 同一個執行檔也有 `pico/serial_proto.c` | 見食譜 5.4.6 |
+| 連結錯誤 `multiple definition of 'crc32_update'` | 2026-11-12 前的 `pico/serial_proto.c` 和 `crc32.c` 放同一個執行檔 | 用目前版本（`serial_proto.c` 的是弱符號）；見食譜 5.4.6 |
 | 題目說 poly = `0xEDB88320`，填進 `crc_generic` 結果錯 | 那是反轉寫法 | 填 `0x04C11DB7` + refin=refout=1 |
 
 ### 5.3.3 `crc32_test.c`
@@ -709,8 +709,8 @@ gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
 | `void merge_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | `tmp` 至少 n 個 | 原地遞增排序（結果回到 `a`），穩定 | O(n log n)；n 個 `tmp`；M33 stack 64 byte | 迭代式，不遞迴 |
 | `void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | `tmp` 至少 n 個 | 原地遞增排序（結果回到 `a`），穩定 | O(n)，4 趟；n 個 `tmp`；**M33 stack 1064 byte**（`cnt[256]`） | 有號數 / 遞減見 5.2.7 |
 | `void merge_two_sorted(const uint32_t *a, size_t na, const uint32_t *b, size_t nb, uint32_t *out)` | 兩個已排序陣列、輸出 | `out[na+nb]` 有序 | O(na+nb)；M33 stack 28 byte | `out` **不能**跟 `a`、`b` 重疊 |
-| `KWAY_MAX` | — | 16 | — | `kway_merge` 最多段數 |
-| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k 個已排序陣列的指標與長度 | `out` 有序（長度 = Σlens） | O(n×k)；M33 stack 88 byte | **k > 16 會被截成 16，多的段直接不見，沒有錯誤訊息** |
+| `KWAY_MAX` | — | 16 | — | 建議值（不是上限）：段數比這多時，兩兩合併通常比較快。2026-11-12 前是硬上限，超過會默默截斷 |
+| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k 個已排序陣列的指標與長度 | `out` 有序（長度 = Σlens） | O(n×k)；M33 stack 48 byte + 8k byte（`pos[k]`，VLA） | k 沒有上限（2026-11-12 前 k > 16 會被截成 16） |
 
 #### 程式流程
 1. `sort.c:4` `copy_u32`：自己寫的複製迴圈（不依賴 `string.h`）。
@@ -720,15 +720,15 @@ gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
 5. `merge_sort_u32`（`:26-39`）：`:27-28` 每 RUN 個先排好；`:30-36` 寬度 32、64、128…每次把相鄰兩段合併到另一個陣列，然後交換 `src`/`dst`（ping-pong）；`:38` 結果若停在 `tmp` 就抄回 `a`。
 6. `radix_sort_u32`（`:44-57`）：`n < 2` 直接返回（`:46`）；`shift = 0, 8, 16, 24` 四趟（`:47`）；每趟計數（`:49`）、全同就跳過（`:50`）、前綴和（`:52`）、穩定搬移（`:53`）、交換（`:54`）；跳過奇數趟時結果可能在 `tmp`，`:56` 抄回。
 7. `merge_two_sorted`（`:59-65`）：標準雙指標合併，`<=` 穩定。
-8. `kway_merge`（`:67-78`）：`pos[16]` 記每段走到哪（`:68`）；`:69` k 截到 `KWAY_MAX`；每次掃 k 個頭找最小（`:72-74`，`<` 所以相等取編號小的）；全部用完就結束（`:75`）。
+8. `kway_merge`（`:67-78`）：`pos[k]` 記每段走到哪（`:68`，可變長度陣列，`:69` 清成 0）；每次掃 k 個頭找最小（`:72-74`，`<` 所以相等取編號小的）；全部用完就結束（`:75`）。
 
 #### 要改的地方
 
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
 | `sort.c:6` | `#define RUN 32` | merge sort 第一步每組多大 | 16~64 都可（註解）；一般不用改 |
-| `sort.c:69` | `if (k > KWAY_MAX) k = KWAY_MAX;` | 段數上限 | 段數超過 16 → 改 `sort.h:31` 的 `KWAY_MAX`（`pos[]` 會跟著變大）；或改用兩兩合併（食譜 5.4.3）。**不要依賴這行默默截斷** |
-| `sort.h:31` | `#define KWAY_MAX 16` | 同上 | 同上 |
+| `sort.c:68` | `size_t pos[k > 0 ? k : 1];` | 每段讀到哪 | 不用改：k 沒有上限。2026-11-12 前這裡是 `pos[KWAY_MAX]` 加上 `if (k > KWAY_MAX) k = KWAY_MAX;`，超過 16 段會默默漏資料 |
+| `sort.h:31` | `#define KWAY_MAX 16` | 建議值 | 不影響程式；段數比它多時考慮兩兩合併（食譜 5.4.3） |
 
 #### 實際執行輸出
 見 5.3.8。
@@ -738,7 +738,7 @@ gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
 | 症狀 | 原因 | 修法 |
 |---|---|---|
 | 負數排在最後面 | 把 `int32_t` 當 `uint32_t` 排 | 前後各 `^= 0x80000000u` |
-| 合併結果少了一大段 | `kway_merge` 的 k > 16 | 加大 `KWAY_MAX` 或兩兩合併 |
+| 合併結果少了一大段 | 2026-11-12 前的 `kway_merge` k > 16 會截斷；現在不會。還少資料就檢查 `lens[]` 加起來是不是 n | 印出 Σlens |
 | `merge_two_sorted` 結果亂 | `out` 跟輸入重疊 | 另外開一個輸出陣列 |
 | Pico 上 hard fault | `a`、`tmp` 放 stack（例如 `uint32_t a[4096];` 寫在函式裡 = 16 KB） | 改成 `static`（`sort.h:11` 的建議） |
 | 結果「幾乎有序」 | `tmp` 比 n 小，寫出界 | `tmp` 至少 n 個 |
@@ -759,8 +759,8 @@ gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
 
 #### 程式流程
 1. `sort_test.c:20-36` 正確性：n ∈ {0, 1, 2, 3, 31, 32, 33, 100, 1000, 4097, 100000} × mask ∈ {全部、0xFF、0x3、0xFFFF0000}，三種排序都跟 `qsort` 比（insertion 只測 n ≤ 4097）。
-2. `:38-53` 合併：故意 1/3 : 2/3 不平均切兩段 → `merge_two_sorted`；不等長切 4 段 → `kway_merge`。
-3. `:55-72` 測速：qsort、merge、radix、兩半 radix + merge、memcpy 本身、n=10000 的 insertion 和 radix。
+2. `:38-61` 合併：故意 1/3 : 2/3 不平均切兩段 → `merge_two_sorted`；不等長切 4 段 → `kway_merge`；再切 20 段（超過 `KWAY_MAX`）→ `kway_merge`（`:54-61`）。
+3. `:63-80` 測速：qsort、merge、radix、兩半 radix + merge、memcpy 本身、n=10000 的 insertion 和 radix。
 
 #### 要改的地方
 
@@ -779,6 +779,7 @@ gcc -O2 -Wall -Wextra -std=c11 sort.c sort_test.c -o $B/sort && $B/sort
 [合併：模擬 2 塊板子 / 4 個核心各排一段]
   PASS  merge_two_sorted
   PASS  kway_merge (k=4)
+  PASS  kway_merge (k=20)        ← 2026-11-12 修正 kway_merge 後加的測試
 [Benchmark：n = 1048576 個隨機 uint32，取 3 次最快]
   qsort (libc)         106.25 ms
   merge_sort_u32        77.68 ms
@@ -1045,8 +1046,8 @@ uint32_t fletcher32(const uint8_t *p, size_t n) {
 4. 正確後再決定要不要換成快的版本：
    - 資料小（幾 KB）：直接用 `crc_generic`（28~31 MB/s，本次實測）。
    - refin=refout=1、init=xorout=`0xFFFFFFFF` 的 32-bit CRC：改 `crc32.c:10` 的 `POLY32R` 成反轉多項式，直接用 `crc32_update`。
-   - 其他（不反轉、init 不是全 1、width 8..32 任意）：用下面的 `crcf`（ch05 自寫查表版，可分段）。
-   - width < 8：用下面的 `crc_bits`。
+   - 其他（不反轉、init 不是全 1、width 8..32 任意）而且要快：用下面的 `crcf`（ch05 自寫查表版，可分段）。只是要對答案：`crc_generic` 就好。
+   - width < 8：`crc_generic` 現在就能算（width 1..32）；下面的 `crc_bits` 是獨立寫的同一個演算法，可以拿來互相對答案。
 
 **`crcf`：任意 refin==refout 規格的查表版（ch05 自寫；本次對 12 種規格 × 100 組隨機長度、切兩段算，和 `crc_generic` 全一致；CRC-32/AUTOSAR 470.0 MB/s，`crc_generic` 28.3 MB/s，快 16.6 倍）**：
 
@@ -1294,21 +1295,19 @@ pico_add_extra_outputs(app_algo)
 
 本次的測試程式 `app_algo.c`（ch05 自寫，開機印 CRC、SHA-0 自我測試與 CRC/SHA/radix/BNN 的時間）連結結果：`text 34588 / bss 232792`（bss 大是因為測試用了 64 KB 資料 + 128 KB 排序陣列 + 25 KB 權重）。⚠️ 沒有上板，沒有板上速度數字。
 
-**和 `pico/serial_proto.c` 同時用的衝突**：`serial_proto.c:25` 和 `crc32.c:77` 都定義了 `crc32_update`（同樣是 zlib CRC-32），放進同一個執行檔會出錯。本次實測：
+**和 `pico/serial_proto.c` 同時用**：`serial_proto.c:25` 和 `crc32.c:77` 都定義了 `crc32_update`（同樣是 zlib CRC-32）。2026-11-12 前放進同一個執行檔會連結失敗：
 
 ```text
 crc32.c:78: multiple definition of `crc32_update'; CMakeFiles/app_conflict.dir/serial_proto.c.o:serial_proto.c:25: first defined here
 collect2: error: ld returned 1 exit status
 ```
 
-（報錯行號 78 是函式本體那行。）修法擇一：
-- 只需要 zlib CRC-32 → 不要加 `crc32.c`，直接用 `serial_proto.c` 的 `crc32_update`（同樣結果）。
-- 還需要 `crc32c_update`、`crc_generic` 等 → 對 `crc32.c` 改名：`set_source_files_properties(algo/crc32.c PROPERTIES COMPILE_DEFINITIONS "crc32_update=algo_crc32_update")`。本次這樣改後 `app_serial` + `crc32.c` 連結通過；注意這個屬性對所有用到 `algo/crc32.c` 的 target 都生效，別的 target 若呼叫 `crc32_update` 會找不到，改呼叫 `crc32_slice4`。
+現在 `serial_proto.c` 那一份是 `__attribute__((weak))`（弱符號）：專案裡也有 `crc32.c` 時，連結器用 `crc32.c` 的版本（slice-by-4，結果完全一樣），不會衝突。本次實測：`app_serial` 加上 `algo/crc32.c` 連結通過，`arm-none-eabi-nm` 看到 `crc32_update` 指向 `crc32.c` 的實作；同一個 `app_serial.c` + `serial_proto.c` 用 `frame.py` 對打，ECHO / SUM / CRC 回覆都和修正前一樣。
 
 **MCU 上的記憶體注意**：
 - 大陣列一律 `static`（Pico 主 stack 只有 `PICO_STACK_SIZE` = 0x800 = 2 KB 的保留空間，pico-sdk `rp2350/pico_platform/include/pico/platform.h:45`）。
 - `radix_sort_u32` 本身用 1064 byte stack、`sha256` 壓縮用 336 byte（5.5.6），在 core1（預設 2 KB）上用時要留意。
-- 有用雙核心：開機先呼叫一次 `crc32_init()` 再 `multicore_launch_core1`（避免兩核同時第一次建表）。
+- 有用雙核心：`crc32_init()` 現在是 `__attribute__((constructor))`，pico-sdk 在 `main()` 之前就在 core0 建好表（`runtime_init()` 會跑 `__init_array`），兩核不會同時第一次建表。2026-11-12 前要自己先呼叫一次。
 
 **RISC-V 版**：本次在這個容器用 `-DPICO_PLATFORM=rp2350-riscv -DPICO_GCC_TRIPLE=riscv64-unknown-elf` 可以 configure，但連結 SDK 的 boot stage2 時失敗（`cannot read spec file 'nosys.specs'`：容器的 RISC-V 工具鏈只有 picolibc、沒有 newlib）。這是容器限制，不是 algo 的問題；6 個核心檔用 SDK 同樣的 `-march` 單獨編譯 0 警告（5.5.4）。考場 Docker 的工具鏈⚠️未驗證。
 
@@ -1329,14 +1328,14 @@ def reflect(v, bits):
     return r
 
 def crc_generic(data, width, poly, init, refin, refout, xorout):
-    """= algo/crc32.c crc_generic（width 8..32）"""
+    """= algo/crc32.c crc_generic（width 1..32）"""
     top, mask = 1 << (width - 1), (1 << width) - 1
     crc = init & mask
     for b in data:
         if refin: b = reflect(b, 8)
-        crc ^= b << (width - 8)
-        for _ in range(8):
-            crc = ((crc << 1) ^ poly) if crc & top else (crc << 1)
+        for k in range(7, -1, -1):                 # 一次一個 bit（高位先），跟 C 版一樣
+            fb = (1 if crc & top else 0) ^ ((b >> k) & 1)
+            crc = ((crc << 1) ^ poly) if fb else (crc << 1)
         crc &= mask
     if refout: crc = reflect(crc, width)
     return (crc ^ xorout) & mask
@@ -1567,7 +1566,7 @@ bnn 每層 12.26 us
 | `sha256` | 136 | 含 `sha256_ctx`（112） |
 | `sha1` / `sha0` | 128 | 含 `sha1_ctx`（104） |
 | `sha1_sha0.c` 的 `compress` | 128 | |
-| `kway_merge` | 88 | `pos[16]` |
+| `kway_merge` | 48 + 8k（dynamic） | `pos[k]`（修正前固定 88 byte、`pos[16]`） |
 | `merge_sort_u32` | 64 | |
 | `bnn_dense_sign` / `bnn_dot` | 48 / 40 | |
 | `crc_generic` | 32 | |
@@ -1577,21 +1576,21 @@ bnn 每層 12.26 us
 
 ## 5.6 限制、已知問題、沒驗證的地方
 
-**程式問題（本次發現，沒有改程式）**：
+**程式問題（本次發現；標「已修」的 2026-11-12 已改程式）**：
 
-1. **`crc_generic` 的 width < 8 是未定義行為**（`crc32.c:110`：`crc ^= b << (c->width - 8);`）。`crc32.h:33` 註解寫了「8..32」，但程式沒檢查。本次 UBSan 對 width = 7 回報 `crc32.c:110:18: runtime error: shift exponent -1 is negative`，回傳 0（CRC-7/MMC 正確值 0x75）。width = 0 或 > 32 同樣會出錯。替代：食譜 5.4.1 的 `crc_bits`。
-2. **`crc32_update` 和 `pico/serial_proto.c:25` 同名**，同一個執行檔同時放 `algo/crc32.c` 和 `pico/serial_proto.c` 會 `multiple definition` 連結失敗（本次實測）。修法見食譜 5.4.6。
-3. **`kway_merge` 的 k > `KWAY_MAX`（16）會默默截斷**（`sort.c:69`），第 17 段以後的資料不會出現在輸出裡，也沒有回傳錯誤。輸出長度少了，呼叫者若照 Σlens 讀 `out` 會讀到舊資料。
-4. **CRC 表的懶惰初始化不是執行緒安全的**：`crc32_table`、`crc32_slice4`、`crc32c_update`、`crc16_ccitt_false` 在 `!inited` 時呼叫 `crc32_init()`（例如 `crc32.c:55`）。兩核同時第一次呼叫會同時寫表（寫的值一樣，實務上多半沒事，但屬於資料競爭）。雙核心時先在 core0 呼叫 `crc32_init()` 再啟動 core1。
+1. **（已修）`crc_generic` 的 width < 8 原本是未定義行為**：舊的 `crc ^= b << (c->width - 8);` 在 width < 8 時位移量是負數，UBSan 對 width = 7 回報 `shift exponent -1 is negative`、回傳 0（CRC-7/MMC 正確值 0x75）。2026-11-12 改成一次處理一個 bit（`crc32.c:110-112`），width 1..32 都對：9 個 width 3～7 的標準規格 + 原本 34 列共 43 列 PASS，UBSan 無錯誤，速度不變（CRC-32/AUTOSAR 4 MB：修正前 27.0 MB/s、修正後 26.3 MB/s）。width = 0 或 > 32 仍然不行。
+2. **（已修）`crc32_update` 和 `pico/serial_proto.c:25` 同名**：同一個執行檔同時放 `algo/crc32.c` 和 `pico/serial_proto.c` 原本會 `multiple definition` 連結失敗。現在 `serial_proto.c` 那一份是弱符號，連結器自動用 `crc32.c` 的（結果相同）；本次實測 `app_serial` + `crc32.c` 連結通過（食譜 5.4.6）。
+3. **（已修）`kway_merge` 的 k > `KWAY_MAX`（16）原本會默默截斷**：第 17 段以後的資料不會出現在輸出裡，也沒有回傳錯誤。2026-11-12 改成 `pos[k]`（`sort.c:68-69`），k 沒有上限；`sort_test.c` 加了 k=20 的測試（`PASS  kway_merge (k=20)`）。
+4. **（已修）CRC 表的懶惰初始化不是執行緒安全的**：原本第一次呼叫才建表，兩核同時第一次呼叫會同時寫表。現在 `crc32_init()` 是 `__attribute__((constructor))`，`main()` 之前就建好（pico-sdk `runtime_init()` 會在 core0 跑 `__init_array`）；`pico/serial_proto.c` 的表也一樣。
 5. **`radix_sort_u32` 在 M33 上用 1064 byte stack**（`sort.c:48` 的 `size_t cnt[256]`）。Pico 的 core1 預設 stack 是 `PICO_CORE1_STACK_SIZE` = 0x800（2 KB，pico-sdk `pico/multicore.h:32-37`），呼叫鏈深時會不夠。檔頭沒有提醒。
 6. **`bnn_fold_bn` 的 `(int32_t)t`**（`bnn.c:49` 的 `ceil_f`）：`|t| > 2^31` 時是未定義行為。正常 BN 參數不會發生（只有 gamma 非常接近 0 時）。
 7. **`bnn_dense_sign` 要求 `thr` 非 NULL**（`bnn.c:31` 直接讀 `L->thr[j]`），`bnn.h:48` 的註解只說最後一層可 NULL，容易誤用。
-8. **`bnn_test.c:78` 的 `uint32_t x[2]` 寫死 2 個 word**，改 `N_IN` 超過 64 時會出界（`TODO` 註解沒提到這行）。
+8. **（已修）`bnn_test.c:78` 的 `uint32_t x[2]` 原本寫死 2 個 word**，照 `TODO` 改 `N_IN` 超過 64 會出界；現在是 `uint32_t x[BNN_WORDS(N_IN)]`，跟著 `N_IN` 變。
 
 **註解和實測不符（不影響正確性）**：
 
 9. `sha1_sha0.c:1` 說「stack 用約 64 byte」；M33 實測 `compress` 128 byte、`sha1()` 整條呼叫鏈 280 byte。
-10. `crc32.c:53` 說查表「約快 5~8 倍」、`:61` 說 slice-by-4「再快 2~3 倍」；本次 host 實測查表 4.2 倍、slice4 再 3.0 倍（README 在 Ryzen 上是 4.1 倍、3.0 倍）。
+10. （已修）`crc32.c:53` 原本說查表「約快 5~8 倍」、`:61` 說 slice-by-4「再快 2~3 倍」；本次 host 實測查表 4.2 倍、slice4 再 3.0 倍，註解已改成「電腦實測約快 4 倍」「再快約 3 倍」。
 11. `sha256_update` 逐 byte 複製進 `buf`（`sha256.c:51-54`），不像 `sha1_update` 整塊直接算。這是 SHA-256 比 SHA-1 慢的原因之一（另一個是回合計算較重）；本次沒有拆開量兩者各占多少。
 
 **功能限制**：
@@ -1631,14 +1630,14 @@ bnn 每層 12.26 us
 | `uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n)` | zlib CRC-32；第一段傳 0，可分段 |
 | `uint32_t crc32c_update(uint32_t crc, const uint8_t *p, size_t n)` | CRC-32C；第一段傳 0 |
 | `uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n)` | 第一段傳 `0xFFFF`（傳 0 = XMODEM） |
-| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | `{width, poly, init, refin, refout, xorout}`，width 8..32，不能分段 |
+| `uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n)` | `{width, poly, init, refin, refout, xorout}`，width 1..32，不能分段 |
 | `void sha1_init(sha1_ctx *c, int is_sha0)` | **1 = SHA-0**、0 = SHA-1 |
 | `void sha1_update(sha1_ctx *c, const uint8_t *p, size_t n)` / `void sha1_final(sha1_ctx *c, uint8_t out[20])` | 串流 |
 | `void sha0(const uint8_t *p, size_t n, uint8_t out[20])` / `sha1(...)` / `sha256(..., uint8_t out[32])` | 一次算完 |
 | `void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | 最快；有號數前後 `^= 0x80000000u` |
 | `void merge_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` / `void insertion_sort_u32(uint32_t *a, size_t n)` | 穩定 / 小陣列 |
 | `void merge_two_sorted(const uint32_t *a, size_t na, const uint32_t *b, size_t nb, uint32_t *out)` | out 不可重疊 |
-| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k ≤ 16，否則默默截斷 |
+| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | k 不限；段數多時兩兩合併較快 |
 | `void bnn_pack(const int8_t *v, int n, uint32_t *out)` | `v > 0` → 1 |
 | `int32_t bnn_dot(const uint32_t *a, const uint32_t *w, int n)` | `2*popcount(~(a^w)) - n` |
 | `void bnn_dense_sign(const bnn_layer_t *L, const uint32_t *in, uint32_t *out_bits)` | 隱藏層；thr 必填 |
@@ -1666,11 +1665,11 @@ bnn 每層 12.26 us
 |---|---|
 | CRC 差一個 `~` | xorout（5.2.4 JAMCRC 那列） |
 | CRC-16 = `0x31C3` 但要 `0x29B1` | `crc16_ccitt_false` 第一段要傳 `0xFFFF` |
-| `multiple definition of 'crc32_update'` | 和 `pico/serial_proto.c` 衝突（食譜 5.4.6） |
+| `multiple definition of 'crc32_update'` | 2026-11-12 前的 `pico/serial_proto.c` 才會衝突；用目前版本（食譜 5.4.6） |
 | SHA-0 結果 = SHA-1 | `sha1_init` 第二個參數要 1 |
 | 分包 SHA 結果錯 | 只能 init 一次、final 一次、照順序餵 |
 | 負數排在最後 | `^= 0x80000000u` |
-| 合併結果少資料 | `kway_merge` k > 16 |
+| 合併結果少資料 | Σlens ≠ n（k 不受限了） |
 | BNN 分數差、n 非 32 倍數才錯 | 尾巴 mask |
 | BNN 全錯 | 權重 bit 順序（`bnn_from_packbits`）、flip |
 | Pico 當掉 | 大陣列放 stack；改 `static` |

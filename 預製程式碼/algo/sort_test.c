@@ -51,6 +51,14 @@ int main(void) {
     }
     kway_merge(lists, lens, 4, out);
     CHECK(!memcmp(out, ref, N * 4), "kway_merge (k=4)");
+    const uint32_t *l20[20]; size_t n20[20];            /* k=20 > KWAY_MAX：舊版會默默丟掉後 4 段 */
+    memcpy(a, orig, N * 4);
+    for (int i = 0; i < 20; i++) {
+        size_t s0 = N / 20 * (size_t)i; n20[i] = (i < 19) ? N / 20 : N - s0;
+        l20[i] = a + s0; radix_sort_u32(a + s0, n20[i], tmp);
+    }
+    kway_merge(l20, n20, 20, out);
+    CHECK(!memcmp(out, ref, N * 4), "kway_merge (k=20)");
 
     printf("[Benchmark：n = %u 個隨機 uint32，取 3 次最快]\n", N);
     uint64_t ns;

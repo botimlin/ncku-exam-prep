@@ -25,7 +25,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from std_msgs.msg import Int32MultiArray, UInt8MultiArray, UInt32
 
-from frame import CHUNK_BYTES, CMD_CRC32, CMD_SUM_U32, transact, unpack_u32
+from frame import CHUNK_BYTES, CMD_CRC32, CMD_SUM_U32, MAX_LEN, transact, unpack_u32
 
 
 class SerialBridge(Node):
@@ -37,6 +37,9 @@ class SerialBridge(Node):
         self.declare_parameter("retries", 3)             # 逾時重送幾次
         g = lambda n: self.get_parameter(n).value        # noqa: E731  縮短寫法
         self.batch, self.timeout, self.retries = g("batch_size"), g("timeout"), g("retries")
+        if self.batch * 4 > MAX_LEN:       # 一包超過 Pico 的 FRAME_MAX_PAYLOAD，Pico 會直接丟掉、不回覆
+            self.get_logger().warning(f"batch_size={self.batch} 太大，改成 {MAX_LEN // 4}（Pico 一包最多 {MAX_LEN} bytes）")
+            self.batch = MAX_LEN // 4
 
         # timeout 要小 (0.05)，transact() 會自己算總逾時；USB CDC 的 baudrate 沒差
         self.ser = serial.Serial(g("port"), timeout=0.05)

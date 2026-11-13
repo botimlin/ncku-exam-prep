@@ -9,9 +9,9 @@
 - **考場第一件事**：先用官方 repo 的 `pico_micro_ros_example.c` build + 燒錄 + 開 agent 一次，確認環境能動（`micro-ros/README.md:9`），再換成這裡的程式。
 - 先開的檔案：要算陣列 → `pico_array_compute.c` + `host_driver.py`；要 ping-pong → `pico_pingpong.c`；運算很重 → `pico_dualcore_micro_ros.c`。
 - 最常改的 3 個地方：
-  1. `pico_array_compute.c:46` 的 `compute()`（你的運算）和 `host_driver.py:36` 的 `host_compute()`（對答案用）。
-  2. `pico_array_compute.c:17` 的 `BOARD_NS`（每塊板子燒錄前改成 `pico0`、`pico1`…）和 `host_driver.py:20` 的 `N_BOARDS`。
-  3. `CMakeLists.txt:28` 的 `APP_SRC` 和 `host_driver.py:23` 的 `MERGE`（**兩個要一起改**：`pico_array_compute.c` → `"sorted"`，`pico_dualcore_micro_ros.c` → `"concat"`）。
+  1. `pico_array_compute.c:46` 的 `compute()`（你的運算）和 `host_driver.py:38` 的 `host_compute()`（對答案用）。
+  2. `pico_array_compute.c:17` 的 `BOARD_NS`（每塊板子燒錄前改成 `pico0`、`pico1`…）和 `host_driver.py:21` 的 `N_BOARDS`。
+  3. `CMakeLists.txt:28` 的 `APP_SRC` 和 `host_driver.py:24` 的 `MERGE`（**兩個要一起改**：`pico_array_compute.c` → `"sorted"`，`pico_dualcore_micro_ros.c` → `"concat"`）。
 - 一則訊息的上限：reliable 一則最多 2036 B（≈ 505 個 int32，含 `job_id`），best_effort 500 B（≈ 121 個 int32）；範本 `MAX_LEN=400`、`CHUNK=300`。
 
 ## 4.1 檔案總表
@@ -24,7 +24,7 @@
 | `pico_pingpong.c` | 157 | `/microROS/ping`、`/microROS/pong`（`std_msgs/Header`）+ agent 斷線重連狀態機 | 去年的 Ping-Pong 題；要抄重連機制時 | ✅ 編譯、連結；⚠️ 沒在板子上跑 |
 | `pico_array_compute.c` | 123 | 收 `Int32MultiArray` → `compute()`（範例：插入排序）→ 發回；示範 sequence 記憶體配置 | 「電腦送資料、Pico 算、送回」的主範本 | ✅ 編譯、連結；`compute()` 在 host 測過；⚠️ 沒在板子上跑 |
 | `pico_dualcore_micro_ros.c` | 112 | core0 跑 micro-ROS，core1 用 queue 幫忙算後半（範例：平方） | 運算時間遠大於傳輸時間時 | ✅ 編譯、連結；`compute_range()` 在 host 測過；⚠️ 沒在板子上跑 |
-| `host_driver.py` | 115 | 電腦端 rclpy 節點：切塊、分給 N 塊板子、照 `job_id` 合併、計時、對答案 | 搭配上面兩支陣列程式 | ⚠️ 沒有用真的 rclpy 跑；用假 rclpy 跑過 7 種情境（4.3.7） |
+| `host_driver.py` | 129 | 電腦端 rclpy 節點：切塊、分給 N 塊板子、照 `job_id` 合併、計時、對答案 | 搭配上面兩支陣列程式 | ⚠️ 沒有用真的 rclpy 跑；用假 rclpy 跑過 7 種情境（4.3.7） |
 
 ## 4.2 先懂這些概念
 
@@ -69,7 +69,7 @@
 - **reliable**（可靠）：要 ACK，掉了會重送；板子端 `rcl_publish` 會等 agent 確認才返回（`pico_array_compute.c:68` 的註解，依據 rmw_microxrcedds `rmw_publish.c`）。可以傳比較大的訊息（多個 MTU 片段）。`rclc_*_init_default()` = reliable。
 - **best_effort**（盡力而為）：不等 ACK，掉了就掉了；比較快，但一則只能放 1 個 MTU。`rclc_*_init_best_effort()`。
 - 配對規則：**reliable 發佈 → best_effort 訂閱：可以收**；**best_effort 發佈 → reliable 訂閱：收不到**（QoS 不相容）。所以兩端最好用同一種。
-- `host_driver.py:46` 用 `ReliabilityPolicy.RELIABLE`，配合板子的 `_default`。
+- `host_driver.py:48` 用 `ReliabilityPolicy.RELIABLE`，配合板子的 `_default`。
 
 ### 4.2.5 訊息大小限制（`README.md` §4）
 
@@ -336,7 +336,7 @@ cp app.uf2 /media/$USER/RP2350/                # 舊 Pico 是 RPI-RP2
 ```
 
 - **換程式**：只要改 `CMakeLists.txt:28` 再 `make -j4`，不用重跑 cmake（CMakeLists 變了，make 會自己重新 configure）。本 session 實測：同一個 build 資料夾換 `APP_SRC` 後 `make` 1 秒內就完成。
-- **換程式時 `host_driver.py:23` 的 `MERGE` 要一起改**（`CMakeLists.txt:27`）。
+- **換程式時 `host_driver.py:24` 的 `MERGE` 要一起改**（`CMakeLists.txt:27`）。
 
 #### 對外介面
 
@@ -366,7 +366,7 @@ cp app.uf2 /media/$USER/RP2350/                # 舊 Pico 是 RPI-RP2
 |---|---|---|---|
 | `CMakeLists.txt:6` | `#   export PICO_SDK_PATH=~/pico-sdk` | 註解中的用法：pico-sdk 路徑 | 不用改檔；在終端機 `export PICO_SDK_PATH=<考場 pico-sdk 路徑>`（要含 `lib/tinyusb`） |
 | `CMakeLists.txt:15` | `set(PICO_BOARD pico2 CACHE STRING "Board type")` | 預設板子 | 舊 Pico（RP2040）改 `pico`，或命令列 `-DPICO_BOARD=pico`；Pico 2 W 改 `pico2_w`（⚠️ W 版 LED 不是 GP25） |
-| `CMakeLists.txt:25`（實際值在 28） | `set(APP_SRC pico_array_compute.c)` | 要編哪支 | `pico_pingpong.c` / `pico_array_compute.c` / `pico_dualcore_micro_ros.c`；改了要同步改 `host_driver.py:23` 的 `MERGE` |
+| `CMakeLists.txt:25`（實際值在 28） | `set(APP_SRC pico_array_compute.c)` | 要編哪支 | `pico_pingpong.c` / `pico_array_compute.c` / `pico_dualcore_micro_ros.c`；改了要同步改 `host_driver.py:24` 的 `MERGE` |
 
 #### 實際執行輸出
 
@@ -639,7 +639,7 @@ cap=4 n=4: -3 0 5 9                         ← cap=4：只排前 4 個輸入，
 
 #### 怎麼編譯 / 執行
 
-`CMakeLists.txt:28` 改成 `set(APP_SRC pico_dualcore_micro_ros.c)`（`pico_multicore` 已經在 `CMakeLists.txt:37` 連上），`make -j4`。**`host_driver.py:23` 改成 `MERGE = "concat"`**。手動測：`ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [7, 3, 1, 2]}"` → 預期 `[7, 9, 1, 4]`（⚠️未實測）。
+`CMakeLists.txt:28` 改成 `set(APP_SRC pico_dualcore_micro_ros.c)`（`pico_multicore` 已經在 `CMakeLists.txt:37` 連上），`make -j4`。**`host_driver.py:24` 改成 `MERGE = "concat"`**。手動測：`ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [7, 3, 1, 2]}"` → 預期 `[7, 9, 1, 4]`（⚠️未實測）。
 
 #### 對外介面
 
@@ -742,7 +742,7 @@ python3 host_driver.py
 python3 -c 'import host_driver as h; h.CHUNK=399; h.N_BOARDS=3; h.main()'
 ```
 
-預期輸出格式（`host_driver.py:108`–`109`；格式是本 session 用假 rclpy 跑出來的，數字要在考場實測）：
+預期輸出格式（`host_driver.py:122`–`123`；格式是本 session 用假 rclpy 跑出來的，數字要在考場實測）：
 
 ```text
 [INFO] 等板子上線中…（ros2 topic list 看看）      ← 板子還沒上線時每 0.5 秒一次
@@ -755,84 +755,100 @@ boards=2 n=3000 chunk=300 time=<實測> ms throughput=<實測> KiB/s correct=Tru
 
 | 名稱 | 行號 | 值 | 意思 |
 |---|---|---|---|
-| `N_BOARDS` | 20 | 2 | 板子數；namespace 必須是 `pico0`..`pico{N-1}` |
-| `CHUNK` | 21 | 300 | 每塊資料個數；`CHUNK + 1` ≤ 板子 `MAX_LEN`（400），且 ≤ reliable 上限 505 |
-| `MERGE` | 23 | `"sorted"` | `"concat"`：依 job_id 接起來；`"sorted"`：各塊已排序 → k-way merge |
-| `TIMEOUT_S` | 26 | 10.0 | 整個 `run()` 最多等幾秒 |
+| `N_BOARDS` | 21 | 2 | 板子數；namespace 必須是 `pico0`..`pico{N-1}` |
+| `CHUNK` | 22 | 300 | 每塊資料個數；`CHUNK + 1` ≤ 板子 `MAX_LEN`（400），且 ≤ reliable 上限 505 |
+| `MERGE` | 24 | `"sorted"` | `"concat"`：依 job_id 接起來；`"sorted"`：各塊已排序 → k-way merge |
+| `TIMEOUT_S` | 27 | 10.0 | 整個 `run()` 最多等幾秒 |
+| `RESEND_S` | 28 | 1.0 | 一塊送出後幾秒沒回就收回來重送（2026-11-12 加的；回覆遺失時不用等到 `TIMEOUT_S`） |
 
 函式 / 方法：
 
 | 名稱 | 行號 | 參數 | 回傳 / 效果 | 注意 |
 |---|---|---|---|---|
-| `make_data()` | 29–33 | — | `random.seed(0)` 後 3000 個 −1000..1000 的整數 | 換成題目輸入 |
-| `host_compute(data)` | 36–38 | 全部資料 | `MERGE == "concat"` → 每個平方；否則 `sorted(data)` | 對答案用；要和板子運算一致 |
-| `Driver.__init__()` | 42–52 | — | node 名 `host_driver`；QoS depth 10 RELIABLE；對每塊板子建 `/pico{i}/input` publisher 和 `/pico{i}/output` subscription | lambda 用 `b=i` 預設參數記住板子編號（51–52） |
-| `on_result(board, msg)` | 54–59 | 板子編號、訊息 | 空訊息忽略；`results[job_id] = data[1:]`；`busy[board] = False` | — |
-| `send(board, job_id, chunk)` | 61–65 | — | `msg.data = [job_id] + chunk`，publish，`busy[board] = True` | 不填 `layout.dim` |
-| `wait_boards()` | 67–75 | — | 等到每塊板子的 input 有訂閱者、且 output 有發佈者 | 只等 input 不夠：output 還沒配對時板子回的第一則會掉（volatile QoS 不補發） |
-| `run(data)` | 77–98 | 全部資料 | `(out, dt)`：合併後的結果、秒數 | 見下面流程 |
-| `main()` | 101–111 | — | init → `Driver` → `wait_boards` → `make_data` → `run` → 比對 → print → shutdown | — |
+| `make_data()` | 31–35 | — | `random.seed(0)` 後 3000 個 −1000..1000 的整數 | 換成題目輸入 |
+| `host_compute(data)` | 38–40 | 全部資料 | `MERGE == "concat"` → 每個平方；否則 `sorted(data)` | 對答案用；要和板子運算一致 |
+| `Driver.__init__()` | 44–55 | — | node 名 `host_driver`；QoS depth 10 RELIABLE；對每塊板子建 `/pico{i}/input` publisher 和 `/pico{i}/output` subscription；`busy`、`job_of`（每塊板子手上那一塊的 `(job_id, 送出時間)`） | lambda 用 `b=i` 預設參數記住板子編號（54–55） |
+| `on_result(board, msg)` | 57–63 | 板子編號、訊息 | 空訊息忽略；`results[job_id] = data[1:]`；**回的是這塊板子手上那一塊**才把它標成空閒 | 重送之後才到的舊回覆只存結果，不會把板子誤標成空閒 |
+| `send(board, job_id, chunk)` | 65–70 | — | `msg.data = [job_id] + chunk`，publish，`busy[board] = True`，記下 `job_of[board]` | 不填 `layout.dim` |
+| `wait_boards()` | 72–80 | — | 等到每塊板子的 input 有訂閱者、且 output 有發佈者 | 只等 input 不夠：output 還沒配對時板子回的第一則會掉（volatile QoS 不補發） |
+| `run(data)` | 82–112 | 全部資料 | `(out, dt)`：合併後的結果、秒數 | 見下面流程 |
+| `main()` | 115–125 | — | init → `Driver` → `wait_boards` → `make_data` → `run` → 比對 → print → shutdown | — |
 
 #### 程式流程
 
-`run()` 的排程（流量控制：每塊板子同時最多 1 塊工作）：
+`run()` 的排程（流量控制：每塊板子同時最多 1 塊工作；回覆遺失會重送）：
 
 ```text
-chunks = [data[0:300], data[300:600], ...]      # 3000 / 300 = 10 塊，job_id 0..9（78 行）
-nxt = 0；t0 = perf_counter()；deadline = t0 + TIMEOUT_S（79–81 行）
-while 還沒收齊 且 沒逾時：（83 行）
-    for b in 0..N_BOARDS-1:                     # 84–87 行
-        if 板子 b 不忙 且 還有塊：send(b, nxt, chunks[nxt])；nxt += 1
-    rclpy.spin_once(timeout 1 ms)               # 88 行：處理收到的回覆 → on_result 把 busy 清掉
-dt = perf_counter() - t0                        # 89 行
-沒收齊 → log error「逾時！只收到 x/y 塊」          # 90–91 行
-parts = 依 job_id 排序後的各塊結果                 # 93 行
-MERGE == "sorted" → heapq.merge(*parts)         # 94–95 行：k-way merge，各塊已排序 → 全體排序
-否則              → 依序串接                       # 96–97 行
+chunks = [data[0:300], data[300:600], ...]      # 3000 / 300 = 10 塊，job_id 0..9（83 行）
+todo = deque([0, 1, ..., 9])；t0；deadline = t0 + TIMEOUT_S（84–86 行）
+while 還沒收齊 且 沒逾時：（88 行）
+    for b in 0..N_BOARDS-1:                     # 90 行
+        板子 b 忙、而且這一塊送出超過 RESEND_S 秒 → 印 [WARN]、把板子標成空閒、
+            這塊還沒有結果就放回 todo 最前面（91–96 行）
+        todo 前面已經有結果的丟掉（97–98 行）
+        板子 b 空閒 且 todo 還有 → send(b, todo.popleft())（99–101 行）
+    rclpy.spin_once(timeout 1 ms)               # 102 行：處理回覆 → on_result 存結果、把板子標成空閒
+dt = perf_counter() - t0                        # 103 行
+沒收齊 → log error「逾時！只收到 x/y 塊」          # 104–105 行
+parts = 依 job_id 排序後的各塊結果                 # 107 行
+MERGE == "sorted" → heapq.merge(*parts)         # 108–109 行：k-way merge，各塊已排序 → 全體排序
+否則              → 依序串接                       # 110–111 行
 ```
 
 - 計時從第一塊送出前開始，**不含** `wait_boards()` 等板子上線的時間。
 - `throughput = len(data) * 4 / dt / 1024`（KiB/s，只算單向的輸入資料量，不含 job_id 和回傳）。
-- `correct = (out == host_compute(data))`（107 行）：Python 整數比對，所以板子端 int32 溢位會被抓出來。
+- `correct = (out == host_compute(data))`（121 行）：Python 整數比對，所以板子端 int32 溢位會被抓出來。
 - 排程是「誰空就給誰」：板子一樣快時等於輪流（round-robin）；某塊比較快就會拿到比較多塊。
+- **`RESEND_S` 要比「板子算一塊的時間」長**：板子還在算就被判定逾時的話，同一塊會重算一次（結果還是對的，只是浪費時間）。考場先用預設 1.0 秒，看到很多 `[WARN] … 重送` 而且最後都對，就把它調大。
 
 #### 要改的地方
 
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
-| `host_driver.py:20` | `N_BOARDS = 2` | 板子數 | 實際插幾塊就填幾；每塊的 `BOARD_NS` 要是 `pico0`..`pico{N-1}` |
-| `host_driver.py:21` | `CHUNK = 300` | 每塊資料個數 | 越大每則 overhead 比例越低；上限 `MAX_LEN − 1`（399）且 reliable ≤ 504、best_effort ≤ 120 |
-| `host_driver.py:23` | `MERGE = "sorted"` | 合併方式 | 板子是排序 → `"sorted"`；板子是逐元素運算 → `"concat"`；**跟 `CMakeLists.txt:28` 一起改** |
-| `host_driver.py:30`（函式 29–33） | 3000 個亂數 | 輸入資料 | 換成題目給的輸入（讀檔等） |
-| `host_driver.py:37`（函式 36–38） | 平方或 `sorted` | 正確答案 | 換成題目運算的 Python 版；注意要和「每塊各自算再合併」的結果形狀一樣（4.4.1） |
+| `host_driver.py:21` | `N_BOARDS = 2` | 板子數 | 實際插幾塊就填幾；每塊的 `BOARD_NS` 要是 `pico0`..`pico{N-1}` |
+| `host_driver.py:22` | `CHUNK = 300` | 每塊資料個數 | 越大每則 overhead 比例越低；上限 `MAX_LEN − 1`（399）且 reliable ≤ 504、best_effort ≤ 120 |
+| `host_driver.py:24` | `MERGE = "sorted"` | 合併方式 | 板子是排序 → `"sorted"`；板子是逐元素運算 → `"concat"`；**跟 `CMakeLists.txt:28` 一起改** |
+| `host_driver.py:28` | `RESEND_S = 1.0` | 幾秒沒回就重送 | 板子算一塊要超過 1 秒時調大（例如 3.0）；想更快發現遺失就調小 |
+| `host_driver.py:32`（函式 31–35） | 3000 個亂數 | 輸入資料 | 換成題目給的輸入（讀檔等） |
+| `host_driver.py:39`（函式 38–40） | 平方或 `sorted` | 正確答案 | 換成題目運算的 Python 版；注意要和「每塊各自算再合併」的結果形狀一樣（4.4.1） |
 
 #### 實際執行輸出
 
-- 環境：python 3.13.18；**沒有真的 rclpy**。本 session 寫了一個假 rclpy（`$S/ch04/mock/fake/`）：publisher 一送出就模擬板子（排序或 int32 平方、超過 `MAX_LEN` 時不回、可指定某個 job 的回覆遺失），回覆在下一次 `spin_once` 送達。測試腳本 `$S/ch04/mock/run.py` 用 `import host_driver` 後改全域常數再呼叫 `main()`。**這只驗證排程、合併、比對的邏輯；時間和 throughput 數字沒有意義**（下面以 `…` 省略）。
+- 環境：python 3.13.18；**沒有真的 rclpy**。用一個假 rclpy：publisher 一送出就模擬板子（排序或 int32 平方、超過 `MAX_LEN` 時不回、可指定某個 job 的回覆遺失），回覆在下一次 `spin_once` 送達。測試腳本 `import host_driver` 後改全域常數再呼叫 `main()`。**這只驗證排程、重送、合併、比對的邏輯；時間和 throughput 數字沒有意義**（下面以 `…` 省略，重送的情況保留時間）。2026-11-12 修好重送後重跑：
 
 ```text
 1 預設（板子排序、MERGE=sorted）
 boards=2 n=3000 chunk=300 time=… correct=True
-sent per board: {'pico0': 5, 'pico1': 5}  jobs: pico0←0, pico1←1, pico0←2, pico1←3 …
+sent per board: {'pico0': 5, 'pico1': 5}
 
 2 板子平方、MERGE="concat"                          → correct=True
 3 板子平方、MERGE="sorted"（沒一起改）                → correct=False
 4 板子排序、MERGE="concat"（沒一起改）                → correct=False
 
-5 job 3 的回覆遺失、TIMEOUT_S=2.0
-[ERROR] 逾時！只收到 9/10 塊
-boards=2 n=3000 chunk=300 time=2000.1 ms … correct=False
-sent per board: {'pico0': 8, 'pico1': 2}  jobs: … pico1←3, 之後全部給 pico0
+5 job 3 的回覆遺失一次、TIMEOUT_S=2.0
+[WARN] pico1 第 3 塊 1.0s 沒回，重送
+boards=2 n=3000 chunk=300 time=1001.1 ms … correct=True
+sent per board: {'pico0': 8, 'pico1': 3}
 
-6 CHUNK=500（+1 > MAX_LEN 400，板子 size=0 不回）、TIMEOUT_S=1.0
+5b job 3 的回覆每次都掉（板子在這塊上壞掉）、TIMEOUT_S=2.5
+[WARN] pico1 第 3 塊 1.0s 沒回，重送
+[WARN] pico1 第 3 塊 1.0s 沒回，重送
+[ERROR] 逾時！只收到 9/10 塊
+boards=2 n=3000 chunk=300 time=2500.6 ms … correct=False
+
+6 CHUNK=500（+1 > MAX_LEN 400，板子 size=0 不回）、TIMEOUT_S=3.0
+[WARN] pico0 第 0 塊 1.0s 沒回，重送
+[WARN] pico1 第 1 塊 1.0s 沒回，重送
 [ERROR] 逾時！只收到 0/6 塊
-sent per board: {'pico0': 1, 'pico1': 1}
+sent per board: {'pico0': 3, 'pico1': 3}
 
 7 N_BOARDS=3                                       → correct=True，分配 pico0:4、pico1:3、pico2:3
 
 8 板子 int32 平方、資料 [46340, -46340, 46341, 1000]、MERGE="concat" → correct=False
 ```
 
+- 修正前（同一個情境 5）：`[ERROR] 逾時！只收到 9/10 塊`、`time=2000.1 ms`、`correct=False`，而且 pico1 之後再也拿不到工作。
+- 情境 5b、6：重送救不了「每次都不回」，最後還是逾時；但 `[WARN] … 重送` 會告訴你是哪塊板子、哪一塊出事。
 - 語法：上面每個測試都成功 `import host_driver`（等於語法檢查通過）。
 
 #### 常見錯誤
@@ -842,7 +858,8 @@ sent per board: {'pico0': 1, 'pico1': 1}
 | 一直印「等板子上線中…」 | 某塊板子的 agent 沒開 / namespace 不是 `pico{i}` / `N_BOARDS` 比實際多 | `ros2 topic list` 對照 `/pico0/input`…`/pico{N-1}/input` |
 | `ModuleNotFoundError: rclpy` | 沒 `source /opt/ros/jazzy/setup.bash` | 先 source |
 | `correct=False`、沒有逾時訊息 | `MERGE` 和板子程式不配；或 `host_compute` 和板子運算不一致；或板子 int32 溢位 | 4.6 問題 1、5 |
-| `逾時！只收到 x/y 塊` | 某則回覆遺失（沒有重送）；`CHUNK` 太大；板子當掉 | 4.4.6；考場可把 `TIMEOUT_S` 調小快速發現 |
+| 偶爾 `[WARN] pico… 第 n 塊 … 重送`，最後 `correct=True` | 回覆遺失一次，或 `RESEND_S` 比板子算一塊的時間短 | 不影響正確性；很多次就把 `RESEND_S` 調大 |
+| 同一塊一直 `重送`，最後 `逾時！只收到 x/y 塊` | 板子每次都不回：`CHUNK + 1` > `MAX_LEN`；訊息超過 MTU；板子當掉 | 4.4.6；看 `[WARN]` 是哪塊板子 |
 | 全部板子都收到同一塊 | 板子燒了同一個 `BOARD_NS` | 每塊不同 namespace |
 | `ros2 topic echo` 收不到 host 的訊息 | QoS 不合（板子改 best_effort、host 還是 RELIABLE，或反過來） | 4.4.4 |
 
@@ -862,8 +879,8 @@ sent per board: {'pico0': 1, 'pico1': 1}
    }
    ```
 
-2. `host_driver.py:23`：`MERGE = "concat"`。
-3. `host_driver.py:38`：`return [x * 3 + 1 for x in data]`（注意 int32 範圍）。
+2. `host_driver.py:24`：`MERGE = "concat"`。
+3. `host_driver.py:40`：`return [x * 3 + 1 for x in data]`（注意 int32 範圍）。
 
 **整塊縮成一個值（例如加總、CRC32）**：
 
@@ -876,8 +893,8 @@ sent per board: {'pico0': 1, 'pico1': 1}
 
 ### 4.4.2 題目：「資料量 N 個、要調每則大小」→ 改陣列大小 / CHUNK
 
-1. 資料量：`host_driver.py:33` 的 `range(3000)` 改成題目大小，或換成讀檔。
-2. `CHUNK`（`host_driver.py:21`）：先確定 QoS（reliable 或 best_effort），用 4.2.5 的上限算：reliable `CHUNK ≤ 504`、best_effort `CHUNK ≤ 120`。
+1. 資料量：`host_driver.py:35` 的 `range(3000)` 改成題目大小，或換成讀檔。
+2. `CHUNK`（`host_driver.py:22`）：先確定 QoS（reliable 或 best_effort），用 4.2.5 的上限算：reliable `CHUNK ≤ 504`、best_effort `CHUNK ≤ 120`。
 3. 若 `CHUNK + 1 > 400`：板子端兩個檔的 `MAX_LEN`（`pico_array_compute.c:27`、`pico_dualcore_micro_ros.c:25`）改成 ≥ `CHUNK + 1`，重新 build、燒每塊板子。RAM 代價：每多 1 個元素多 8 B（`in_buf` + `out_buf`），很寬裕。
 4. 輸出比輸入長的運算（例如每個輸入產生 2 個輸出）：`out_n + 1` 也要 ≤ `MAX_LEN` 和傳輸上限，`CHUNK` 要再減半。
 
@@ -898,7 +915,7 @@ sent per board: {'pico0': 1, 'pico1': 1}
    （`sed` 指令沒有在本 session 實測；不放心就用編輯器手改 `pico_array_compute.c:17` 三次。）namespace 叫 `pico2` 只是名字，和板子型號 `PICO_BOARD=pico2` 無關。
 2. 一次插一塊、燒一個 uf2，貼標籤。
 3. 開三個 agent，各指向自己的 `/dev/serial/by-id/...`（`agent_cheatsheet.md:35`–`38`）。
-4. `host_driver.py:20`：`N_BOARDS = 3`。
+4. `host_driver.py:21`：`N_BOARDS = 3`。
 5. 驗證：`ros2 topic list` 要有 `/pico0/input`、`/pico1/input`、`/pico2/input`；跑 `host_driver.py`，成功的樣子：`boards=3 … correct=True`。假 rclpy 測試中 3 塊板子分到 4 / 3 / 3 塊。
 
 ### 4.4.4 題目：「訊息小、要更快」→ reliable 改 best_effort
@@ -910,9 +927,9 @@ sent per board: {'pico0': 1, 'pico1': 1}
    RCCHECK(rclc_publisher_init_best_effort(&pub, &node, ts, "output"));
    ```
 
-2. host（`host_driver.py:46`）：`qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)`。
-3. `CHUNK ≤ 120`（`host_driver.py:21`），因為 best_effort 一則只能 500 B。
-4. 風險：best_effort 掉了不會重送，而 `host_driver.py` 也沒有重送（4.6 問題 1）→ 掉一則就等到 `TIMEOUT_S`。題目沒要求極限速度時，維持 reliable。
+2. host（`host_driver.py:48`）：`qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)`。
+3. `CHUNK ≤ 120`（`host_driver.py:22`），因為 best_effort 一則只能 500 B。
+4. 風險：best_effort 掉了不會重送；`host_driver.py` 會在 `RESEND_S`（預設 1 秒）後自己重送那一塊（4.3 的 `run()` 流程），所以掉一則只多等約 1 秒。掉得很頻繁時反而更慢，題目沒要求極限速度時，維持 reliable。
 5. 驗證：`ros2 topic info /pico0/input -v` 顯示 BEST_EFFORT；`ros2 topic echo --qos-reliability best_effort /pico0/output`；跑 `host_driver.py` 比較 `time=`。⚠️ best_effort 比較快是文件說法（`README.md:67`、`82`），本 session 沒有實測。
 
 ### 4.4.5 症狀：「agent 連上了，可是 `ros2 topic list` 沒有板子的 topic」
@@ -970,10 +987,9 @@ sent per board: {'pico0': 1, 'pico1': 1}
 
 **已知問題（本 session 核對過）：**
 
-1. **`APP_SRC` 和 `MERGE` 要成對改；host 沒有重送**（審查已知問題 1）。
-   - `CMakeLists.txt:27` 和 `host_driver.py:24`–`25` 都有註明。沒一起改 → `correct=False`（假 rclpy 測試 3、4 重現）。
-   - `host_driver.py:54`–`59`、`83`–`88`：送出後 `busy[b] = True`，只有收到回覆才清掉。回覆遺失（或板子因 `size == 0` 不回）時，那塊 `job_id` **永遠不會重送**，那塊板子也**永遠不會再被派工**；其他板子把剩下的做完後，迴圈一直等到 `TIMEOUT_S`（10 s），印「逾時！只收到 x/y 塊」，結果缺塊、`correct=False`（測試 5：job 3 遺失後 pico1 再也沒拿到工作，等滿 2.0 s）。所有板子都各掉一則時，整個流程停住直到逾時。
-   - 考場修法（沒有實作、沒有測）：記錄每塊的送出時間，超過例如 0.5 s 沒回就把 `job_id` 重送（給同一塊或別塊），`on_result` 已經用 dict 收，重複回覆不會影響結果。
+1. **`APP_SRC` 和 `MERGE` 要成對改**（審查已知問題 1）。
+   - `CMakeLists.txt:27` 和 `host_driver.py:25`–`26` 都有註明。沒一起改 → `correct=False`（假 rclpy 測試 3、4 重現）。
+   - **回覆遺失不會重送（已修，2026-11-12）**：原本送出後 `busy[b] = True` 只有收到回覆才清掉，回覆遺失時那塊永遠不重送、那塊板子也不再被派工，最後等到 `TIMEOUT_S` 才報逾時、`correct=False`。現在 `run()` 記錄每塊的送出時間，超過 `RESEND_S`（`host_driver.py:28`，預設 1.0 秒）沒回就收回來重送（`host_driver.py:91`–`96`）；`on_result` 只在回的是「手上那一塊」時才把板子標成空閒（`:62`–`63`）。假 rclpy 測試 5 從 `correct=False`（2000 ms 逾時）變成 `correct=True`（約 1000 ms）。板子每次都不回的情況（測試 5b、6）重送救不了，還是會逾時。
 2. **`pico_pingpong.c:31`–`32` 的 `EVERY_N_MS` 在 `-Wall` 下觸發 `-Wmisleading-indentation`**（審查已知問題 4）。本 session 實測：第 139、146 行展開處各一次。外觀問題，不影響功能；SDK 預設 build 不開 `-Wall`，所以平常看不到。
 3. **`pico_dualcore_micro_ros.c:45` 的 `in[i] * in[i]` 在 |x| > 46340 時 int32 溢位**（審查已知問題 5）。有號整數溢位是 C 的未定義行為；host 端 `host_compute` 用 Python 大整數，所以會 `correct=False`（host 測試：46341² 得到 −2147479015；假 rclpy 測試 8 → `correct=False`）。範本資料 ±1000 沒事。題目資料可能很大時改成 `int64_t` 算並決定輸出格式（例如拆成兩個 int32）。
 4. **文件不一致（已修）**：`CMakeLists.txt:58`–`59` 的註解原本寫「推論（未實際連結驗證）」，和檔頭矛盾；2026-11-12 已改成實測結果。
@@ -1019,12 +1035,12 @@ sent per board: {'pico0': 1, 'pico1': 1}
 
 | 板子端 | host 端 |
 |---|---|
-| `CMakeLists.txt:28` `APP_SRC = pico_array_compute.c` | `host_driver.py:23` `MERGE = "sorted"` |
-| `CMakeLists.txt:28` `APP_SRC = pico_dualcore_micro_ros.c` | `host_driver.py:23` `MERGE = "concat"` |
-| `BOARD_NS` = `pico0`..`pico{N-1}`（`pico_array_compute.c:17`） | `host_driver.py:20` `N_BOARDS = N` |
-| `MAX_LEN`（`pico_array_compute.c:27`） | `host_driver.py:21` `CHUNK + 1 ≤ MAX_LEN` |
-| `rclc_*_init_default` / `_best_effort` | `host_driver.py:46` `RELIABLE` / `BEST_EFFORT` |
-| `compute()` / `compute_range()` | `host_driver.py:36` `host_compute()` |
+| `CMakeLists.txt:28` `APP_SRC = pico_array_compute.c` | `host_driver.py:24` `MERGE = "sorted"` |
+| `CMakeLists.txt:28` `APP_SRC = pico_dualcore_micro_ros.c` | `host_driver.py:24` `MERGE = "concat"` |
+| `BOARD_NS` = `pico0`..`pico{N-1}`（`pico_array_compute.c:17`） | `host_driver.py:21` `N_BOARDS = N` |
+| `MAX_LEN`（`pico_array_compute.c:27`） | `host_driver.py:22` `CHUNK + 1 ≤ MAX_LEN` |
+| `rclc_*_init_default` / `_best_effort` | `host_driver.py:48` `RELIABLE` / `BEST_EFFORT` |
+| `compute()` / `compute_range()` | `host_driver.py:38` `host_compute()` |
 
 **常數：**
 
@@ -1059,7 +1075,7 @@ sent per board: {'pico0': 1, 'pico1': 1}
 | 症狀 | 第一個檢查 |
 |---|---|
 | `correct=False` | `APP_SRC` ↔ `MERGE`；int32 溢位 |
-| 逾時 `只收到 x/y 塊` | `CHUNK + 1` vs `MAX_LEN` / 傳輸上限；某則遺失（無重送） |
+| 逾時 `只收到 x/y 塊` | `CHUNK + 1` vs `MAX_LEN` / 傳輸上限；板子當掉（偶爾遺失會自動重送，看 `[WARN]`） |
 | topic 沒出現 | LED、agent `-v6`、`ROS_DOMAIN_ID`、handle 數 |
 | echo 收不到 | QoS（`--qos-reliability best_effort`） |
 | 陣列收不到 | sequence 沒配置 capacity；host 填了 `layout.dim` |

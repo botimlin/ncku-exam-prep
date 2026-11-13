@@ -65,8 +65,8 @@ void merge_two_sorted(const uint32_t *a, size_t na,
 }
 
 void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out) {
-    size_t pos[KWAY_MAX] = {0};
-    if (k > KWAY_MAX) k = KWAY_MAX;                         /* TODO(改這裡) 需要更多就加大 */
+    size_t pos[k > 0 ? k : 1];                              /* 每個序列讀到第幾個；k 沒有上限 */
+    for (int i = 0; i < k; i++) pos[i] = 0;
     for (;;) {
         int best = -1;
         for (int i = 0; i < k; i++)                         /* 找 k 個頭裡最小的 */

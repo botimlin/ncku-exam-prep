@@ -23,7 +23,7 @@ static uint32_t make_entry_r(uint32_t c, uint32_t polyr) {
     return c;
 }
 
-void crc32_init(void) {
+__attribute__((constructor)) void crc32_init(void) {   /* main() 前自動建表 → 兩核不會同時第一次建表 */
     for (uint32_t i = 0; i < 256; i++) {
         T[0][i] = make_entry_r(i, POLY32R);
         TC[i]   = make_entry_r(i, POLY32CR);
@@ -50,7 +50,7 @@ uint32_t crc32_bitwise(uint32_t crc, const uint8_t *p, size_t n) {
     return ~crc;                                  /* xorout = 0xFFFFFFFF */
 }
 
-/* ② 查表版：每 byte 一次查表，約快 5~8 倍 */
+/* ② 查表版：每 byte 一次查表，電腦實測約快 4 倍 */
 uint32_t crc32_table(uint32_t crc, const uint8_t *p, size_t n) {
     if (!inited) crc32_init();
     crc = ~crc;
@@ -58,7 +58,7 @@ uint32_t crc32_table(uint32_t crc, const uint8_t *p, size_t n) {
     return ~crc;
 }
 
-/* ③ slice-by-4：一次吃 4 byte，4 次查表互相獨立 → CPU 可並行，再快 2~3 倍 */
+/* ③ slice-by-4：一次吃 4 byte，4 次查表互相獨立 → CPU 可並行，電腦實測再快約 3 倍 */
 uint32_t crc32_slice4(uint32_t crc, const uint8_t *p, size_t n) {
     if (!inited) crc32_init();
     crc = ~crc;
@@ -107,9 +107,9 @@ uint32_t crc_generic(const crc_param_t *c, const uint8_t *p, size_t n) {
     while (n--) {
         uint32_t b = *p++;
         if (c->refin) b = reflect(b, 8);
-        crc ^= b << (c->width - 8);               /* 把 byte 放到最高的 8 位 */
-        for (int k = 0; k < 8; k++)
-            crc = (crc & top) ? ((crc << 1) ^ c->poly) : (crc << 1);
+        for (int k = 7; k >= 0; k--) {            /* 一次一個 bit（高位先）：width 1..32 都對 */
+            uint32_t fb = ((crc & top) ? 1u : 0u) ^ ((b >> k) & 1u);
+            crc = (crc << 1) ^ (fb ? c->poly : 0u); }
         crc &= mask;
     }
     if (c->refout) crc = reflect(crc, c->width);

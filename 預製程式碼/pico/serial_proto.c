@@ -7,11 +7,11 @@
 #include <string.h>
 #include "pico/stdlib.h"
 
-// ---------------- crc32（查表法，比一次算 1 bit 快約 8 倍） ----------------
+// ---------------- crc32（查表法，電腦實測比一次算 1 bit 快約 4 倍） ----------------
 static uint32_t crc_table[256];
 static int crc_table_ready = 0;
 
-static void crc32_make_table(void) {
+__attribute__((constructor)) static void crc32_make_table(void) {   // main() 前在 core0 建好（兩核不會搶著建）
     for (uint32_t i = 0; i < 256; i++) {
         uint32_t c = i;
         for (int k = 0; k < 8; k++)
@@ -21,8 +21,8 @@ static void crc32_make_table(void) {
     crc_table_ready = 1;
 }
 
-// 驗證：crc32_update(0, "123456789", 9) 應該 == 0xCBF43926
-uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n) {
+// 驗證：crc32_update(0, "123456789", 9) 應該 == 0xCBF43926。weak：專案裡也加了 algo/crc32.c 時用那一份（結果相同），不會 multiple definition
+__attribute__((weak)) uint32_t crc32_update(uint32_t crc, const uint8_t *p, size_t n) {
     if (!crc_table_ready) crc32_make_table();
     crc ^= 0xFFFFFFFFu;                                // 初值 / 接續
     while (n--) crc = crc_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);

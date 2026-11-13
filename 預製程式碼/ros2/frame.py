@@ -15,7 +15,7 @@ import zlib
 
 HDR = b"\xAA\x55"
 CMD_ECHO, CMD_SUM_U32, CMD_CRC32 = 0x01, 0x02, 0x03  # TODO(改這裡) 題目若有新指令加在這
-MAX_LEN = 65535          # len 是 u16，最多 65535；Pico 端 buffer 可能更小 → 見 CHUNK_BYTES
+MAX_LEN = 8192           # = Pico 端 FRAME_MAX_PAYLOAD（pico/serial_proto.h）；len 比這大的封包當壞包丟掉（跟 Pico 一樣）。Pico 那邊改了這裡也要改
 CHUNK_BYTES = 4096       # TODO(改這裡) 一包 payload 最多幾 bytes，要 <= Pico 端 FRAME_MAX_PAYLOAD (pico/serial_proto.h，目前 8192)
 
 
@@ -37,11 +37,13 @@ def unpack_u32(data):
 
 class FrameParser:
     """串流解析器: 資料可能一次來半包、或夾雜垃圾，丟進 feed() 就好。
-    feed(bytes) 回傳 [(cmd, seq, payload), ...]，CRC 錯的包會被丟掉並重新對齊 AA 55。"""
+    feed(bytes) 回傳 [(cmd, seq, payload), ...]，CRC 錯或 len > max_len 的包會被丟掉並重新對齊 AA 55。"""
 
-    def __init__(self):
+    def __init__(self, max_len=MAX_LEN):
         self.buf = bytearray()
+        self.max_len = max_len
         self.bad_crc = 0  # 統計 CRC 錯誤次數 (除錯用)
+        self.bad_len = 0  # 統計 len 太大的次數 (Pico 會丟掉這種包、不回覆)
 
     def feed(self, data):
         self.buf += data
@@ -55,6 +57,10 @@ class FrameParser:
             if len(self.buf) < 6:
                 return out                  # 表頭還沒收齊，等下次
             cmd, seq, n = struct.unpack_from("<BBH", self.buf, 2)
+            if n > self.max_len:            # 跟 Pico 的 proto_feed 一樣：len 太大 = 壞包（也避免為了垃圾 len 一直等）
+                self.bad_len += 1
+                del self.buf[:1]
+                continue
             total = 6 + n + 4
             if len(self.buf) < total:
                 return out                  # payload 還沒收齊，等下次
@@ -117,8 +123,10 @@ def diff(exp_hex, act_hex):
     print("線索：" + ("；".join(hints) if hints else "無"))
 
 
-if __name__ == "__main__" and len(sys.argv) == 4 and sys.argv[1] == "diff":
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "diff":
     # 用法: python3 frame.py diff "aa 55 01 ..." "aa 55 01 ..."   (預期, 實際)
+    if len(sys.argv) != 4:
+        sys.exit('用法: python3 frame.py diff "預期 hex" "實際 hex"（兩個都要加引號）')
     diff(sys.argv[2], sys.argv[3])
     sys.exit(0)
 
@@ -135,6 +143,11 @@ if __name__ == "__main__":          # ---- 自我測試 (不需要板子) ----
     got = p.feed(stream[:10]) + p.feed(stream[10:])
     assert got == [(CMD_CRC32, 2, b"abc"), (CMD_ECHO, 3, b"")], got
     assert p.bad_crc == 1
-    # 3) u32 打包 / 解包
+    # 3) len 太大的包要丟掉並重新對齊（Pico 也是這樣）；後面的好包照收
+    big = encode(CMD_ECHO, 4, b"z" * (MAX_LEN + 1))
+    got = p.feed(big + encode(CMD_ECHO, 5, b"ok"))
+    assert got == [(CMD_ECHO, 5, b"ok")] and p.bad_len == 1, got
+    assert FrameParser().feed(encode(CMD_ECHO, 6, b"z" * MAX_LEN)) == [(CMD_ECHO, 6, b"z" * MAX_LEN)]
+    # 4) u32 打包 / 解包
     assert unpack_u32(pack_u32([1, 2, -1])) == [1, 2, 0xFFFFFFFF]
     print("frame.py 自我測試 OK")

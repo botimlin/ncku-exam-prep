@@ -30,7 +30,7 @@ uint16_t crc16_ccitt_false(uint16_t crc, const uint8_t *p, size_t n);
 /* ---- 任意參數的通用 CRC（bit-by-bit，慢但萬用）----
  * 題目給你一個「CRC 規格」時，把參數填進來就能算，用來當標準答案對照。 */
 typedef struct {
-    uint8_t  width;   /* 8..32 位元 */
+    uint8_t  width;   /* 1..32 位元（CRC-5、CRC-7 也可以）*/
     uint32_t poly;    /* 一般（非反轉）寫法，例如 CRC-32 = 0x04C11DB7 */
     uint32_t init;    /* 初始值 */
     uint8_t  refin;   /* 1 = 每個輸入 byte 先位元反轉（LSB 先處理）*/

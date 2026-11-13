@@ -453,7 +453,7 @@ File app_serial.uf2 family ID 'rp2350-arm-s':
 
 **CRC32（`serial_proto.c:14-30`）**
 
-1. 第一次呼叫 `crc32_update` 時建 256 格表（`:26`，`crc_table_ready` 旗標）。表的每一格是「一個 byte 用反射多項式 `0xEDB88320` 跑 8 次」（`:18`）。
+1. `crc32_make_table()` 是 `__attribute__((constructor))`（`:14`），pico-sdk 在 `main()` 之前（core0 的 `runtime_init()`）就建好 256 格表，所以兩個核心同時呼叫也安全；`:26` 的 `crc_table_ready` 檢查只是保險。表的每一格是「一個 byte 用反射多項式 `0xEDB88320` 跑 8 次」（`:18`）。`crc32_update` 是弱符號（`:25` 的 `__attribute__((weak))`）：專案裡同時放了 `algo/crc32.c` 時用那一份，不會 `multiple definition`（第 5 章 5.4.6）。
 2. `crc ^= 0xFFFFFFFF`（`:27`）→ 每個 byte 查表一次（`:28`）→ 最後再 `^ 0xFFFFFFFF`（`:29`）。前後各 XOR 一次，所以把上一段的結果直接傳進來就能接著算。
 3. 驗證值：`crc32_update(0, "123456789", 9)` = `0xCBF43926`（`:24` 註解；電腦上實測相同）。
 
@@ -485,7 +485,7 @@ File app_serial.uf2 family ID 'rp2350-arm-s':
 3. 依序送表頭、payload、CRC（`:97-99`），用 `stdio_put_string(p, n, false, false)`（`:89`）：不加換行、不轉 `\r\n`，直接送原始 bytes。
 4. `stdio_flush()`（`:100`）立刻送出。
 
-**跟 `ros2/frame.py` 的差別**：CRC 錯時，Pico 丟掉整包、從下一個 byte 重新找 AA；`frame.py` 的 `FrameParser.feed()` 只往後挪 1 byte（`frame.py:68`）。USB 不會掉 byte，實務上沒差（`README.md:144`）。
+**跟 `ros2/frame.py` 的差別**：CRC 錯時，Pico 丟掉整包、從下一個 byte 重新找 AA；`frame.py` 的 `FrameParser.feed()` 只往後挪 1 byte（`frame.py:74`）。USB 不會掉 byte，實務上沒差（`README.md:144`）。
 
 #### 要改的地方
 
@@ -525,7 +525,7 @@ frame.py 解回覆: cmd=0x01 seq=7 len=5
 | 症狀 | 原因 | 修法 |
 |---|---|---|
 | 電腦端收到的封包 CRC 錯 | 用了 `printf` 混進文字；或沒關 CRLF 轉換 | `app_serial` 不要 printf；確認 `CMakeLists.txt:31` 和 `app_serial.c:61` |
-| 兩核都呼叫 `crc32_update`，第一次結果偶爾怪 | 查表是第一次呼叫才建（`:26`），沒有鎖 | 在 `multicore_launch_core1` 前先呼叫一次 `crc32_update(0, NULL, 0)` 把表建好（兩核同時建表寫入的值相同，⚠️ 沒有實測會不會出錯，先建好最保險） |
+| 兩核都呼叫 `crc32_update`，第一次結果偶爾怪 | 2026-11-12 前查表是第一次呼叫才建、沒有鎖 | 用目前版本：表在 `main()` 之前就建好（`:14` constructor） |
 | 想分包算 CRC，結果跟電腦不同 | 每包都從 0 開始算 | 協定加「前一段 crc」欄位，Pico 端 `crc32_update(prev, ...)`；或電腦端 `zlib.crc32(data, prev)` 自己合併 |
 
 ### 3.3.5 `app_serial.c`
@@ -546,7 +546,7 @@ cd 預製程式碼/pico/build && make -j4 app_serial     # 產生 app_serial.uf2
 import sys, serial
 sys.path.insert(0, "ros2")
 from frame import transact, pack_u32, unpack_u32, CMD_ECHO, CMD_SUM_U32, CMD_CRC32
-ser = serial.Serial("/dev/ttyACM0", timeout=0.05)          # timeout 要小（frame.py:73 說明）
+ser = serial.Serial("/dev/ttyACM0", timeout=0.05)          # timeout 要小（frame.py:79 說明）
 print(transact(ser, CMD_ECHO, b"hello"))                     # 預期 b'hello'
 print(unpack_u32(transact(ser, CMD_SUM_U32, pack_u32([1, 2, 3])))[0])   # 預期 6
 print(hex(unpack_u32(transact(ser, CMD_CRC32, b"123456789"))[0]))      # 預期 0xcbf43926
@@ -1549,7 +1549,7 @@ assert r == sorted(vals), r
 | RISC-V `.text` 大小 | app_serial 27204、app_multicore 43932、app_dma 43880、app_dma_pio 43860、app_pio 43308 bytes | `riscv64-unknown-elf-size`（替代工具鏈 + picolibc） |
 | CRC32 查表 vs 逐 bit | 查表 65.5～71.0 ms、逐 bit 290.8～302.6 ms，3 次各 4.4×、4.6×、4.1× | Intel Xeon 2.30GHz、host gcc 13.3.0 `-O2`、16384 bytes × 2000 次；用 `serial_proto.c` 的 `crc32_update` 和 `app_dma.c` 的 `cpu_crc32` 原樣 |
 
-- `serial_proto.c:10` 註解寫「比一次算 1 bit 快約 8 倍」，在電腦上實測只有 4.1～4.6 倍；Pico 上的倍數沒有實測。
+- `serial_proto.c:10` 註解原本寫「比一次算 1 bit 快約 8 倍」，在電腦上實測只有 4.1～4.6 倍（註解已改成「電腦實測約 4 倍」）；Pico 上的倍數沒有實測。
 
 **沒有實測（要上板才知道）**：DMA vs CPU copy 的時間、sniffer CRC 的速度、DMA+PIO vs CPU put/get、race 三種模式的時間、pipeline 時間、USB 實際吞吐量。
 
@@ -1565,7 +1565,7 @@ assert r == sorted(vals), r
 
 | # | 問題 | 核對結果 | 影響 / 怎麼處理 |
 |---|---|---|---|
-| 2 | `README.md:143` 原本說電腦端 `serial_bridge.py` 的 `on_bytes()`「沒有切包…未改」 | **確認過時，2026-11-12 已更新 README**。現在 `ros2/serial_bridge.py:78` 會拒絕 `len(msg.data) > CHUNK_BYTES`（`frame.py:19`，4096）並印錯誤。 | 電腦端上限 4096 比 Pico 的 8192 嚴。題目 CRC 資料 4097～8192 bytes 時 Pico 收得了，但電腦端先擋掉。要放寬就把 `CHUNK_BYTES` 改成 8192（≤ `FRAME_MAX_PAYLOAD`） |
+| 2 | `README.md:143` 原本說電腦端 `serial_bridge.py` 的 `on_bytes()`「沒有切包…未改」 | **確認過時，2026-11-12 已更新 README**。現在 `ros2/serial_bridge.py:81` 會拒絕 `len(msg.data) > CHUNK_BYTES`（`frame.py:19`，4096）並印錯誤。 | 電腦端上限 4096 比 Pico 的 8192 嚴。題目 CRC 資料 4097～8192 bytes 時 Pico 收得了，但電腦端先擋掉。要放寬就把 `CHUNK_BYTES` 改成 8192（≤ `FRAME_MAX_PAYLOAD`） |
 | 6 | `app_pio.c` 的 `test_loopback` / `load()`：狀態機和程式沒釋放；第二次 load 失敗時第一個一直占著 | **確認**。`app_pio.c:62-63`：`bitstream_in` 載入成功、`shift_out` 失敗時直接 return，`sm_rx` 和 `off_rx` 沒有 remove；成功跑完（`:80`）也沒有 `pio_sm_set_enabled(false)` / `pio_remove_program_and_unclaim_sm` | 目前 `main` 只呼叫一次，不影響輸出；但把 `test_loopback` 拿去重複呼叫或在同一個 pio1 再載別的程式，會遇到指令空間 / SM 不夠。修法：失敗分支與結尾都對已載入的那個呼叫 `pio_remove_program_and_unclaim_sm(&prog, pio, sm, off)` |
 | 9 | DMA sniffer 的 zlib CRC32 等價（CRC32R + OUT_REV + 軟體 XOR）只從暫存器文件推得 | **確認仍未上板**。暫存器說明（`regs/dma.h` SNIFF_CTRL、SNIFF_DATA）與 SDK 函式（`dma.h:965-1055`）都核對過；Python 模型 200/200 組等於 zlib（3.3.8）；但模型是依文件寫的，不能取代硬體 | 考場先跑 `app_dma`，看 `PASS`；FAIL 照 3.3.8 的對照表改；正式答案保留軟體 CRC 當備案 |
 | 10 | pico-sdk 版本差異 | `dma_encode_transfer_count`：SDK 2.2.0 有（`dma.h:531`），2.1.1 沒有 → `app_dma.c:21-24`、`app_dma_pio.c:27-29` 的補丁在 2.1.1 實際編譯通過。RISC-V：SDK 2.2.0 的 `pico_riscv_gcc.cmake` 固定 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`、**沒有** `-mstrict-align`；2.3.x 的 `pico_riscv_gcc.cmake` 會依序試 `-mcpu=hazard3-rp2350`、含 `zcb_zcmp` 的 `-march`、最後才退回同一組，；`-mstrict-align` 是 2.3.1 才預設加（2.3.0 還沒有，已對照兩版原始碼；可用 `PICO_NO_STRICT_ALIGN` 關） | 補丁版本在 2.0/2.1 直接回傳 n、不遮 MODE bits，所以 count 必須自己保證 < 2^28（`dma_xfer` 有檢查）。RISC-V 在 SDK 2.2.0 沒有 `-mstrict-align`：Hazard3 遇到不對齊存取的行為 ⚠️未驗證；考場用 ARM 最穩 |
@@ -1574,10 +1574,10 @@ assert r == sorted(vals), r
 
 | 檔案:行號 | 問題 | 嚴重度 | 建議 |
 |---|---|---|---|
-| `serial_proto.c:26` | CRC 表在第一次呼叫時才建，沒有鎖；兩核第一次同時呼叫會同時寫表（寫入值相同） | 低（目前只有 core0 用） | 雙核心版本在 launch core1 前先呼叫一次 `crc32_update(0, NULL, 0)` |
+| `serial_proto.c:14` | （已修）CRC 表原本在第一次呼叫時才建，沒有鎖；兩核第一次同時呼叫會同時寫表 | — | 2026-11-12 改成 constructor，`main()` 之前就建好 |
 | `app_dma_pio.c:52-54` | `ch_tx` 要到、`ch_rx` 失敗時直接停住，沒有 unclaim `ch_tx` | 低（程式本來就停住） | 改寫成可恢復時要先 unclaim |
 | `app_multicore.c:109` | `%-18s` 以 byte 對齊，中文那行對不齊 | 外觀 | 不用改 |
-| `serial_proto.c:10` | 註解「快約 8 倍」，電腦上實測 4.1～4.6 倍 | 註解不準 | 以實測為準（3.5） |
+| `serial_proto.c:10` | （已修）註解原本寫「快約 8 倍」，電腦上實測 4.1～4.6 倍 | — | 註解已改成實測值 |
 | RISC-V 工具鏈 | `README.md:26` 說 Ubuntu 的 riscv64 工具鏈連結會失敗：實測確認（`nosys.specs`）；另外 SDK 2.2.0 預設只找 `riscv32-*` 名稱 | 環境 | 用 ARM；或用 SDK 官方 riscv32 工具鏈 |
 
 ### 3.6.3 沒驗證的地方（考場先確認）

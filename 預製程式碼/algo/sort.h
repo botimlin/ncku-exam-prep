@@ -27,8 +27,8 @@ void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp);   /* tmp 至少 n 個
 void merge_two_sorted(const uint32_t *a, size_t na,
                       const uint32_t *b, size_t nb, uint32_t *out);
 
-/* k 個已排序陣列合併到 out。k ≤ KWAY_MAX。O(n*k)，k 小（≤8）時最划算 */
-#define KWAY_MAX 16
+/* k 個已排序陣列合併到 out。k 不限（舊版上限 KWAY_MAX 已拿掉）。O(n*k)，k 小（≤8）時最划算 */
+#define KWAY_MAX 16      /* 只是建議值：k 很大時，用 merge_two_sorted 兩兩合併（O(n log k)）通常比較快 */
 void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out);
 
 #endif

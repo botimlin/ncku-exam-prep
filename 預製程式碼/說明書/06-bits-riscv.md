@@ -10,18 +10,18 @@
 - 題目要你 **寫組合語言函式給 C 呼叫、inline asm、`cpop` / `clz`** → 6.3.5 `asm_examples.S`、6.3.6 `asm_test.c`、6.3.7 速查表，食譜 6.4.7。
 - 最常改的 3 個地方：
   1. `packet_fields.c:15-22` 的 `*_SHIFT` / `*_W`（換成題目的欄位表）。
-  2. `rv32_encode_decode.c:57` `disasm()` 和 `:81` `step()` 的 `switch`（加新指令）。
+  2. `rv32_encode_decode.c:57` `disasm()` 和 `:83` `step()` 的 `switch`（加新指令）。
   3. `asm_examples.S`：複製最接近的函式改，宣告同步加到 `asm_test.c:8-14`。
-- 位元題三條鐵律：**一律用 `uint32_t`**；**位移量必須在 0～31**（`1u << 32`、寬度 0 都是未定義行為，見 6.6）；**先手算 1～2 組答案寫成 `CHECK`，PASS 再交**。
+- 位元題三條鐵律：**一律用 `uint32_t`**；**位移量必須在 0～31**（`1u << 32` 是未定義行為；`bitops.h` 的 `sign_extend`、`bitrev_n` 已經會處理寬度 0，自己寫的位移要自己檢查，見 6.6）；**先手算 1～2 組答案寫成 `CHECK`，PASS 再交**。
 
 ## 6.1 檔案總表
 
 | 檔案 | 行數 | 做什麼 | 什麼時候用 | 驗證狀態 |
 |---|---|---|---|---|
-| `bitops.h` | 95 | 位元工具巨集與 inline 函式：BIT、MASK、GET/SET_FIELD、sign_extend、popcount、clz/ctz、bswap、rotate、2 的次方、位元反轉 | 任何位元題，`#include "bitops.h"` 直接用 | ✅ 本章自寫測試 PASS（host、UBSan、rv32 qemu）；repo 內沒有測試檔（已知問題 8） |
+| `bitops.h` | 97 | 位元工具巨集與 inline 函式：BIT、MASK、GET/SET_FIELD、sign_extend、popcount、clz/ctz、bswap、rotate、2 的次方、位元反轉 | 任何位元題，`#include "bitops.h"` 直接用 | ✅ 本章自寫測試 PASS（host、UBSan、rv32 qemu）；repo 內沒有測試檔（已知問題 8） |
 | `packet_fields.c` | 111 | 依規格表把欄位打包成 32 位元 / 拆回來；bitfield 寫法；大小端讀寫；位元重排 | 封包 header、暫存器欄位、規格位元表 | ✅ host、rv32 qemu `ALL PASS` |
 | `bitstream.c` | 113 | 從 byte 陣列逐位元讀寫欄位（MSB-first、LSB-first）；從 word 陣列取跨 word 欄位 | 位元流解析、欄位跨 byte / 跨 word | ✅ host、rv32 qemu `ALL PASS` |
-| `rv32_encode_decode.c` | 151 | RV32I 六種格式的編碼器、立即值解碼、反組譯器（子集）、迷你模擬器 | 指令編碼 / 解碼、寫反組譯器或 CPU 模擬器 | ✅ host、rv32 qemu `ALL PASS`；期望值與 GNU as 一致 |
+| `rv32_encode_decode.c` | 160 | RV32I 六種格式的編碼器、立即值解碼、反組譯器（子集）、迷你模擬器 | 指令編碼 / 解碼、寫反組譯器或 CPU 模擬器 | ✅ host、rv32 qemu `ALL PASS`；期望值與 GNU as 一致 |
 | `asm_examples.S` | 133 | 7 個可從 C 呼叫的 RV32 組語函式（加總、複製、取欄位、popcount 兩版、BNN 內積、回呼） | 寫組語函式、示範呼叫慣例 | ✅ qemu 基本 ISA / Zbb 兩版 PASS |
 | `asm_test.c` | 86 | 測 `asm_examples.S`：每個組語函式和 C 參考版比對；inline asm 範例 | 改完組語後驗證 | ✅ 同上 |
 | `rv32_asm_cheatsheet.md` | 99 | 暫存器 / ABI、偽指令、載入儲存、`.S` 寫法、inline asm、Hazard3 位元擴充、opcode/funct 表 | 只查不改 | ✅ 表 6 的 29 條指令本章重新組譯過 |
@@ -146,7 +146,7 @@ funct3 / funct7（`rv32_asm_cheatsheet.md:98-99`）：
 
 - `sub`、`sra` 的 funct7 = `0x20`（`0100000`），其他 R 型是 0。
 - `slli/srli/srai`：imm[4:0] 是位移量 shamt，`srai` 的 imm[11:5] = `0x20`（所以 `srai x5,x6,3` = `0x40335293`，GNU as 實測）。
-- M 擴充（`mul` 等）也是 opcode `0x33`，但 funct7 = `0x01`。這點和 6.6 的已知限制有關。
+- M 擴充（`mul` 等）也是 opcode `0x33`，但 funct7 = `0x01`。`rv32_encode_decode.c` 的反組譯器和模擬器會看 funct7：0x00 = add、0x20 = sub、0x01 = mul，其他當成不認得（6.6）。
 
 ### 6.2.8 立即值為什麼被打亂、怎麼編碼解碼
 
@@ -176,7 +176,7 @@ funct3 / funct7（`rv32_asm_cheatsheet.md:98-99`）：
          | BITS(u, 4, 1) << 8 | BITS(u, 11, 11) << 7 | op; }
 ```
 
-負數也一樣，先把 imm 當 `uint32_t` 看（二補數）：`beq x1, x2, -24` → imm13 = `1111111101000` → imm[12]=1、imm[11]=1、imm[10:5]=111111、imm[4:1]=0100 → `0xfe2084e3`（`rv32_encode_decode.c:117`，GNU as 實測一致）。
+負數也一樣，先把 imm 當 `uint32_t` 看（二補數）：`beq x1, x2, -24` → imm13 = `1111111101000` → imm[12]=1、imm[11]=1、imm[10:5]=111111、imm[4:1]=0100 → `0xfe2084e3`（`rv32_encode_decode.c:120`，GNU as 實測一致）。
 
 **B 型解碼一步一步：`0xfe0598e3`**（這是 `asm_examples.S` 的 `bnez a1, 1b` 在 `-march=rv32i` 下的機器碼，objdump 實測，位址 0x18 跳回 0x8）
 
@@ -216,7 +216,7 @@ int imm_b(uint32_t x) { return sext(BITS(x, 31, 31) << 12 | BITS(x, 7, 7) << 11
 
 對應程式：`rv32_encode_decode.c:36-39` `enc_j()`。
 
-**J 型解碼一步一步：`0xffdff06f`**（`jal x0, -4`，`rv32_encode_decode.c:120`）
+**J 型解碼一步一步：`0xffdff06f`**（`jal x0, -4`，`rv32_encode_decode.c:123`）
 
 ```text
 1. 展開：1111 1111 1101 1111 1111 0000 0110 1111
@@ -343,18 +343,18 @@ gcc -O2 -Wall -Wextra -I<bits-riscv 的路徑> bitops_selftest.c -o bt && ./bt
 | `SET_FIELD(x, hi, lo, v)` | 同上，v 新值 | 清空 [hi:lo] 後放入 `v & MASK`，回傳新值 | v 超出寬度的位元被丟掉：`SET_FIELD(0,7,4,0x1F)` = `0xF0`（實測） |
 | `COMBINE16(a, b)` | 兩個 byte | `(a & 0xFF) << 8 \| (b & 0xFF)` | 自動 mask：`COMBINE16(0x1FF, 0x2AB)` = `0xFFAB`（實測） |
 
-符號延伸、popcount、clz/ctz（`bitops.h:30-49`）：
+符號延伸、popcount、clz/ctz（`bitops.h:30-51`）：
 
 | 名稱 | 參數 | 回傳 / 效果 | 注意 |
 |---|---|---|---|
-| `sign_extend(v, bits)` | v：原始位元；bits：1～32 | 32 位有號數 | v 高於 bits 的位元會被左移推掉，不用先 mask；**bits = 0 → 位移 32，UB（已知問題 7）**；bits > 32 → 位移量負數，UB |
+| `sign_extend(v, bits)` | v：原始位元；bits：1～32 | 32 位有號數 | v 高於 bits 的位元會被左移推掉，不用先 mask；bits ≤ 0 回傳 0、bits ≥ 32 回傳 `(int32_t)v`（2026-11-12 起；之前 bits = 0 是 UB，已知問題 7） |
 | `popcount32(x)` | x | 1 的個數（0～32） | 可攜版，迴圈次數 = 1 的個數 |
 | `POPCOUNT(x)` | x | `__builtin_popcount(x)` | gcc/clang 才有；Hazard3 `-march` 下編成一條 `cpop`（實測） |
 | `clz32(x)` | x | 前導 0 個數；x = 0 → 32 | `__builtin_clz(0)` 是 UB，所以先判斷；Zbb 下整個函式編成一條 `clz`（實測，因為硬體 `clz(0)` = 32） |
 | `ctz32(x)` | x | 尾端 0 個數；x = 0 → 32 | 同上，Zbb 下一條 `ctz` |
-| （註解）`31 - clz32(x)` | x | 最高的 1 在第幾位（log2 取整） | x = 0 → −1（`bitops.h:49`） |
+| （註解）`31 - clz32(x)` | x | 最高的 1 在第幾位（log2 取整） | x = 0 → −1（`bitops.h:51`） |
 
-endian、rotate、2 的次方（`bitops.h:53-72`）：
+endian、rotate、2 的次方（`bitops.h:55-74`）：
 
 | 名稱 | 參數 | 回傳 / 效果 | 注意 |
 |---|---|---|---|
@@ -365,15 +365,15 @@ endian、rotate、2 的次方（`bitops.h:53-72`）：
 | `round_up_pow2(x)` | x | 往上取到 2 的次方；0 → 0 | x > 0x80000000 會溢位成 0（實測 `0x80000001` → 0） |
 | `ALIGN_UP(x, a)` | a 必須是 2 的次方 | 對齊到 a 的倍數：`ALIGN_UP(13, 4)` = 16 | a 不是 2 的次方會算錯：`ALIGN_UP(7, 6)` 實測 = 8（應該是 12）；巨集參數會被算兩次 |
 
-位元反轉（`bitops.h:76-85`）：
+位元反轉（`bitops.h:78-87`）：
 
 | 名稱 | 參數 | 回傳 / 效果 | 注意 |
 |---|---|---|---|
 | `bitrev32(x)` | x | 32 位左右顛倒：`0x1` → `0x80000000`、`0x12345678` → `0x1E6A2C48` | 先相鄰 1、2、4 位互換，最後 `bswap32` |
-| `bitrev_n(x, n)` | n：1～32 | 只反轉低 n 位：`bitrev_n(0b0011, 4)` = `0b1100` | x 高於 n 的位元不影響結果（實測 `bitrev_n(0xFF03, 4)` = `0xC`）；**n = 0 → 位移 32，UB（已知問題 7）** |
+| `bitrev_n(x, n)` | n：1～32 | 只反轉低 n 位：`bitrev_n(0b0011, 4)` = `0b1100` | x 高於 n 的位元不影響結果（實測 `bitrev_n(0xFF03, 4)` = `0xC`）；n ≤ 0 回傳 0（2026-11-12 起；之前是 UB，已知問題 7） |
 | `brev8(x)` | x | 每個 byte 內部反轉、byte 順序不變：`0x01020380` → `0x8040C001` | 等於 Zbkb 的 `brev8`；但 gcc 不會自動認出，C 版編成 28 條指令（含 `ret`，實測）；要一條指令請用 `__builtin_riscv_brev8(x)`（本章實測可用，編成 `brev8 a0,a0`） |
 
-小技巧速查（`bitops.h:87-94`，只是註解）：`x & -x` 只留最低的 1（`0b10110` → `0b00010`，實測）、`x & (x-1)` 清掉最低的 1、`popcount(a ^ b)` 是漢明距離、`~(a ^ b)` 是 XNOR。
+小技巧速查（`bitops.h:89-96`，只是註解）：`x & -x` 只留最低的 1（`0b10110` → `0b00010`，實測）、`x & (x-1)` 清掉最低的 1、`popcount(a ^ b)` 是漢明距離、`~(a ^ b)` 是 XNOR。
 
 `ALIGN_UP` 的公式 `(x + a-1) & ~(a-1)` 只有在 a−1 是「低位全 1」（也就是 a 是 2 的次方）時，`& ~(a-1)` 才等於「清掉低位」。
 
@@ -381,10 +381,10 @@ endian、rotate、2 的次方（`bitops.h:53-72`）：
 
 沒有流程，每個都是獨立的巨集或 `static inline` 函式。需要注意的實作細節：
 
-1. `sign_extend`（`bitops.h:30-33`）：`sh = 32 - bits`；`(int32_t)(v << sh) >> sh`。依賴「gcc 對有號數右移是算術右移」（gcc 文件保證；C 標準說是 implementation-defined）。`bitops.h:34` 的註解給了完全可攜的寫法 `(v ^ m) - m`（v 要先 mask）。
-2. `popcount32`（`bitops.h:37-41`）：`x &= x - 1` 每次清掉最低的 1，計數。
-3. `round_up_pow2`（`bitops.h:65-70`）：先減 1，再把最高的 1 往右填滿（`x |= x >> 1 … >> 16`），最後 +1。
-4. `bitrev32`（`bitops.h:76-81`）：分治法，3 次交換 + `bswap32`，沒有迴圈。
+1. `sign_extend`（`bitops.h:30-35`）：`sh = 32 - bits`；`(int32_t)(v << sh) >> sh`。依賴「gcc 對有號數右移是算術右移」（gcc 文件保證；C 標準說是 implementation-defined）。`bitops.h:36` 的註解給了完全可攜的寫法 `(v ^ m) - m`（v 要先 mask）。
+2. `popcount32`（`bitops.h:39-43`）：`x &= x - 1` 每次清掉最低的 1，計數。
+3. `round_up_pow2`（`bitops.h:67-72`）：先減 1，再把最高的 1 往右填滿（`x |= x >> 1 … >> 16`），最後 +1。
+4. `bitrev32`（`bitops.h:78-83`）：分治法，3 次交換 + `bswap32`，沒有迴圈。
 
 #### 要改的地方
 
@@ -415,7 +415,7 @@ brev8(0x01020380)                  = 0x8040C001  1000_0000_0100_0000_1100_0000_0
 clz32(0x10)=27 ctz32(0x10)=4 clz32(0)=32 ctz32(0)=32 clz32(1)=31 ctz32(0x80000000)=31
 ```
 
-寬度 0 的 UB（已知問題 7）用 UBSan 實測（位移量用執行期變數，編譯器不能事先算掉）：
+寬度 0 的 UB（已知問題 7）用 UBSan 實測（位移量用執行期變數，編譯器不能事先算掉）。**修正前**（2026-11-12 之前的 `bitops.h`）：
 
 ```text
 bitops.h:32:24: runtime error: shift exponent 32 is too large for 32-bit type 'unsigned int'
@@ -425,7 +425,17 @@ bitops.h:83:73: runtime error: shift exponent 32 is too large for 32-bit type 'u
 [UB] bitrev_n(5, 0)                = 0xA0000000
 ```
 
-`-O2` 不開 UBSan 時，x86 上 `sign_extend(5,0)` 回傳 5、`bitrev_n(5,0)` 回傳 `0xA0000000`（等於沒位移），**不是 0**。換平台或最佳化可能又不一樣。
+修正前 `-O2` 不開 UBSan 時，x86 上 `sign_extend(5,0)` 回傳 5、`bitrev_n(5,0)` 回傳 `0xA0000000`（等於沒位移），**不是 0**。
+
+**修正後**（`sign_extend` 加了 `bits <= 0` 回傳 0、`bits >= 32` 回傳 `(int32_t)v`，`bitops.h:31-32`；`bitrev_n` 在 `n <= 0` 時回傳 0，`:85`），同一支測試加上一個小測試，在 UBSan 下沒有任何 `runtime error`：
+
+```text
+[UB] sign_extend(5, 0) = 0
+[UB] bitrev_n(5, 0)                = 0x00000000  0000_0000_0000_0000_0000_0000_0000_0000
+sign_extend(5,0)=0 sign_extend(0xFFF,12)=-1 sign_extend(0x80000000,32)=-2147483648 bitrev_n(1,0)=0 bitrev_n(1,4)=8
+```
+
+（`[UB]` 是測試程式自己印的標籤，標出這兩個是邊界情況。）
 
 #### 常見錯誤
 
@@ -433,7 +443,7 @@ bitops.h:83:73: runtime error: shift exponent 32 is too large for 32-bit type 'u
 |---|---|---|
 | `SET_BIT(x, 3);` 之後 x 沒變 | 巨集回傳新值，不改參數 | `x = SET_BIT(x, 3);` |
 | 寬度 32 的欄位取出來是 0 或亂碼 | 自己寫 `(1u << 32) - 1` | 用 `MASK(32)`（有特判）或直接 `0xFFFFFFFFu` |
-| `sign_extend(v, 0)`、`bitrev_n(x, 0)` 結果不對 | 寬度 0 → 位移 32（UB） | 呼叫前判斷寬度 ≥ 1；寬度 0 的欄位直接當 0 |
+| `sign_extend(v, 0)`、`bitrev_n(x, 0)` 結果不是 0 | 2026-11-12 前的 `bitops.h`：寬度 0 → 位移 32（UB） | 用目前版本（寬度 0 回傳 0） |
 | `GET_FIELD(x, lo, hi)` 結果怪 | hi、lo 順序反了 | 順序是 `(x, hi, lo)`，高位在前 |
 | `clz32` 在 x = 0 時回傳 32，`31 - clz32(0)` = −1 | 0 沒有最高位 | 先判斷 x ≠ 0 |
 | 在 `int` 上用 `BIT(31)` 比較得到負數 | `int` 和 `unsigned` 混用 | 變數一律宣告 `uint32_t` |
@@ -641,7 +651,7 @@ rv32 qemu 兩種 `-march` 也是 `bitstream: ALL PASS`。
 
 #### 用途
 
-RV32I 指令的「組譯器方向」（欄位 → 機器碼）與「反組譯器方向」（機器碼 → 欄位、文字），加上一個能跑程式的迷你模擬器（`rv32_encode_decode.c:1-11`）。期望值是用 `riscv64-unknown-elf-as -march=rv32i` + objdump 得到的（`:110`）。
+RV32I 指令的「組譯器方向」（欄位 → 機器碼）與「反組譯器方向」（機器碼 → 欄位、文字），加上一個能跑程式的迷你模擬器（`rv32_encode_decode.c:1-11`）。期望值是用 `riscv64-unknown-elf-as -march=rv32i` + objdump 得到的（`:113`）。
 
 #### 怎麼編譯 / 執行
 
@@ -667,27 +677,27 @@ gcc -O2 -Wall -Wextra rv32_encode_decode.c -o /tmp/rv && /tmp/rv
 | `OPC/RD/F3/RS1/RS2/F7(x)`（`:42-47`） | 機器碼 | 各欄位 | |
 | `imm_i/imm_s/imm_b/imm_j(x)`（`:48-54`） | 機器碼 | 已符號延伸的立即值 | |
 | `imm_u(x)`（`:52`） | 機器碼 | `x & 0xFFFFF000`（已經 <<12） | 和 `enc_u` 的參數單位不同，注意 |
-| `disasm(x, out)`（`:57-74`） | 機器碼、輸出字串 | 子集反組譯 | 支援：add/sub、addi、lw、sw、beq/bne、jal、jalr、lui、auipc；其他印 `unknown 0x...`；暫存器印 `x10` 不印 `a0` |
-| `CPU`（`:77`） | — | `x[32]`、`pc`、`mem[1024]` | `TODO(改這裡)` 記憶體大小 |
-| `ld32/st32`（`:78-79`） | 位址 | 小端 4 byte 讀寫 | **不檢查越界** |
-| `step(c)`（`:81-103`） | CPU | 執行一條；0 = 正常、−1 = 不認得（當停機） | 和 `disasm` 支援同一個子集 |
+| `disasm(x, out)`（`:57-75`） | 機器碼、輸出字串 | 子集反組譯 | 支援：add/sub/mul（會看 funct7）、addi、lw、sw、beq/bne、jal、jalr、lui、auipc；其他印 `unknown 0x...`；暫存器印 `x10` 不印 `a0` |
+| `CPU`（`:78`） | — | `x[32]`、`pc`、`mem[1024]` | `TODO(改這裡)` 記憶體大小 |
+| `ld32/st32`（`:79-80`）、`MEM_OK`（`:81`） | 位址 | 小端 4 byte 讀寫；`MEM_OK(c, a)` 檢查 `a + 4` 有沒有超出 `mem` | `ld32/st32` 本身不檢查，`step()` 用 `MEM_OK` 先檢查（2026-11-12 加的） |
+| `step(c)`（`:83-106`） | CPU | 執行一條；0 = 正常、−1 = 不認得的指令或存取超出記憶體（當停機） | 和 `disasm` 支援同一個子集 |
 
 #### 程式流程
 
-`step()`（`:81-103`）：
-1. 取指令 `x = ld32(c, c->pc)`，預設 `next = pc + 4`（`:82`）。
-2. 先讀 `a = x[rs1]`、`b = x[rs2]`、`rd`（`:83-84`）。不管格式都先讀，沒用到也沒關係。
-3. 依 opcode 執行（`:85-99`）：分支成立就改 `next = pc + imm_b`；`jal` 寫 `rd = pc + 4`、`next = pc + imm_j`；`jalr` 先算目標 `t = (a + imm) & ~1` 再寫 rd（`:95`，因為 rd 可能等於 rs1）。
-4. `x[0] = 0`（`:100`）：就算指令寫了 x0，也清回 0。
-5. `pc = next`（`:101`）。
+`step()`（`:83-106`）：
+1. 取指令：`pc` 在記憶體範圍內（`MEM_OK`）才 `ld32(c, c->pc)`，否則當成 `0xFFFFFFFF`（不認得 → 停機）；預設 `next = pc + 4`（`:84`）。
+2. 先讀 `a = x[rs1]`、`b = x[rs2]`、`rd`（`:85-86`）。不管格式都先讀，沒用到也沒關係。
+3. 依 opcode 執行（`:87-102`）：分支成立就改 `next = pc + imm_b`；`jal` 寫 `rd = pc + 4`、`next = pc + imm_j`；`jalr` 先算目標 `t = (a + imm) & ~1` 再寫 rd（`:98`，因為 rd 可能等於 rs1）。
+4. `x[0] = 0`（`:103`）：就算指令寫了 x0，也清回 0。
+5. `pc = next`（`:104`）。
 
-`main`（`:109-151`）：
-1. 13 個編碼測試（`:111-123`），每個註解都寫了組語。
-2. B / J / S 立即值解碼往返（`:125-127`）。
-3. `disasm(0xfe2084e3)` 要等於 `"beq x1, x2, -24"`（`:128-130`）。
-4. 模擬器測試（`:133-147`）：組一段「sum = 1+2+…+10，存到 mem[0x100]」的程式（`:134-143`），印出反組譯（`:145`），最多跑 1000 步（`:146`），檢查 `mem[0x100] = 55`、`x0 = 0`、停在 `pc = 0x1c`（`:147`）。
+`main`（`:112-160`）：
+1. 13 個編碼測試（`:114-126`），每個註解都寫了組語。
+2. B / J / S 立即值解碼往返（`:128-130`）。
+3. `disasm(0xfe2084e3)` 要等於 `"beq x1, x2, -24"`（`:131-133`）。
+4. 模擬器測試（`:142-156`）：組一段「sum = 1+2+…+10，存到 mem[0x100]」的程式（`:143-152`），印出反組譯（`:154`），最多跑 1000 步（`:155`），檢查 `mem[0x100] = 55`、`x0 = 0`、停在 `pc = 0x1c`（`:156`）。
 
-模擬器測試程式（`:134-143`）展開：
+模擬器測試程式（`:143-152`）展開：
 
 ```text
 0x00  addi a0,x0,0        sum = 0
@@ -704,9 +714,9 @@ gcc -O2 -Wall -Wextra rv32_encode_decode.c -o /tmp/rv && /tmp/rv
 
 | 行號 | 現在的值 | 意思 | 什麼情況要改、改成什麼 |
 |---|---|---|---|
-| `rv32_encode_decode.c:56` | `// 反組譯成文字（只支援子集）。TODO(改這裡)：加新指令就在對應 opcode 下加 funct3/funct7 判斷` | `disasm()` 的 switch（`:58-72`） | 題目的指令不在子集內 → 照 6.2.7 的 funct3 表加 case；完整範例見食譜 6.4.5（實測過） |
-| `rv32_encode_decode.c:77` | `uint8_t mem[1024]` | 模擬器記憶體 1 KiB | 題目程式或資料超過 1 KiB → 改大（例 65536）；`CPU c` 在 `main` 裡是區域變數（`:133`），改很大時改成 `static CPU c;` 避免堆疊不夠 |
-| `rv32_encode_decode.c:81-99` | `step()` 只支援子集 | 模擬器 | 加指令時 `disasm` 和 `step` 兩邊都要加；範例見食譜 6.4.6（實測過） |
+| `rv32_encode_decode.c:56` | `// 反組譯成文字（只支援子集）。TODO(改這裡)：加新指令就在對應 opcode 下加 funct3/funct7 判斷` | `disasm()` 的 switch（`:58-73`） | 題目的指令不在子集內 → 照 6.2.7 的 funct3 表加 case；完整範例見食譜 6.4.5（實測過） |
+| `rv32_encode_decode.c:78` | `uint8_t mem[1024]` | 模擬器記憶體 1 KiB | 題目程式或資料超過 1 KiB → 改大（例 65536）；`CPU c` 在 `main` 裡是區域變數（`:142`），改很大時改成 `static CPU c;` 避免堆疊不夠 |
+| `rv32_encode_decode.c:83-102` | `step()` 只支援子集 | 模擬器 | 加指令時 `disasm` 和 `step` 兩邊都要加；範例見食譜 6.4.6（實測過） |
 
 #### 實際執行輸出
 
@@ -743,7 +753,7 @@ rv32_encode_decode: ALL PASS
   30:	ffdff06f          	jal	x0,2c <L0+0x8>
 ```
 
-13 個值和 `rv32_encode_decode.c:111-123` 的期望值完全一樣。objdump 在分支後面印的是「目標位址」（例 `0x24 - 24 = 0xc`），不是偏移量。
+13 個值和 `rv32_encode_decode.c:114-126` 的期望值完全一樣。objdump 在分支後面印的是「目標位址」（例 `0x24 - 24 = 0xc`），不是偏移量。
 
 其他本章額外組譯的指令（食譜用）：
 
@@ -775,8 +785,8 @@ echo "addi x1, x0, 5" | riscv64-unknown-elf-as -march=rv32i - -o /tmp/x.o && ris
 | `lui` 編出來多了 12 個 0 | 傳入已經 <<12 的值 | `enc_u` 吃「高 20 位」；`imm_u` 回傳的才是 <<12 後的值 |
 | 分支偏移差 4 | 以為是相對「下一條」 | RISC-V 的分支 / jal 偏移相對「本指令」位址 |
 | 解碼負數立即值變成很大的正數 | 忘了符號延伸 | 用 `imm_*()`（都有 `sext`） |
-| 模擬器跑到一半 segfault | pc 或 load/store 位址超過 `mem` | 加大 `mem` 或在 `ld32/st32` 加邊界檢查 |
-| `mul x3,x1,x2` 被印成 `add` | `disasm` / `step` 只看 funct3、不看 funct7 = 0x01 | 見 6.6；要支援 M 擴充時先判斷 `F7(x) == 1` |
+| 模擬器停在奇怪的地方（`step` 回傳 −1） | 指令不在支援的子集，或 pc / load / store 位址超出 `mem`（1024 bytes） | 看最後的 pc 和那條指令；要更大的記憶體就改 `:78` 的 `mem[1024]` |
+| `mulh`、`div` 等印成 `unknown` | 只支援 funct7 = 0x00 / 0x20 / 0x01 且 funct3 = 0 的 R 型 | 在 `disasm` / `step` 的 `OP_OP` 加對應的 funct3 / funct7（食譜 6.4） |
 | RISC-V 上 printf 警告 | `uint32_t` 是 `unsigned long` | 轉 `(unsigned)`（`:15` 註解） |
 
 ### 6.3.5 `asm_examples.S`
@@ -1247,7 +1257,7 @@ uint32_t gather_bits(uint32_t x, const int src[], int n) {
 
 題目長這樣：「反組譯器要支援 xor、andi、slli、srai、blt…」。
 
-改哪些行：`rv32_encode_decode.c:59-67` 的三個 case。改後（本章在副本實測，13 個原本的測試仍 PASS）：
+改哪些行：`rv32_encode_decode.c:59-68` 的三個 case。改後（本章在副本實測，13 個原本的測試仍 PASS）：
 
 ```c
     case OP_OP:
@@ -1294,7 +1304,7 @@ rv32_encode_decode: ALL PASS
 
 ### 6.4.6 模擬器加指令
 
-改哪些行：`rv32_encode_decode.c:87` 的 `case OP_IMM` 換成（本章在副本實測）：
+改哪些行：`rv32_encode_decode.c:90` 的 `case OP_IMM` 換成（本章在副本實測）：
 
 ```c
     case OP_IMM: {
@@ -1368,7 +1378,7 @@ my_test: PASS
 
 題目長這樣：「Pico 上跑二值神經網路內積，要更快。」
 
-- C 寫法（任何平台）：`2 * __builtin_popcount(~(w ^ x)) - 32`，配合 Hazard3 的 `-march` 編成 `xnor` + `cpop` + `addi` + `slli` 4 條（本章實測；`bitops.h:42`、速查表 `:93`）。演算法本身見第 5 章 `algo/bnn.c`。
+- C 寫法（任何平台）：`2 * __builtin_popcount(~(w ^ x)) - 32`，配合 Hazard3 的 `-march` 編成 `xnor` + `cpop` + `addi` + `slli` 4 條（本章實測；`bitops.h:44`、速查表 `:95`）。演算法本身見第 5 章 `algo/bnn.c`。
 - 組語寫法：直接用 `asm_bnn_dot`（`asm_examples.S:80-107`）。
 - 怎麼驗證：`asm_test.c:67-70` 的 3 個 CHECK（一般、全同 = +32n、全反 = −32n）。
 - 在 Cortex-M33 上沒有 `cpop`；`__builtin_popcount` 會變成軟體實作。RISC-V 和 ARM 誰快，本章沒有在板子上量 ⚠️未驗證。
@@ -1391,15 +1401,15 @@ my_test: PASS
 
 ## 6.6 限制、已知問題、沒驗證的地方
 
-1. **已知問題 7（核對屬實）**：`bitops.h:30-33` `sign_extend(v, 0)` 和 `bitops.h:83` `bitrev_n(x, 0)` 會位移 32 位，是 C 的未定義行為，檔案沒有註明。UBSan 實測報 `bitops.h:32:24`、`32:31`、`83:73` 三處 `shift exponent 32 is too large`。`-O2` 下 x86 實際回傳 `5` 和 `0xA0000000`（等於沒位移）。同類問題：`sign_extend(v, bits)` 的 bits > 32、`GET_FIELD` 的 hi < lo 或 lo ≥ 32、`BIT(n)` / `TEST_BIT(x,n)` 的 n ≥ 32、`rv32_encode_decode.c:18` 的 `sext(v, 0)`、`packet_fields.c:23` 的 `M(32)`。修法（沒有改程式）：呼叫端保證寬度 1～32；或在函式內 `if (bits <= 0) return 0; if (bits >= 32) return (int32_t)v;`。
+1. **（已修）已知問題 7**：`bitops.h` 的 `sign_extend(v, 0)` 和 `bitrev_n(x, 0)` 原本會位移 32 位（C 的未定義行為），UBSan 報三處 `shift exponent 32 is too large`；`-O2` 下 x86 實際回傳 `5` 和 `0xA0000000`。2026-11-12 起寬度 ≤ 0 回傳 0、`sign_extend` 的 bits ≥ 32 直接回傳（`bitops.h:31-32`、`:85`），UBSan 無錯誤。同類問題仍要自己注意：`GET_FIELD` 的 hi < lo 或 lo ≥ 32、`BIT(n)` / `TEST_BIT(x,n)` 的 n ≥ 32、`rv32_encode_decode.c:18` 的 `sext(v, 0)`、`packet_fields.c:23` 的 `M(32)`。
 2. **已知問題 8（核對屬實）**：`README.md:43` 寫「bitops.h（另寫測試）」，但 repo 裡沒有這個測試檔（`ls bits-riscv/` 只有 8 個檔）。本章 6.3.1 補了一份 `bitops_selftest.c`（host、UBSan、rv32 qemu 都 PASS），沒有放進 repo。
 3. **已知問題 10（RISC-V 部分，核對 SDK 原始碼）**：
    - SDK 2.1.1 與 2.2.0：`cmake/preload/toolchains/pico_riscv_gcc.cmake:5` 固定 `-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`，沒有 `-mstrict-align`；`pico_riscv_gcc_zcb_zcmp.cmake:8` 是 `rv32ima_zicsr_zifencei_zba_zbb_zbs_zbkb_zca_zcb_zcmp`。預設 GCC triple 是 `riscv32-unknown-elf riscv32-corev-elf`；本容器的是 `riscv64-unknown-elf`，要 `-DPICO_GCC_TRIPLE=riscv64-unknown-elf`（`util/pico_arm_gcc_common.cmake:6-15`）。
    - SDK 2.3.x（`$S/sdk/pico_riscv_gcc.cmake`）：`:5-8` 預設加 `-mstrict-align`（`-DPICO_NO_STRICT_ALIGN=1` 關掉）；`:11-14` 依序試 `-mcpu=hazard3-rp2350` → `rv32ima_…_zca_zcb_zcmp` → `rv32imac_…_zbkb`，用 `:18-21` 的測試檔確認編譯器支援。「2.3.1 起」這個版本號依審查紀錄，本章只有 2.3.x 片段，沒有逐版比對 ⚠️未驗證。
    - 本容器的 gcc 13.2：`-mcpu=hazard3-rp2350` 報 `unknown CPU`、`zcmp` 報 `unknown prefixed ISA extension`（實測）→ 2.3.x 會退到第三個候選，和 2.2.0 一樣。
    - `-mstrict-align` 的影響：gcc 13.2 的 `-Q --help=target` 顯示 `-mstrict-align [enabled]` 已經是預設；`memcpy` 讀 4 個未對齊 byte 在預設、`-mstrict-align`、`-mno-strict-align` 三種下產生**相同**的逐 byte 程式碼（實測）。新版 gcc 搭配 `-mcpu=hazard3-rp2350` 時差異可能不同 ⚠️未驗證。Hazard3 對未對齊存取的硬體行為本章沒有查 datasheet ⚠️未驗證。結論：**讀線上資料一律用 `load_be32/load_le32` 逐 byte 組合**，不受這些旗標影響。
-4. **`disasm()` / `step()` 不看 funct7（本章發現）**：`rv32_encode_decode.c:60` 和 `:86` 只判斷 `F3(x) == 0`、`F7(x) == 0x20` 就當 `sub`，其他 funct7 一律當 `add`。M 擴充的 `mul x3,x1,x2`（GNU as 實測 `0x022081b3`，funct7 = 0x01）會被印成 `add x3, x1, x2`（本章實測）、模擬成加法。題目只要 RV32I 就沒影響；要支援 M 時先判斷 `F7(x) == 0x01`。`:69`/`:95` 的 `jalr` 也沒檢查 funct3 = 0。
-5. 模擬器 `ld32/st32`（`:78-79`）不檢查越界；pc 跑出 `mem` 會讀到陣列外。
+4. **（已修）`disasm()` / `step()` 原本不看 funct7（本章發現）**：M 擴充的 `mul x3,x1,x2`（GNU as 實測 `0x022081b3`，funct7 = 0x01）會被印成 `add x3, x1, x2`、模擬成加法。2026-11-12 起 `OP_OP` 只接受 funct7 = 0x00（add）、0x20（sub）、0x01（mul），其他印 `unknown`、模擬器停機（`rv32_encode_decode.c:60-61`、`:88-89`）；自我測試加了 `mul` 反組譯、`mul` 模擬（6×7 = 42）、funct7 = 2 要印 `unknown`。`:70`/`:98` 的 `jalr` 仍沒檢查 funct3 = 0。
+5. （已修）模擬器原本不檢查越界，pc 跑出 `mem` 會讀到陣列外。2026-11-12 起 `step()` 用 `MEM_OK`（`rv32_encode_decode.c:81`）檢查取指令和 `lw` / `sw` 的位址，超出就回傳 −1；自我測試加了 `lw x5,2000(x0)` 要停機。
 6. `bitstream.c:28` 註解說 `write_msb` 前 buf 要先清 0，實際上函式會設或清每個寫到的位元（`:33-34`、`:54-55`），只有沒寫到的位元需要先清。不是 bug，只是說法比需要的保守。
 7. `asm_examples.S:3` 的 `-march` 字串（`rv32imac_zba_zbb_zbs`）和 README `:30` 不同。兩個都能組譯（實測）；以 README 和 SDK 的為準。
 8. `rv32_asm_cheatsheet.md:69` 的「RP2350 datasheet 3.8 節」和 `h3.bextm` 的編碼，本章沒有對照 datasheet ⚠️未驗證。擴充清單和 SDK 2.3.x 的 `-march` 一致。
@@ -1448,10 +1458,10 @@ RISC-V 格式：
 
 | 症狀 | 一句話修法 |
 |---|---|
-| 位移 32 / 寬度 0 | 呼叫前保證寬度 1～32 |
+| 位移 32 / 寬度 0 | `bitops.h` 已處理；自己寫的位移保證 0～31 |
 | 線上 byte 順序反 | 用 `load_be32/store_be32`，不要 `memcpy` |
 | MSB/LSB 讀反 | 手算第一個欄位決定順序 |
 | 分支偏移差 4 | 偏移相對本指令 |
 | `extension 'zbb' required` | `-march` 加 `_zbb` 或用 `#ifdef __riscv_zbb` |
 | qemu segfault | `-nostartfiles` + `linux_shim.c` |
-| `mul` 被當 `add` | 判斷 `F7(x) == 0x01` |
+| `mulh` / `div` 印 `unknown` | 在 `OP_OP` 加 funct3 / funct7 判斷 |

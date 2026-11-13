@@ -57,7 +57,8 @@ int imm_j(uint32_t x) { return sext(BITS(x, 31, 31) << 20 | BITS(x, 19, 12) << 1
 void disasm(uint32_t x, char *out) {
     switch (OPC(x)) {
     case OP_OP:
-        if (F3(x) == 0) { sprintf(out, "%s x%u, x%u, x%u", F7(x) == 0x20 ? "sub" : "add", RD(x), RS1(x), RS2(x)); return; }
+        if (F3(x) == 0 && (F7(x) == 0x00 || F7(x) == 0x20 || F7(x) == 0x01)) {   // funct7 要看：0x20 sub、0x01 mul（M 擴充）
+            sprintf(out, "%s x%u, x%u, x%u", F7(x) == 0x20 ? "sub" : F7(x) == 0x01 ? "mul" : "add", RD(x), RS1(x), RS2(x)); return; }
         break;
     case OP_IMM:  if (F3(x) == 0) { sprintf(out, "addi x%u, x%u, %d", RD(x), RS1(x), imm_i(x)); return; } break;
     case OP_LOAD: if (F3(x) == 2) { sprintf(out, "lw x%u, %d(x%u)", RD(x), imm_i(x), RS1(x)); return; } break;
@@ -77,16 +78,18 @@ void disasm(uint32_t x, char *out) {
 typedef struct { uint32_t x[32], pc; uint8_t mem[1024]; } CPU;   // TODO(改這裡)：記憶體大小
 static uint32_t ld32(CPU *c, uint32_t a) { uint32_t v; memcpy(&v, c->mem + a, 4); return v; }  // 小端
 static void     st32(CPU *c, uint32_t a, uint32_t v) { memcpy(c->mem + a, &v, 4); }
-// 執行一條指令；回傳 0 = 正常，-1 = 不認得的指令（當成停機）
+#define MEM_OK(c, a) ((uint32_t)(a) <= sizeof (c)->mem - 4)       // 4-byte 存取有沒有超出 mem
+// 執行一條指令；回傳 0 = 正常，-1 = 不認得的指令或存取超出記憶體（當成停機）
 int step(CPU *c) {
-    uint32_t x = ld32(c, c->pc), next = c->pc + 4;
+    uint32_t x = MEM_OK(c, c->pc) ? ld32(c, c->pc) : 0xFFFFFFFFu, next = c->pc + 4;   // pc 跑出記憶體 → 當成停機
     uint32_t a = c->x[RS1(x)], b = c->x[RS2(x)];
     int rd = RD(x);
     switch (OPC(x)) {
-    case OP_OP:    if (F3(x) == 0) { c->x[rd] = F7(x) == 0x20 ? a - b : a + b; break; } return -1;
+    case OP_OP:    if (F3(x) == 0 && (F7(x) == 0x00 || F7(x) == 0x20 || F7(x) == 0x01)) {   // 其他 funct7（mulh、div…）要自己加
+                       c->x[rd] = F7(x) == 0x20 ? a - b : F7(x) == 0x01 ? a * b : a + b; break; } return -1;
     case OP_IMM:   if (F3(x) == 0) { c->x[rd] = a + imm_i(x); break; } return -1;
-    case OP_LOAD:  if (F3(x) == 2) { c->x[rd] = ld32(c, a + imm_i(x)); break; } return -1;
-    case OP_STORE: if (F3(x) == 2) { st32(c, a + imm_s(x), b); break; } return -1;
+    case OP_LOAD:  if (F3(x) == 2 && MEM_OK(c, a + imm_i(x))) { c->x[rd] = ld32(c, a + imm_i(x)); break; } return -1;
+    case OP_STORE: if (F3(x) == 2 && MEM_OK(c, a + imm_s(x))) { st32(c, a + imm_s(x), b); break; } return -1;
     case OP_BR:
         if (F3(x) == 0) { if (a == b) next = c->pc + imm_b(x); break; }   // beq
         if (F3(x) == 1) { if (a != b) next = c->pc + imm_b(x); break; }   // bne
@@ -128,6 +131,12 @@ int main(void) {
     char s[64];
     disasm(0xfe2084e3, s); printf("%-12s %s\n", "0xfe2084e3", s);
     if (strcmp(s, "beq x1, x2, -24")) { printf("FAIL disasm\n"); fails++; }
+    disasm(0x022081b3, s); if (strcmp(s, "mul x3, x1, x2")) { printf("FAIL disasm mul: %s\n", s); fails++; }
+    disasm(0x042081b3, s); if (strncmp(s, "unknown", 7)) { printf("FAIL disasm funct7=2: %s\n", s); fails++; }
+    CPU m; memset(&m, 0, sizeof m); m.x[1] = 6; m.x[2] = 7;        // mul 要真的乘；超出記憶體的 lw 要停機
+    uint32_t p2[] = { 0x022081b3, enc_i(2000, 0, 2, 5, OP_LOAD) };  // mul x3,x1,x2 ; lw x5,2000(x0)
+    memcpy(m.mem, p2, sizeof p2);
+    CHECK(step(&m), 0);  CHECK(m.x[3], 42);  CHECK(step(&m), -1);  CHECK(m.pc, 4);
 
     // 模擬器測試：sum = 1+2+...+10，結果存到 mem[0x100]
     CPU c; memset(&c, 0, sizeof c);

@@ -28,6 +28,8 @@
 // 把「bits 位寬的有號數」變成 32 位元有號數。例：sign_extend(0xFFF, 12) = -1
 // 原理：把該數的最高位（符號位）推到 bit31，再「有號右移」回來
 static inline int32_t sign_extend(uint32_t v, int bits) {
+    if (bits <= 0) return 0;            // 寬度 0：沒有欄位（避免位移 32 位的未定義行為）
+    if (bits >= 32) return (int32_t)v;
     int sh = 32 - bits;
     return (int32_t)(v << sh) >> sh;   // gcc 的有號右移是算術右移（補符號位）
 }
@@ -80,7 +82,7 @@ static inline uint32_t bitrev32(uint32_t x) {
     return bswap32(x);                                          // 最後 byte 順序顛倒
 }
 // 反轉「低 n 位」：bitrev_n(0b0011, 4) = 0b1100
-static inline uint32_t bitrev_n(uint32_t x, int n) { return bitrev32(x) >> (32 - n); }
+static inline uint32_t bitrev_n(uint32_t x, int n) { return n <= 0 ? 0 : bitrev32(x) >> (32 - n); }   // n=0 → 0（避免位移 32）
 // 只反轉每個 byte 內部（= Zbkb 的 brev8）
 static inline uint32_t brev8(uint32_t x) { return bswap32(bitrev32(x)); }
 

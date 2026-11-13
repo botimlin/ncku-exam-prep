@@ -75,7 +75,7 @@ int main(void) {
     ok = 1;
     for (int rep = 0; rep < 1000; rep++) {
         int c = (int)(rnd32() % N_OUT);
-        uint32_t x[2] = { W1[c][0], W1[c][1] };
+        uint32_t x[BNN_WORDS(N_IN)]; memcpy(x, W1[c], sizeof x);   /* 大小跟著 N_IN 變（舊版寫死 2 個 word）*/
         for (int f = (int)(rnd32() % 4); f > 0; f--) { int i = (int)(rnd32() % N_IN); x[i >> 5] ^= 1u << (i & 31); }
         if (predict(x) != c) ok = 0;
     }
