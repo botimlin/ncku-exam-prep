@@ -11,6 +11,23 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parent.parent       # prompt工具包/
 OUT = ROOT / "model" / "01-資源目錄.md"
 ALL = ROOT / "print" / "05-給模型的說明書.md"
+ARS = ROOT / "print" / "06-軍火庫.md"
+ARS_PARTS = ["arsenal/recipes-optimize.md", "arsenal/api-pico.md", "arsenal/api-sync-ros.md",
+             "arsenal/snippets-pico.md", "arsenal/snippets-host.md"]
+ARS_HEAD = """# 軍火庫（合併版，給 local model 一次載入）
+
+> 這份是 `prompt工具包/arsenal/` 的卡片合成的一份（`model/gen_catalog.py` 自動產生，不要手改）。整份約 {n} 字元。
+> 用法：和 `05-給模型的說明書.md` 一起放進 local model 的 system prompt 或知識檔；context 放不下就只放需要的那一區，或改用單張卡片一次貼一張。
+> 操作者說明在 `arsenal/README.md`（沒有放進這份）。
+
+## 給模型：怎麼用軍火庫
+
+- **函式名、參數順序、列舉值、常數、數字一律照這裡抄**，不要憑記憶。這裡沒有的，標【推測】並跟操作者要官方 header 那一行。
+- 要寫程式：先找「片段卡」，照抄，只換 `<尖括號>` 的值；呼叫的每個 API 都要能在「API 卡」找到同樣的簽名。
+- 要優化：先看「食譜卡 優化 0」選食譜編號，再照那張食譜的「修改後」改；改完附驗證指令和量測指令。
+- 引用時寫卡片名稱（例：「API卡 DMA 2/4」）當證據。
+
+"""
 ALL_PARTS = ["model/00-總說明.md", "model/02-要資料.md", "model/01-資源目錄.md", "model/spec-ros2.md",
              "model/spec-pico.md", "model/spec-micro-ros.md", "model/spec-algo.md",
              "model/spec-bits-riscv.md", "model/spec-linux-perf.md"]
@@ -39,6 +56,12 @@ GROUPS = [
     ("規格卡：預製範本（ALGO、BITS、PERF）", [
         ("規格卡 ALGO", "model/spec-algo.md"), ("規格卡 BITS", "model/spec-bits-riscv.md"),
         ("規格卡 PERF", "model/spec-linux-perf.md")]),
+    ("軍火庫：API 卡（照抄的函式簽名、參數順序、列舉值）", [
+        ("", "arsenal/api-pico.md"), ("", "arsenal/api-sync-ros.md")]),
+    ("軍火庫：片段卡（照抄的程式，只換 <> 的值）", [
+        ("", "arsenal/snippets-pico.md"), ("", "arsenal/snippets-host.md")]),
+    ("軍火庫：優化食譜卡（先看 0 號選哪個）、套用卡", [
+        ("", "arsenal/recipes-optimize.md")]),
     ("參考卡：RP2350 硬體與 pico-sdk", [
         ("", "cards/pico-sdk.md"), ("", "cards/pico-dma.md"), ("", "cards/pio.md"),
         ("", "cards/multicore-sync.md"), ("", "cards/riscv-hazard3.md"),
@@ -73,7 +96,7 @@ def group_lines(entries):
             lines.append(f"- （{path} 還沒有）")
             continue
         series = {}
-        for kind, name, topic in cards_in(path, 34 if path.startswith("model/") else TOPIC_MAX):
+        for kind, name, topic in cards_in(path, 34 if path.startswith(("model/", "arsenal/")) else TOPIC_MAX):
             m = re.match(r"(.+?)\s*(\d+)/(\d+)$", name)
             base, num = (m.group(1), m.group(2)) if m else (name, "")
             label = prefix or f"{kind} {base}"
@@ -119,6 +142,15 @@ def main():
         text = re.sub(r"^# ", "## ", text, count=1)        # 每個檔案的標題降一級
         parts.append(f"<!-- 來源：{rel} -->\n{text}")
     joined = "\n\n---\n\n".join(parts) + "\n"
+    aparts = []
+    for rel in ARS_PARTS:
+        if (ROOT / rel).exists():
+            text = re.sub(r"^# ", "## ", (ROOT / rel).read_text(encoding="utf-8").strip(), count=1)
+            aparts.append(f"<!-- 來源：{rel} -->\n{text}")
+    if aparts:
+        ajoined = "\n\n---\n\n".join(aparts) + "\n"
+        ARS.write_text(ARS_HEAD.format(n=f"{len(ajoined) // 1000 * 1000:,}") + ajoined, encoding="utf-8")
+        print(f"{ARS.relative_to(ROOT)}  ({len(ARS.read_text(encoding='utf-8')):,} 字元)")
     ALL.write_text(ALL_HEAD.format(n=f"{len(joined) // 1000 * 1000:,}") + joined, encoding="utf-8")
     print(f"{ALL.relative_to(ROOT)}  ({len(ALL.read_text(encoding='utf-8')):,} 字元)")
 

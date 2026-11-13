@@ -107,6 +107,19 @@ BOOKS = [
             "model/spec-linux-perf.md",
         ],
     ),
+    (
+        "06-軍火庫.pdf",
+        "軍火庫",
+        "照抄用：API 簽名（pico-sdk、rclc、rclpy、pyserial）、程式片段、優化食譜",
+        [
+            "arsenal/README.md",
+            "arsenal/recipes-optimize.md",
+            "arsenal/api-pico.md",
+            "arsenal/api-sync-ros.md",
+            "arsenal/snippets-pico.md",
+            "arsenal/snippets-host.md",
+        ],
+    ),
 ]
 
 CSS = r"""
@@ -176,7 +189,7 @@ def build_html(title: str, subtitle: str, files: list[str], flow: bool) -> str:
         md = path.read_text(encoding="utf-8")
         t = chapter_title(md, rel)
         toc.append(f"<li>{html.escape(t)} <span class='src'>（{html.escape(rel)}）</span></li>")
-        if rel.startswith(("cards/", "model/")) and not rel.endswith("README.md"):
+        if rel.startswith(("cards/", "model/", "arsenal/")) and not rel.endswith("README.md"):
             # 貼上卡要「逐行照原樣」：每張卡用 <pre> 排，不讓 Markdown 把換行合併、把 * 當斜體
             chunks = re.split(r"\n---\n", md)
             body = md_to_html(chunks[0]) + "".join(
