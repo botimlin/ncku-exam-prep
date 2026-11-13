@@ -4,7 +4,7 @@
 
 ---
 
-【規格卡｜ROS 1/10｜ros2/ 總覽：檔案、題型、接法】
+【規格卡｜ROS 1/11｜ros2/ 總覽：檔案、題型、接法】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 資料夾 `預製程式碼/ros2/`。所有 `.py` 要在同一資料夾執行（都 `from frame import ...`）。
 | 檔案 | 行數 | 做什麼 | 題目 | 驗證 |
@@ -25,7 +25,7 @@
 
 ---
 
-【規格卡｜ROS 2/10｜frame.py：封包格式與 CRC（逐 byte）】
+【規格卡｜ROS 2/11｜frame.py：封包格式與 CRC（逐 byte）】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 定義在 `frame.py:4-6`、`encode()` `frame.py:22-25`。**必須和 Pico 端 `pico/serial_proto.c` 逐 byte 相同**（送 `proto_send()` :92-101，收 `proto_feed()` :39-76，格式 `serial_proto.h:3-7`；已實測一致）。
 | 位移 | 欄位 | 大小 | 說明 |
@@ -51,7 +51,7 @@ CRC = CRC-32/ISO-HDLC = Python `zlib.crc32`：
 
 ---
 
-【規格卡｜ROS 3/10｜frame.py：函式、常數、長度上限】
+【規格卡｜ROS 3/11｜frame.py：函式、常數、長度上限】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 | 函式 | 行號 | 回傳 | 注意 |
 | `encode(cmd, seq, payload=b"")` | frame.py:22-25 | 整包 bytes | len ≥ 65536、cmd > 255 → `struct.error` |
@@ -71,7 +71,7 @@ CRC = CRC-32/ISO-HDLC = Python `zlib.crc32`：
 
 ---
 
-【規格卡｜ROS 4/10｜serial_bridge.py：參數、topic、批次、例外】
+【規格卡｜ROS 4/11｜serial_bridge.py：參數、topic、批次、例外】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 node 名 `serial_bridge`（:33）。
 | 參數 | 行號 | 預設 | 意思 |
@@ -92,11 +92,11 @@ node 名 `serial_bridge`（:33）。
 - 例外（:69、:86）：接 `(TimeoutError, serial.SerialException)` → log error、不發布、node 繼續跑。port 打不開（:45）node 起不來。
 - `send()`（:54-57）：seq +1 取低 8 bit。spin 單執行緒（:98），不用鎖。
 執行：`python3 serial_bridge.py --ros-args -p port:=/dev/pts/N -p batch_size:=0`；pub `/numbers` `"{data: [1, 2, 3]}"` → /sum `data: 6`。
-要看程式：請操作者貼「cat -n serial_bridge.py | sed -n 31,91p」
+要看程式：請操作者貼「cat -n serial_bridge.py | sed -n 31,90p」
 
 ---
 
-【規格卡｜ROS 5/10｜fake_pico.py：用法、和真 Pico 的差異】
+【規格卡｜ROS 5/11｜fake_pico.py：用法、和真 Pico 的差異】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 只用 Python 標準函式庫。`os.openpty()` 開虛擬序列埠；你的程式開它印出的 `/dev/pts/N`。
 | 指令 | 效果 |
@@ -120,7 +120,7 @@ node 名 `serial_bridge`（:33）。
 
 ---
 
-【規格卡｜ROS 6/10｜bench.py、multi_device.py：測速、多板平行】
+【規格卡｜ROS 6/11｜bench.py、multi_device.py：測速、多板平行】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 bench.py：每種大小送 iters 次 ECHO 並比對。
 - `python3 bench.py /dev/pts/5 --sizes 4,64,1024,4096 --iters 200`
@@ -135,13 +135,13 @@ multi_device.py（不需 ROS）：
 | `run_parallel(ports, chunks, cmd)` | :51-66 | 依 chunk 順序的 reply list；有 None 丟 `RuntimeError` |
 | `merge_sum(replies)` | :69-72 | TODO(改這裡) u32 加總 & 0xFFFFFFFF |
 - 合併換法：最大值 `max(unpack_u32(r)[0] for r in replies)`；排序 `list(heapq.merge(*[unpack_u32(r) for r in replies]))`；CRC32 不能加。
-- 其他 TODO：:76 ports、:77 資料、:85 cmd（:80 `expect` 跟著改）。
-- 成功：`正確=True`，`每個 port 做了幾塊: {…: 98, …: 98}`，實測 882 ms → 442 ms。
+- 其他要改：:76 ports、:77 資料、:85 cmd（:80 `expect` 跟著改）。
+- 成功：`正確=True`，`每個 port 做了幾塊: {…: 98, …: 98}`，實測 836 ms → 420 ms。
 要看程式：請操作者貼「cat -n multi_device.py | sed -n 24,72p」
 
 ---
 
-【規格卡｜ROS 7/10｜node_template.py：改哪幾行、QoS 規則】
+【規格卡｜ROS 7/11｜node_template.py：改哪幾行、QoS 規則】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 `/number`(Int32) → 乘 factor → `/double`(Int32)，node 名 `processor`。沒實測。
 | 行號 | 現在 | 改法 |
@@ -166,7 +166,7 @@ QoS：
 
 ---
 
-【規格卡｜ROS 8/10｜ros2 CLI 除錯順序】
+【規格卡｜ROS 8/11｜ros2 CLI 除錯順序】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 出處 `README.md:33-69`（沒實測）。每個新終端機先 `source /opt/ros/jazzy/setup.bash`（否則 `ros2: command not found`）。
 順序：node 在不在 → topic 在不在 → 兩端同一個 topic → count 合理 → 真的有資料。
@@ -187,7 +187,7 @@ QoS：
 
 ---
 
-【規格卡｜ROS 9/10｜custom_msg_cheatsheet.md：自訂 msg】
+【規格卡｜ROS 9/11｜custom_msg_cheatsheet.md：自訂 msg】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 先用內建型別（:6-13），不用自訂：
 | 資料 | 型別（std_msgs/msg/） | Python `msg.data` |
@@ -207,7 +207,7 @@ QoS：
 
 ---
 
-【規格卡｜ROS 10/10｜陷阱與驗證（frame.py diff）】
+【規格卡｜ROS 10/11｜陷阱與驗證（frame.py diff）】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 封包對不上 → 跑 `python3 frame.py diff "預期hex" "實際hex"`（frame.py:126-131），不要自己數 byte。兩段都要加引號；參數不是 3 個會印 `用法: python3 frame.py diff "預期 hex" "實際 hex"（兩個都要加引號）`。
 輸出：`| 欄位 | 預期 | 實際 | 相同? |` 表格、`第一個不同：…`、`線索：…`。
@@ -227,3 +227,19 @@ QoS：
 | baudrate 設 1200 | 板子重開進 BOOTSEL → 不要用 1200 |
 驗證：`python3 frame.py` → `frame.py 自我測試 OK`；bridge log `20000 個數字, 20 包, 總和=…`；multi_device `正確=True`。
 要看程式：請操作者貼「cat -n frame.py | sed -n 104,131p」
+
+---
+
+【規格卡｜ROS 11/11｜程式陷阱：看到這種寫法就照右邊改】
+以下是正確的參考資料（ROS 2 Jazzy、rclpy）。和你的記憶不同時，以這張為準。函式名照抄。
+| 程式長這樣 | 問題 | 改成 |
+|---|---|---|
+| 訂閱和發布的 topic 字串不一樣（例 `"/number"` 對 `"/numbers"`） | 差一個字就收不到 | 照題目或發布端的名稱抄 |
+| 發布端 `ReliabilityPolicy.BEST_EFFORT`，訂閱端只寫 `10` 或 RELIABLE | QoS 不相容：收不到、不報錯 | 訂閱端第 4 個參數改 `QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)`，檔頭加 `from rclpy.qos import QoSProfile, ReliabilityPolicy` |
+| 訂閱端 `TRANSIENT_LOCAL`、發布端 VOLATILE | 不相容 | 訂閱端改 VOLATILE（預設） |
+| 兩端型別不同（Int32 對 Int64） | 連不上 | 兩端用同一個型別 |
+| 沒有 `rclpy.spin(node)` | callback 不會跑 | main 最後加 `rclpy.spin(node)` |
+| callback 裡 `time.sleep`、大量 `print` | 處理不完、掉資料 | 移出 callback |
+| `Int64(data=x)` 的 x 是 float | 例外、node 消失 | `Int64(data=int(x))` |
+| 兩個 node 同名 | 參數、service 混亂 | 換名或 `--ros-args -r __node:=新名` |
+查連線：T1 `ros2 node list`、T3 `ros2 topic info -v /名稱`（看兩端 Reliability）。

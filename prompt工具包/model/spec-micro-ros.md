@@ -153,7 +153,7 @@ int32 平方（45-46）：`out[i] = (int32_t)((uint32_t)in[i] * (uint32_t)in[i])
 | `ping_timer_cb` | 53-64 | frame_id=`"亂數_device_id"`、設 .size、發 ping |
 | `ping_sub_cb` | 68-73 | 不是自己的 ping → 原封不動發 pong |
 | `pong_sub_cb` | 75-79 | 自己的 pong → `pong_count++`（沒輸出） |
-| `create_entities` | 81-103 | node `pingpong_node`（85，TODO 多板改名）；ping pub reliable，其餘 best_effort；3 handle（97） |
+| `create_entities` | 81-103 | node `pingpong_node`（85；84 的 TODO：多板改名）；ping pub reliable，其餘 best_effort；3 handle（97） |
 | `destroy_entities` | 105-117 | destroy timeout 設 0，全部 fini |
 板子 ID（131-134）：`pico_get_unique_board_id()` 出廠序號算成 `device_id` → 每塊一定不同。
 狀態機（138-158）：

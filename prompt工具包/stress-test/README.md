@@ -38,3 +38,12 @@ python3 run.py --cards-dir ../cards/_舊版 ...    # 舊版卡片 A/B 對照
 - 範例裡的數值會被**照抄**（檔名、行號）→ 範例標「只示範格式，內容不要照抄」。
 - 改建置檔時，「修改後 = 原本那行 + 在 `)` 前加新名稱，其他字不動」比「照原本寫法」有效。
 - 引用常用反引號 `` `…` `` 而不是「」→ 評分時兩種都算。
+
+## 主流程實測（`flow.py`，2026-11-14）
+模擬考場操作者照 `考場SOP.md` 做，多輪對話；照模型寫的「原本 → 改成」手動套用到檔案，再用 gcc / pico-sdk 2.2.0 實際編譯、跑測資（`flow_apply.py`）。題目在 `flow_cases.py`（5 個假考題：serial 批次、DMA、ROS 2 topic/QoS、位元欄位、雙核 race）。
+```bash
+python3 flow.py --model gemma4:12b --ctx 4096,8192 --fix-only --plain \
+  --check-card <G04-01 全文檔> --fix-card <G05-01 全文檔> --feedback 3 --build --out out/flow/x
+python3 flow.py --report out/flow
+```
+結果（gemma4:12b，關 thinking）：舊流程（模型自己一直要卡）照著改完能用 0/5 → 修 bug 專用對話（SOP §5.2）4/5（4k、8k 相同）。gemma4:e4b 最好 1/5。serial 批次（兩端大改寫）兩個模型都沒成功。
