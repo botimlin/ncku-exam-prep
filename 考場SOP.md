@@ -56,7 +56,7 @@
   - [ ] clone → 改一個小檔 → commit → push → 看 pipeline：**跑多久**（＝明天每次提交的最短間隔）、分數印在 log 哪裡。
   - [ ] 打開 `.gitlab-ci.yml`，抄下：`rules:` / `only:` / `if: $CI_COMMIT_MESSAGE` 的條件（**commit message 要寫什麼格式**）、哪個分支、會不會因為 push tag 觸發。
   - [ ] 有問題 21:00 前寫信 srecruit.csie.ncku@gmail.com。
-- [ ] 填好 `cards/00-starter.md` 開場 1/3 的「熟：{{…}}；不熟：{{…}}」，存成一段直接複製的文字（雲端筆記）。
+- [ ] 把 `cards/00-starter.md` 開場 1/3 整張複製進雲端筆記最上面（已設定成「全部第一次接觸」，不用填任何東西），開新對話時直接複製。
 - [ ] 預製程式碼帶進考場的方法測一次：私人 GitHub repo（用 token clone）**和** Google Drive zip 兩條都要通；`cards/08-docs-map.md` 的網址存書籤。
 - [ ] 印：`print/00-考場SOP.pdf`（口袋版那頁放最上面）、`print/04-提示詞卡.pdf`、`print/06-軍火庫.pdf`。**不用印** `01-考場隨身手冊.pdf`（舊流程）。
 - [ ] 開一份雲端筆記「考場筆記」，貼上第 3 節的範本。
