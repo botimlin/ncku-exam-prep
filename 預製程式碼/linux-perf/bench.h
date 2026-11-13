@@ -38,7 +38,7 @@ static volatile uint64_t bench_sink_;
 #endif
 
 /* BENCH(名稱, 次數, 程式碼)：重複執行取最小值並印出；結果也存在 bench_last_ns */
-static uint64_t bench_last_ns;
+static uint64_t bench_last_ns __attribute__((unused));   /* 只用 now_ns() 時不會有 unused 警告 */
 #define BENCH(name, reps, code) do {                                    \
     uint64_t best_ = UINT64_MAX;                                        \
     for (int r_ = 0; r_ < (reps); r_++) {                               \

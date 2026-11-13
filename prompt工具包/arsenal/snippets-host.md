@@ -107,7 +107,6 @@ multi_device.py 怎麼做：
 - 有一塊逾時 → 丟 `RuntimeError("有 chunk 失敗，見上方訊息")`。
 - 會印 `每個 port 做了幾塊: {...}`。
 ✗ 錯：多條執行緒共用一個 `ser` → 回覆互搶 → ✓ 對：一個 port 一條執行緒、各自開。
-✗ 錯：同一個 port 在 `ports` 寫兩次 → 兩條執行緒搶同一個 port。
 前提：`multi_device.py`、`frame.py` 同資料夾；`pip install pyserial`。
 驗證：`python3 fake_pico.py -n 2 --link /tmp/ttyFAKE` → ports = `/tmp/ttyFAKE0`、`/tmp/ttyFAKE1`；5 萬個 u32 切 49 塊（24 + 25）→ `ans == sum(values) & 0xFFFFFFFF`（實跑通過）。
 
@@ -286,8 +285,8 @@ static void alloc_msgs(void) {
 - 收到元素數 > `capacity` → callback 仍被叫，但 `data.size = 0`。
 - dim capacity = 0 → 電腦端填了 `layout.dim` 整則會被丟掉。
 ✗ 錯：buffer 放 stack（主 stack 只有 2 KB）。
-前提：CMake `target_link_libraries(app pico_stdlib microros)`、`target_include_directories(app PUBLIC libmicroros/include)`。
-驗證：`pico_array_compute.c` 原樣 `make` 0 錯 0 警告；沒在板子上跑。
+前提：CMake `target_link_libraries(app pico_stdlib microros)`、include `libmicroros/include`。
+驗證：本卡 + 2/4 + 3/4 組成 .c，pico2 + jazzy libmicroros `-Wall -Wextra` 編譯 0 警告；沒上板跑。
 
 ---
 
@@ -316,7 +315,7 @@ void sub_cb(const void *msgin) {
 - reliable 發佈會等 agent ACK 才回來。
 ✗ 錯：`msg_out.data.size` > `capacity` → 越界。✗ 錯：在 callback 裡 `printf` → 會混進 micro-ROS 的序列埠資料。
 前提：HOST-UROS 1/4 的 `alloc_msgs`；`pub` 是 `rcl_publisher_t`。
-驗證：同 `pico_array_compute.c` 編譯通過；沒在板子上跑。
+驗證：同 1/4 一起編譯連結 0 警告；沒在板子上跑。
 
 ---
 
@@ -343,7 +342,7 @@ while (true) {
 - `rclc_executor_init` 第 3 參數 = handle 數（1 個 sub = 1）。
 - 一則上限：reliable ≈ 505 個 int32。
 前提：`#include <rclc/rclc.h>`、`<rclc/executor.h>`；先做 `rmw_uros_set_custom_transport`、`alloc_msgs()`、`rmw_uros_ping_agent`。
-驗證：同範本編譯通過、簽名對過 jazzy `rclc/*.h`；沒在板子上跑。
+驗證：同 1/4 一起編譯連結 0 警告，簽名對過 jazzy `rclc/*.h`；沒在板子上跑。
 
 ---
 
@@ -416,7 +415,7 @@ merge_two_sorted(<A>, <nA>, <B>, <nB>, out);   // out 至少 nA+nB 個，不可�
 
 const uint32_t *lists[] = {<A>, <B>, <C>};
 const size_t lens[] = {<nA>, <nB>, <nC>};
-kway_merge(lists, lens, 3, out);           // 3 = k
+kway_merge(lists, lens, 3, out);           // 3 = k；out 至少 Σlens 個
 
 // 有號 int32：翻符號位 → 排 → 翻回來
 uint32_t *u = (uint32_t *)s;
@@ -464,7 +463,7 @@ printf("\n");
 | SHA-0 | `0164b8a914cd2a5e74c4f7ff082c4d97f1edf880` |
 | SHA-256 | `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad` |
 ✗ 錯：`sha1_init(&c, 1)` 以為是 SHA-1 → 那是 SHA-0。
-✗ 錯：final 後繼續 update → 要重新 init。
+✗ 錯：final 後沒 init 就算下一份 → 答案錯（實測）→ ✓ 對：每份先 `sha1_init`。
 前提：`#include "sha1_sha0.h"`、`"sha256.h"`，一起編 `sha1_sha0.c`、`sha256.c`。
 驗證："a" + "bc" 分兩包 → 上表三個值都對（實跑通過）。
 
@@ -486,7 +485,7 @@ int bit = d >= 0;                            // sign（門檻 0）
 - 最後一個 word 只有 `n % 32` 個有效 bit → 一定要 mask（`bnn_dot` 已做）。
 - 一整層：`bnn_layer_t L = {n_in, n_out, W, thr, flip};` → `bnn_dense_sign(&L, in, out_bits)`；最後一層 `bnn_dense_score(&L, in, score)` → `bnn_argmax(score, n_out)`。
 ✗ 錯：自己寫 popcount 沒 mask 尾巴 → 多算 `32 - n % 32` 個「相同」（實測 N=70 答案錯）。
-✗ 錯：0/1 像素直接當 ±1 以外的值乘 → `bnn_pack` 把 0 當 -1。
+- 注意：`bnn_pack` 把 `v ≤ 0` 都當 -1 → 0/1 像素的 0 = -1。
 前提：`#include "bnn.h"`，一起編 `bnn.c`。
 驗證：N=70 時 `bnn_dot == Σ x[i]*w[i]`（-14 = -14，實跑通過）。
 
@@ -669,8 +668,8 @@ printf("%.3f ms (r=%llu)\n", (now_ns() - t0) / 1e6, (unsigned long long)r);
 - `do_not_optimize(x)`：不用它，`-O2` 會把沒用到的結果整段刪掉 → 量出 0 ms。
 - 寫陣列的程式：`BENCH` 每次已呼叫 `clobber_memory()`。
 - `now_ns()` = `CLOCK_MONOTONIC`，單位奈秒。
-✗ 錯：`bench.h` 不是第一個 include → 沒有 `clock_gettime`（`_POSIX_C_SOURCE` 太晚定義）。
-✗ 錯：用 `-O0` 量 → 數字沒意義；用 `-O2`。
-- 只用 `now_ns()`、沒用 `BENCH` → `-Wall` 會警告 `bench_last_ns defined but not used`（無害）。
+✗ 錯：`bench.h` 放在 `<stdio.h>` 後面 → `CLOCK_MONOTONIC undeclared`（實測）→ ✓ 對：第一個 include。
+✗ 錯：用 `-O0` 量 → 不是優化後的速度；用 `-O2`。
+- 只用 `now_ns()`、沒用 `BENCH` 也不會有 unused 警告（`bench_last_ns` 標了 `__attribute__((unused))`）。
 前提：`#include "bench.h"`（`預製程式碼/linux-perf/`）；`gcc -O2 -Wall -Wextra -std=c11`。
 驗證：印出兩行 `f 原版 / f 新版  x.xxx ms` 與 `加速 1.0x`（同一個函式），實跑通過。

@@ -56,6 +56,12 @@ prompt工具包/
 │   ├── 12-implement.md       實作：位元欄位、封包、PIO 解讀 / 修改、DMA 設定、雙核分工、RISC-V、ROS 2 node
 │   ├── 13-verify-submit.md   驗證與提交：歧義、邊界測資、對拍、量測、micro-ROS、解釋程式、push 前檢查、CI log、git 救援
 │   └── <主題>.md             16 個領域的參考卡（與 domain/ 同名）
+├── arsenal/                  軍火庫：讓模型照抄、不要憑記憶（見 arsenal/README.md）
+│   ├── api-pico.md           API 卡 16 張：pico-sdk DMA、sniffer、PIO 的完整簽名、參數順序、列舉值（對 SDK 2.2.0 標頭編譯驗證）
+│   ├── api-sync-ros.md       API 卡 19 張：雙核 / 鎖 / queue、時間 / stdio / GPIO、rclc、rclpy、pyserial、struct
+│   ├── snippets-pico.md      片段卡 19 張：Pico 端照抄的程式（DMA、sniffer、DMA+PIO、PIO、雙核、計時、序列埠），全部編譯過
+│   ├── snippets-host.md      片段卡 23 張：電腦端（序列埠批次、多板、rclpy、micro-ROS、CRC、排序、位元、pthread），實跑 / 編譯過
+│   └── recipes-optimize.md   食譜卡 15 張（0 = 依現象選食譜，1～14 = 驗證過的優化改法）+ 套用卡
 ├── model/                    給模型的說明書：模型自己說要哪張卡、哪段程式、哪個指令輸出（見 model/README.md）
 │   ├── README.md             操作者用：怎麼回應模型的【需要】、卡名 → 檔案對照
 │   ├── 00-總說明.md          總說明 1/2（角色、規則、請求格式）、2/2（資料代號、狀況 → 先要什麼）
@@ -70,6 +76,8 @@ prompt工具包/
     ├── 04-提示詞卡.pdf       cards/ 的提示卡
     ├── 05-給模型的說明書.pdf model/ 全部
     ├── 05-給模型的說明書.md  model/ 給模型看的部分合成一份（給 local model 一次載入；gen_catalog.py 產生）
+    ├── 06-軍火庫.pdf         arsenal/ 全部
+    ├── 06-軍火庫.md          arsenal/ 合成一份（給 local model 一次載入；gen_catalog.py 產生）
     └── build_print.py        重新產生 PDF（需 markdown-it-py + Node playwright 或 Chrome；`python3 print/build_print.py 05` 只做一本）
 ```
 

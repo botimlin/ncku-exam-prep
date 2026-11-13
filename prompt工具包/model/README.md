@@ -58,6 +58,7 @@
 | `參考卡 git/環境` / `控制DSP` / `FreeRTOS` / `官方文件導航` | `cards/git-env.md`、`control-dsp.md`、`freertos.md`、`08-docs-map.md` | 同上 |
 | `提示卡 開考` / `讀題` / `建置` / `工具` / `除錯` / `優化` | `cards/10-exam-day-flow.md`、`02-read-spec.md`、`05-cmake-build.md`、`06-tools-debug.md`、`04-debug.md`、`03-optimize.md` | 複製那一張，把 `{{…}}` 填好再貼 |
 | `提示卡 範本` / `查詢` / `實作` / `驗證` / `提交` / `速學` | `cards/09-template-adapt.md`、`11-ask-reference.md`、`12-implement.md`、`13-verify-submit.md`（驗證、提交）、`07-unknown-tech.md` | 同上 |
+| `API卡 …`、`片段卡 …`、`食譜卡 優化 n`、`提示卡 套用 1/1` | `arsenal/*.md`（軍火庫） | 系列名 → 檔案的對照在 `arsenal/README.md` |
 | `程式 <路徑> a-b` | 預製程式碼（或出題 repo） | `cat -n <路徑> \| sed -n a,bp`，貼帶行號的結果 |
 | `資料 K1`…`S4` | `model/02-要資料.md` | 照那個代號的指令跑，貼結果 |
 | `指令 <指令>` | 你的終端機 | 跑那個指令，貼輸出（超過 60 行只貼前 60 行，並說還有幾行） |
