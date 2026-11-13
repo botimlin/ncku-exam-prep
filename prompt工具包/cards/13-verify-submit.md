@@ -1,12 +1,12 @@
 # 貼上卡：驗證與提交（題目歧義、邊界測資、對拍、量測、micro-ROS、看懂程式、push 前檢查、CI log、git 救援）
-> 用法：一次只複製一張卡（兩條分隔線之間），先跑卡上「先跑」的指令，把輸出填進 `{{...}}`，再整張貼進對話送出。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q10（提示卡 驗證）、Q11（提示卡 提交）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 流程：讀完題目 → 驗證 1（歧義，早點問助教）→ 驗證 2（邊界測資）→ 驗證 3（對拍）→ 驗證 4（量測 1：計時區段裡該移出的行）→ 驗證 5（量測 2：暖身、重複、統計）。push 前提交 1 → push → 等 pipeline → 提交 2（讀 log）。git 出事用提交 3。驗證 6 是 micro-ROS 專用；驗證 7 是看不懂程式時的學習卡。
 > 來源：提交 3 的 git 指令、提交 1 的 `@{u}` 指令都在暫存 repo 用 git 2.43 實跑過；驗證 3 的骨架與 5 種比對指令、驗證 2 的產生指令在 bash 5.2 / Python 3.12 實跑過；exit code 124（timeout）/ 134 / 137 / 139 實測；micro-ROS 依 `../預製程式碼/micro-ros/README.md` §3、§4；計時依 `pico/timing.h`、`linux-perf/bench.h`｜最後更新 2026-11
 
 ---
 
-【提示卡｜驗證 1/7｜題目有歧義：列出來問助教】→ 驗證 2
+【提示卡｜驗證 1/7｜題目有歧義：列出來問助教】→ Q10-02
 Task (EN): Fill the fixed 9-row table: quote the spec sentence, judge if it allows only one reading, give readings, and how to confirm. Do not choose a reading. Answer in Traditional Chinese.
 任務：找出題目可以有兩種讀法的地方，開考早點問助教。
 <<<資料 開始>>>
@@ -34,7 +34,7 @@ Task (EN): Fill the fixed 9-row table: quote the spec sentence, judge if it allo
 
 ---
 
-【提示卡｜驗證 2/7｜產生邊界測資】→ 驗證 3
+【提示卡｜驗證 2/7｜產生邊界測資】→ Q10-03
 Task (EN): For each fixed row write one concrete input and a 1-line command that creates it. Expected output only if the spec states it, else write 「跑 naive」. Answer in Traditional Chinese.
 任務：依規格列出邊界測資，每列一個具體輸入。
 <<<資料 開始>>>
@@ -65,7 +65,7 @@ Task (EN): For each fixed row write one concrete input and a 1-line command that
 
 ---
 
-【提示卡｜驗證 3/7｜寫對拍腳本】→ 驗證 4
+【提示卡｜驗證 3/7｜寫對拍腳本】→ Q10-04
 Task (EN): Pick ONE compare option A–E from 怎麼算對, then fill slots ①–⑤ of the fixed bash skeleton (④ = that option's command). Keep other lines unchanged. Answer in Traditional Chinese.
 任務：照骨架寫對拍：隨機輸入 → 我的程式 vs 正確答案。
 <<<資料 開始>>>
@@ -91,7 +91,7 @@ done; echo "ALL PASS"
 完整腳本（存成 check.sh，用 bash check.sh 跑）：
 ---
 
-【提示卡｜驗證 4/7｜量測 1：計時區段裡該移出的行】→ 驗證 5
+【提示卡｜驗證 4/7｜量測 1：計時區段裡該移出的行】→ Q10-05
 Task (EN): Take the start and end line numbers from the two timer lines, then for each suspicious line decide if its number is between them. Answer in Traditional Chinese.
 任務：找出被計時、但不該計時的行（印出、sleep、讀寫檔、產生測資）。
 先跑（f.c 換成你的檔名；計時有好幾段就一次問一段）：
@@ -137,7 +137,7 @@ Task (EN): For each fixed row first copy the evidence line (number + code) from 
 
 ---
 
-【提示卡｜驗證 6/7｜micro-ROS 問題定位】→ 工具 7
+【提示卡｜驗證 6/7｜micro-ROS 問題定位】→ Q04-07
 Task (EN): Quote one data line, copy the matching option keyword, pick ONE cause A–H, then write its fix with the real values from the data. Answer in Traditional Chinese.
 任務：判斷 micro-ROS 哪裡不通（模型不懂時先貼 `預製程式碼/micro-ros/README.md` §3、§4）。
 <<<資料 開始>>>
@@ -193,7 +193,7 @@ Task (EN): First list the functions and types the code uses, then those not defi
 
 ---
 
-【提示卡｜提交 1/3｜push 前檢查】→ push 後 提交 2
+【提示卡｜提交 1/3｜push 前檢查】→ push 後 Q11-02
 Task (EN): For each fixed row copy the rule and the actual value from the named data block, then mark OK / NG / 看不到. Push only if every row is OK. Answer in Traditional Chinese.
 任務：push 前逐項檢查，避免交錯檔或交壞。每個指令的輸出貼在自己那一格。
 <<<資料 開始>>>
@@ -232,10 +232,10 @@ Task (EN): Scan the log from the top. The FIRST error decides the type; later fa
 {{貼 log 或 grep 結果}}
 <<<資料 結束>>>
 類型（→ 下一步）：
-A 建置錯（error:、undefined reference、CMake Error）→ 05 建置卡
-B 執行時崩潰（Segmentation fault、Aborted、core dumped、Traceback、exit code 139 / 134）→ 工具 1 / 2
-C 答案錯（Wrong Answer、expected … got、diff 有輸出、FAIL）→ 驗證 3 對拍
-D 超時（Timeout、timed out、TLE、exit code 124 / 137、Killed）→ 工具 3（卡住）或食譜卡 優化 0（太慢）
+A 建置錯（error:、undefined reference、CMake Error）→ Q03-02（CMake）或 Q03-03（colcon）
+B 執行時崩潰（Segmentation fault、Aborted、core dumped、Traceback、exit code 139 / 134）→ Q04-01 / Q04-02
+C 答案錯（Wrong Answer、expected … got、diff 有輸出、FAIL）→ Q10-03 對拍
+D 超時（Timeout、timed out、TLE、exit code 124 / 137、Killed）→ Q04-03（卡住）或 F01-00（太慢）
 E 環境（pull image 失敗、no space left、runner system failure）→ 重跑或問助教
 F 沒評分（job skipped、commit message 不符）→ 照 CI 規定改 commit message
 規則：

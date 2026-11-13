@@ -1,5 +1,5 @@
 # 貼上卡：實作（照規格寫 / 改程式：位元欄位、封包、PIO、DMA、雙核、RISC-V、ROS 2）
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容送出。每張 ≤ 1200 字元，每張都能在新對話直接用。卡上寫「先貼 xx.md」的，同一個對話先貼那張參考卡，模型回「收到」再貼提示卡（小模型沒有硬體知識，參考卡就是它的知識）。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q09（提示卡 實作）。每張 ≤ 1200 字元。 卡上寫「前面已貼 xx」的，同一個對話要先有那張參考卡。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。能用程式算的（bit 欄位、struct 大小、機器碼解碼）都交給程式，模型只抄結果、照樣板填。判斷規則直接寫在表格的列裡（壓力測試：規則放在列裡比放在「規則」段落準）。標題後的 `→` 是下一張。
 > 流程：實作 1、2（位元 / 封包）、3 → 4（PIO）、5（DMA）、6（雙核）、7、8（RISC-V）、9（ROS 2）→ 編譯測試 → `09-template-adapt.md` 範本 7（檢查）。
 > 機器碼解碼（實作 8 用，印 2 行：欄位、格式 + 指令名 + imm；已和 GNU as 2.42 對過 RV32I/M，Zba/Zbb 等擴充印「?」）：`python3 -c "x=0xX;f=lambda h,l:x>>l&(1<<h-l+1)-1;s=lambda v,n:v-(v>>n-1<<n);o,a,r,b=f(6,0),f(14,12),f(24,20),f(31,25);F={51:'R',19:'I',3:'I',103:'I',35:'S',99:'B',111:'J',55:'U',23:'U'}.get(o,'?');T={51:'add sll slt sltu xor srl or and',19:'addi slli slti sltiu xori srli ori andi',3:'lb lh lw ? lbu lhu',35:'sb sh sw',99:'beq bne ? ? blt bge bltu bgeu',103:'jalr'};N=(T.get(o,'?').split()+['?']*8)[a*(o!=103)];N={111:'jal',55:'lui',23:'auipc'}.get(o,N);k=o==19 and a in(1,5);N=(N if b==0 else{'add':'sub','srl':'sra'}.get(N,'?')if b==32 else'mul mulh mulhsu mulhu div divu rem remu'.split()[a]if b==1 else'?')if o==51 else('srai'if b==32 and a==5 else N if b==0 else'?')if k else N;m={'I':r if k else s(f(31,20),12),'S':s(b<<5|f(11,7),12),'B':s(f(31,31)<<12|f(7,7)<<11|f(30,25)<<5|f(11,8)<<1,13),'J':s(f(31,31)<<20|f(19,12)<<12|f(20,20)<<11|f(30,21)<<1,21),'U':hex(f(31,12)),'R':'無'}.get(F,'?');print('op',hex(o),'rd',f(11,7),'f3',a,'rs1',f(19,15),'rs2',r,'f7',hex(b));print('格式',F,'指令',N,'imm',m)"`
@@ -60,9 +60,9 @@ Task (EN): Fill the offset table from the spec (offset = previous offset + previ
 
 ---
 
-【提示卡｜實作 3/9｜PIO 程式逐行解讀 + C 端要的設定】→ 實作 4
+【提示卡｜實作 3/9｜PIO 程式逐行解讀 + C 端要的設定】→ Q09-04
 Task (EN): A script already computed the cycles, autopull/autopush, the read shift and clkdiv. Copy its lines into the tables, take the shift direction from the spec, then compare each row with the C init. Answer in Traditional Chinese.
-任務：逐行解讀 PIO 程式，推出 C 端設定。（前面已貼 `pio.md` PIO 2/8、3/8）
+任務：逐行解讀 PIO 程式，推出 C 端設定。（前面已貼 L03-02、L03-03）
 取得：建置後跑本檔開頭「PIO 檢查」那行 python3（換成你的 .pio.h、clk_sys、速率）。
 <<<資料 開始>>>
 [程式印出的幾行]
@@ -85,9 +85,9 @@ C 端要改的地方（每個 NG 列一行：第幾行 → 改成什麼；沒有
 
 ---
 
-【提示卡｜實作 4/9｜PIO 程式最小修改 + C init】→ 範本 7
+【提示卡｜實作 4/9｜PIO 程式最小修改 + C init】→ Q07-07
 Task (EN): Using the pio.md cards pasted earlier, pick the change type(s), write the numbers of the places that type lists, output one patch per number only, then fill the checklist. Answer in Traditional Chinese.
-任務：照規格最小修改 PIO 程式，C 端一起改。（前面已貼 `pio.md` PIO 1/8、3/8）
+任務：照規格最小修改 PIO 程式，C 端一起改。（前面已貼 L03-01、L03-03）
 <<<資料 開始>>>
 [要改成什麼] {{例如 一次送 2 bit、CPU 每次 put 1 個 byte、baud 改 9600}}
 [.pio 原文，帶行號]（第一行寫檔名；`cat -n x.pio`）
@@ -116,9 +116,9 @@ D 時序變了 → ⑧ 改 [n] 或加 nop；[n] ≤ 上限（3/8 的表）
 
 ---
 
-【提示卡｜實作 5/9｜DMA 設定：需求表 → pico-sdk 呼叫】→ 範本 7
+【提示卡｜實作 5/9｜DMA 設定：需求表 → pico-sdk 呼叫】→ Q07-07
 Task (EN): Using the pico-dma.md cards pasted earlier, fill the table, then the code template. Answer in Traditional Chinese.
-任務：依規格填 DMA 設定表，再填程式樣板（前面已貼 DMA 2/8，PIO 另加 4/8）。
+任務：依規格填 DMA 設定表，再填程式樣板（前面已貼 L02-02，PIO 另加 L02-04）。
 <<<資料 開始>>>
 [規格] {{…}}
 [現在的程式，帶行號]（沒有寫「無」）
@@ -149,9 +149,9 @@ dma_channel_unclaim(ch);
 
 ---
 
-【提示卡｜實作 6/9｜雙核分工：共享變數表 → 保護方式】→ 範本 7
+【提示卡｜實作 6/9｜雙核分工：共享變數表 → 保護方式】→ Q07-07
 Task (EN): Using the multicore-sync.md cards pasted earlier, list every global variable, pick ONE protection A–F for each (first rule that matches, top to bottom), then output a minimal patch; for B fill the B template. Answer in Traditional Chinese.
-任務：找出兩核都會碰的變數，選保護方式，給最小修改。（前面已貼 `multicore-sync.md` 多核同步 4/8、5/8）範本：`pico/app_multicore.c`。
+任務：找出兩核都會碰的變數，選保護方式，給最小修改。（前面已貼 L05-04、L05-05）範本：`pico/app_multicore.c`。
 <<<資料 開始>>>
 [規格：core0、core1 各做什麼] {{…}}
 [程式，帶行號]（第一行寫檔名；兩核會跑到的函式與全域變數）
@@ -183,9 +183,9 @@ F spin lock：其他兩核都會寫的資料（鎖內只放讀寫那幾行）
 
 ---
 
-【提示卡｜實作 7/9｜RISC-V 組語逐行解讀】→ 看到機器碼用實作 8
+【提示卡｜實作 7/9｜RISC-V 組語逐行解讀】→ 看到機器碼用 Q09-08
 Task (EN): Using the riscv-hazard3.md cards pasted earlier, explain each line, write each forward branch's condition reversed, find the loop, then write the equivalent C using the reversed conditions. Answer in Traditional Chinese.
-任務：逐行解讀 RV32 組語，寫出等價的 C。（前面已貼 `riscv-hazard3.md` RISC-V 1/8、2/8）
+任務：逐行解讀 RV32 組語，寫出等價的 C。（前面已貼 L06-01、L06-02）
 <<<資料 開始>>>
 [組語，帶行號]（`cat -n f.S`，或 .dis 的一段）
 {{貼}}
@@ -239,9 +239,9 @@ imm：-4
 
 ---
 
-【提示卡｜實作 9/9｜從規格改 ROS 2 node（node_template.py）】→ 範本 7
+【提示卡｜實作 9/9｜從規格改 ROS 2 node（node_template.py）】→ Q07-07
 Task (EN): Fill the interface table, then fill the edit table for node_template.py (new code, or 不改). Subscription QoS must match the publisher. Answer in Traditional Chinese.
-任務：照規格改 `ros2/node_template.py`。（前面已貼 `ros2.md` ROS 2 3/8 QoS）
+任務：照規格改 `ros2/node_template.py`。（前面已貼 L08-03 QoS）
 <<<資料 開始>>>
 [規格原文]（node 名、topic、型別、QoS、參數、運算）
 {{貼}}

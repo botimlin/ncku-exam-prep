@@ -1,11 +1,11 @@
 # 貼上卡：陌生技術速學（備援）
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。提示卡＝直接用的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q12（提示卡 速學）、L23（參考卡 速學）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。小模型對陌生技術幾乎一定記錯，所以每張都要貼官方文字（README 開頭、header、範例）給它根據。
 > 來源：full/07-unknown-tech.md、lite/07-unknown-tech.md（詳細版）｜最後更新 2026-11
 
 ---
 
-【提示卡｜速學 1/6｜陌生技術定位】→ 速學 2
+【提示卡｜速學 1/6｜陌生技術定位】→ Q12-02
 Task (EN): Using only the pasted official text, fill the 6 fixed slots about this technology. Write 「資料中沒有」 when not stated. Answer in Traditional Chinese.
 任務：根據官方文字定位 {{技術名稱}}（版本 {{版本}}）。我熟的是 {{熟悉的技術}}。
 <<<資料 開始>>>
@@ -25,7 +25,7 @@ Task (EN): Using only the pasted official text, fill the 6 fixed slots about thi
 
 ---
 
-【提示卡｜速學 2/6｜API 地圖】→ 速學 3
+【提示卡｜速學 2/6｜API 地圖】→ Q12-03
 Task (EN): List only functions that appear in the pasted header, in usage order, in a table. Mark the 5 most relevant to my goal with ★. Answer in Traditional Chinese.
 任務：把 {{技術名稱}} 的 header 整理成 API 表。我的目標：{{一句話}}
 <<<資料 開始>>>
@@ -41,7 +41,7 @@ struct / enum（≤ 5 列）：| 名稱 | 用途 |
 
 ---
 
-【提示卡｜速學 3/6｜解讀最小範例】→ 速學 4
+【提示卡｜速學 3/6｜解讀最小範例】→ Q12-04
 Task (EN): Explain the example line by line in a table: what it does, required or optional, affects performance or not. Say 「看不到定義」 for unknown functions. Answer in Traditional Chinese.
 任務：逐行解讀 {{技術名稱}} 的官方最小範例。
 <<<資料 開始>>>
@@ -57,7 +57,7 @@ Task (EN): Explain the example line by line in a table: what it does, required o
 
 ---
 
-【提示卡｜速學 4/6｜驗證我的理解】→ 速學 5
+【提示卡｜速學 4/6｜驗證我的理解】→ Q12-05
 Task (EN): Check each of my statements against the pasted docs. Answer exactly 對 / 錯 / 資料中沒有 for each, with a quote. Answer in Traditional Chinese.
 任務：用文件逐句檢查我對 {{技術名稱}} 的理解。
 <<<資料 開始>>>
@@ -72,11 +72,11 @@ Task (EN): Check each of my statements against the pasted docs. Answer exactly �
 規則：只根據文件段落判斷；判「錯」時給正確說法。提到的 API 名稱要逐一在文件找到原文才算「對」，有一個找不到 → 「資料中沒有」並寫出名稱。
 只輸出：
 | # | 對 / 錯 / 資料中沒有 | 證據：「原文」 | 正確說法（判錯時） |
-想用實驗確認某一句時，改用除錯 2/6。
+想用實驗確認某一句時，改用 Q05-02（除錯 2/6）。
 
 ---
 
-【提示卡｜速學 5/6｜對準題目】→ 優化 2 或範本 2
+【提示卡｜速學 5/6｜對準題目】→ Q06-02 或 Q07-02
 Task (EN): Map the task requirement to concepts/APIs that appear in the pasted code and docs. Fill the 3 fixed slots. Answer in Traditional Chinese.
 任務：把題目要求對到 {{技術名稱}} 的概念和 API。
 <<<資料 開始>>>

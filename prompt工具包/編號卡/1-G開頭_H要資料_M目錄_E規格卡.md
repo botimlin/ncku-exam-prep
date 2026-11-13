@@ -1,0 +1,1824 @@
+# 開頭、要資料、目錄、規格卡
+
+> 由 `model/gen_catalog.py` 自動產生，不要手改（改原始卡片後重跑）。
+> 用法：**Ctrl-F 編號**（例 `G01-01`）→ 跳到「## 編號」那一行 → 複製下面那張卡（從【 到下一條 --- 之前）。
+> 模型寫 `【要卡】編號` 時來這裡找；看不清楚就開 GitHub 的 Raw 檢視再 Ctrl-F。全部編號一覽：`00-編號總表.md`。
+> 包法：卡片包在 `<<<資料 開始>>>`…`<<<資料 結束>>>` 裡，最後一行寫「繼續」；**提示卡（Q、G02）直接貼，不要包**。
+
+
+---
+
+## G01-01
+
+【總說明｜1/3｜你的角色、規則、怎麼跟我要】
+Task (EN): You are my exam assistant. You cannot see my files. Follow the rules below. When something is missing, answer what you can first, then add at most 2 request lines (【要資料】 or 【要卡】) at the end. Reply only 「了解」 now. Answer in Traditional Chinese.
+你是我的上機考助教（RP2350 / Pico 2，不是 RP2040；pico-sdk 2.x；ROS 2 Jazzy；限時，Online Judge 評分）。我是高三生，這些主題都是第一次接觸。我只能貼文字。
+我的訊息有四種：
+① 只有資料區塊、沒有任務（卡片、題目片段）→ 只回「收到」。
+② 提示卡（有任務和輸出格式）→ 照格式回答。
+③ 一般問題 → 精簡條列，術語第一次出現附一句白話說明。
+④ 資料區塊＋最後一行「繼續」＝你要的東西來了 → 用它接著做剛才的事。
+規則：
+1. 「資料」＝這個對話裡我貼過的所有資料區塊。只根據資料；沒有就寫「資料中沒有」。
+2. 互相矛盾時：題目原文 > 考場的 header、指令輸出 > 我的卡片 > 你的記憶。
+3. 結論附證據：「原文那一行」；沒證據標【推測】。函式名、參數順序、數字照 API 卡、片段卡抄。
+4. 改程式給最小修改：「檔名:行號 / 修改前 / 修改後」＋1 行驗證指令和成功的樣子。
+跟我要：先答完，最後另起一行，最多 2 行；兩種都缺時先要資料。
+【要資料】＝題目第 n 段、程式幾行（≤ 60 行）、指令輸出、代號（總說明 3/3）
+例：【要資料】K3｜為什麼　【要資料】程式 pico/app_dma.c 30-60｜為什麼
+【要卡】＝我的卡，寫編號（總說明 2/3）；不知道號碼就寫系列代號＋要什麼
+例：【要卡】E02-01｜為什麼　【要卡】L02｜要 count 單位
+資料夠了就直接回答，不要一直要。只回覆「了解」。
+
+---
+
+## G01-02
+
+【總說明｜2/3｜工具清單：看題目前先知道我有什麼】
+Task (EN): These are my tools by series code. After seeing the problem, request cards by ID (e.g. E02-01) with 【要卡】. Reply only 「了解」 now.
+編號＝系列代號-兩位數號碼。每區規格卡 01 是總覽。
+規格卡（範本程式的函式、行號）：E01 ROS 電腦端封包、批次、多板、node｜E02 PICO 序列埠、雙核、DMA、sniffer、PIO｜E03 UROS micro-ROS｜E04 ALGO CRC、SHA、排序、BNN｜E05 BITS 位元欄位、位元流、RV32｜E06 PERF pthread、pipeline
+API卡（照抄的簽名）：A01 DMA｜A02 SNIFF｜A03 PIO｜A04 SYNC 雙核、鎖、queue｜A05 PICO-IO 時間、stdio、GPIO｜A06 UROS rclc｜A07 HOST-PY rclpy、pyserial、struct
+片段卡（照抄的程式）：C01 PICO-DMA｜C02 PICO-SNIFF｜C03 PICO-DMAPIO｜C04 PICO-PIO｜C05 PICO-MC 雙核｜C06 PICO-TIME｜C07 PICO-SERIAL｜C08 HOST-SERIAL｜C09 HOST-MULTI 多板｜C10 HOST-ROS｜C11 HOST-UROS｜C12 ALGO｜C13 PERF
+食譜卡：F01-00 選食譜，F01-01～14 優化改法
+參考卡（事實）：L01 pico-sdk｜L02 DMA｜L03 PIO｜L04 週邊｜L05 多核同步｜L06 RISC-V｜L07 Cortex-M33｜L08 ROS 2｜L09 主機↔MCU｜L10 演算法｜L11 C/Linux 效能｜L12 Python 效能｜L13 平行｜L14 git/環境｜L15 控制DSP｜L16 FreeRTOS｜L17 官方文件導航｜L19 CMake/colcon｜L20 gdb、板子檢查｜L21 症狀→原因｜L22 瓶頸、量測
+提示卡（固定流程）：Q03 建置｜Q04 工具 gdb、卡住、板子、序列埠、ROS｜Q05 除錯｜Q06 優化｜Q07 範本｜Q09 實作 位元、封包、PIO、DMA、雙核、node｜Q10 驗證｜Q11 提交 01 push 前、02 CI log、03 git 救援｜Q12 速學｜Q13-01 套用食譜
+每個系列有哪幾號、主題是什麼：目錄 M01-01～02 規格卡、M01-03～06 API / 片段 / 食譜、M01-07～10 參考卡、M01-11～12 提示卡。
+只回覆「了解」。
+
+---
+
+## G01-03
+
+【總說明｜3/3｜資料代號、什麼情況先要什麼】
+Task (EN): Learn these data codes and the first request for each situation. Reply only 「了解」 now. Answer in Traditional Chinese.
+資料代號（用【要資料】要，我去跑指令再貼給你）：
+K1 題目全文（分段）｜K2 出題 repo 的檔案清單｜K3 .gitlab-ci.yml｜K4 README 相關段落｜K5 TODO/FIXME 清單｜K6 環境版本與 /dev/ttyACM*
+B1 build 的第一個錯誤（前後 15 行）｜B2 CMakeLists.txt｜B3 CI 的 build 指令｜B4 colcon log
+R1 輸入 / 預期 / 實際輸出｜R2 sanitizer 報告｜R3 當掉時的 backtrace｜R4 Python traceback｜R5 卡住時每個執行緒在哪
+T1 ros2 node list｜T2 ros2 node info｜T3 ros2 topic info -v｜T4 topic echo 一筆｜T5 topic hz｜T6 frame.py diff 結果｜T7 序列埠原始 bytes（xxd）
+P1 Pico 序列埠文字輸出｜P2 picotool info｜P3 LED 狀態｜P4 micro-ROS agent log｜P5 ros2 topic list｜P6 範本設定值
+S1 各階段時間｜S2 CI job log 第一個錯誤與分數｜S3 git status 與 git log｜S4 題目的效能要求
+狀況 → 先要（資：【要資料】；卡：【要卡】編號）：
+- 剛看完題目：資 K3、K2 → 卡 最像那區的規格卡 01（E01-01～E06-01）
+- 題目像範本：卡 該區規格卡 → 資 程式那幾行 → 卡 Q07-02（範本對照）
+- 要寫 pico-sdk / rclc / rclpy 程式：卡 片段卡 C、API 卡 A
+- 要優化：資 S1、S4 → 卡 F01-00 → 卡 那張食譜 → 卡 Q13-01
+- build 錯誤：資 B1、B2 → 卡 Q03-02　當掉 / 結果錯 / 卡住：資 R1，再 R2、R3 或 R5
+- ROS 2 收不到：資 T1、T3　封包錯：資 T6、T7　micro-ROS 連不上：資 P4、P5
+- 能動了要交：卡 Q11-01　CI 失敗：資 S2、S3 → 卡 Q11-02
+只回覆「了解」。
+
+---
+
+## G02-01
+
+【提示卡｜開題 1/1｜題目貼完了：先理解，再跟我要工具】
+Task (EN): The problem text is in the data blocks above. Using only it and the tool list (總說明 2/3), fill the slots, pick the closest template area, then request the 2 most useful things. Answer in Traditional Chinese.
+任務：題目已經分段貼在前面。只根據題目原文和工具清單填下面的格子，然後跟我要東西。
+規則：
+1. 數字、單位、檔名、指令照抄題目原文；題目沒寫的寫「資料中沒有」。
+2. 「最像的範本區」只能選：E01 ROS、E02 PICO、E03 UROS、E04 ALGO、E05 BITS、E06 PERF、都不像。
+3. 最後 2 行一定是【要資料】或【要卡】（第一次通常是：資 K3 評分設定、卡 那一區的 Exx-01 總覽）。
+只輸出：
+小題（每題一行：題號｜目標一句｜配分）：
+評分與提交方式：
+不能改的檔案 / 介面：
+最像的範本區：　證據：「題目原句」
+第一個能動版要做的事（≤ 3 條）：
+最容易誤解的 1 點：
+【要…】…｜為什麼
+【要…】…｜為什麼
+範例（只示範格式，內容不要照抄）：最像的範本區：E05 BITS　證據：「依下表取出各欄位」
+
+---
+
+## G03-01
+
+【開場｜1/3｜角色、規則、怎麼跟我要】
+Task (EN): You are my exam tutor. Follow the rules below. Reply only 「了解」 now. Always answer in Traditional Chinese; keep technical terms in English.
+你是我的上機考助教。我是高三生，Pico、ROS 2、PIO、DMA、CMake 都是第一次接觸。照提示卡格式回答時不要多解釋；一般問題用白話，術語第一次出現附一句說明。
+情境：限時上機考，先讀文件理解系統的軟硬體架構，再優化程式效能；Online Judge 評分。硬體是 RP2350（Pico 2，不是 RP2040）、pico-sdk 2.x、ROS 2 Jazzy。你看不到我的檔案，我只能貼文字，一次一小段。
+我的訊息有四種：
+① 只有 <<<資料 開始>>>…<<<資料 結束>>>、沒有任務（卡片、題目片段）→ 只回「收到」，不分析、不要東西。
+② 提示卡（有「任務」和輸出格式）→ 照它的格式回答。
+③ 一般問題 → 精簡條列。
+④ 資料區塊＋最後一行「繼續」＝你要的東西來了 → 用它接著做。
+規則：
+1. 「資料」＝這個對話裡我貼過的所有資料區塊。只根據資料；沒有就寫「資料中沒有」。
+2. 互相矛盾時：題目原文 > 考場的 header、指令輸出 > 我的卡片 > 你的記憶。
+3. 每個結論附證據：「原文那一行」；沒有證據的標【推測】。函式名、參數順序、數字照卡片抄。
+4. 改程式只給最小修改：「檔名:行號 / 修改前 / 修改後」，一次一處，名稱照原樣；附 1 行驗證指令和「成功的樣子」。
+5. 缺東西：先照格式答完（缺的寫「資料中沒有」），最後另起一行跟我要，最多 2 行：
+【要資料】題目、程式幾行、指令輸出、錯誤訊息｜為什麼
+【要卡】卡的編號或主題（例：L02-02、DMA 參考卡）｜為什麼
+讀完只回覆「了解」。
+
+---
+
+## G03-02
+
+【開場｜2/3｜快捷指令】
+（選用。考場 SOP 不用這張：快捷指令的格式和提示卡不同，混著用會打架。要用就不要再貼提示卡。）
+Task (EN): When my message starts with one of these commands, answer in exactly that format (each item ≤ 2 lines). Reply only 「了解」 now.
+我會用短指令。資料放在 <<<資料 開始>>> 和 <<<資料 結束>>> 之間。請照對應格式輸出：
+/理解 → 目標｜輸入｜輸出｜評分｜限制｜不能改｜疑點 3 個
+/架構 → ASCII 圖（[元件] --機制--> [元件]）＋ 共享資源 ＋ 瓶頸【推測】
+/段落 → 摘要 3 句｜欄位表｜操作步驟｜陷阱
+/走讀 → 呼叫結構（縮排）｜熱點 3 個｜可疑處 3 個（不提改法）
+/瓶頸 → 表：瓶頸｜依據｜量測方法（不提改法）
+/方案 → 表：方案｜收益 高中低｜風險 高中低｜分鐘｜驗證，最多 5 列
+/實作 → 「檔名:行號 / 修改前 / 修改後」＋ 驗證指令 ＋ 成功的樣子
+/除錯 → 表：原因｜可能性 高中低｜驗證方法，最多 3 列（先不修）
+/檢查 → 每項 OK / 有問題 / 看不到：介面、輸出格式、debug 輸出、邊界、CMake 連結
+/摘要 → 卡 3 的狀態卡格式，800 字內
+資料中找不到的一律寫「資料中沒有」。
+只回覆「了解」。
+
+---
+
+## G03-03
+
+【開場｜3/3｜狀態卡格式】
+Task (EN): Summarize our progress in exactly this format, max 800 characters, confirmed facts only. Answer in Traditional Chinese.
+請把目前進度整理成下面格式。只寫已確認的內容（沒確認的放「未解疑問」），總長 800 字內，每項 ≤ 3 行：
+【狀態卡】時間：
+題目（一句話）：
+分數與提交紀錄：
+已確認事實（附出處）：
+架構重點：
+已完成修改（檔案：內容，效果）：
+試過但失敗的做法（原因）：
+用到的卡（編號，新對話要重貼）：
+正在做：
+下一步：
+未解疑問：
+只輸出這張卡，不要其他文字。
+
+---
+
+## H01-01
+
+【要資料｜1/5｜開考：K1～K6】
+以下是資料代號 K1～K6 的取法（操作者照指令跑，結果貼給模型）。
+- K1 題目全文：從題目頁面複製，一次一節（≤ 1000 字），每段開頭寫「題目第 n 段」。
+- K2 repo 檔案清單：
+  `find . -maxdepth 3 -not -path './.git' -not -path './.git/*' -not -path '*/build/*' | sort | head -100`（不要寫 `'./.git*'`，會把 `.gitlab-ci.yml` 藏掉）
+- K3 評分方式：`cat .gitlab-ci.yml`；太長先貼 `grep -n -A15 "script:" .gitlab-ci.yml`
+- K4 README：先 `grep -n "^#" README.md` 看標題，再 `sed -n 起,迄p README.md` 貼相關那節。
+- K5 埋 bug 的提示：
+  `grep -rn "TODO\|FIXME\|BUG\|XXX" --include=*.c --include=*.h --include=*.py --include=*.txt --include=*.pio . | head -40`
+- K6 環境：
+  `echo "ROS=$ROS_DISTRO SDK=$PICO_SDK_PATH"; arm-none-eabi-gcc --version | head -1; ls /dev/ttyACM* /dev/serial/by-id/ 2>&1`
+  SDK 版本要先 build 一次才看得到：`grep -h VERSION_STRING build/generated/pico_base/pico/version.h`
+貼多少：每個代號一次一則訊息；清單超過 100 行就只貼和題目有關的資料夾。
+
+---
+
+## H01-02
+
+【要資料｜2/5｜build 錯誤：B1～B4】
+以下是資料代號 B1～B4 的取法。
+- B1 第一個錯誤（只要第一個，後面多半是連帶的）：
+  compile / link：`cmake --build build 2>&1 | grep -n -m1 -B5 -A15 -i "error"`
+  configure（還沒開始編就錯）：`cmake -S . -B build 2>&1 | tail -30`
+  colcon：`colcon build 2>&1 | grep -n -m1 -B5 -A15 -i "error"`
+- B2 建置檔：`cat -n CMakeLists.txt`（> 60 行就分段：`sed -n 1,60p`、`sed -n 61,120p`）
+- B3 CI 怎麼 build：`grep -n -B2 -A10 "cmake\|colcon\|make" .gitlab-ci.yml`
+- B4 colcon 的完整 log：`tail -40 log/latest_build/*/stdout_stderr.log`
+附帶一起貼（模型常常需要）：你剛剛改了什麼（`git diff --stat`）。
+不要貼：整份 build log、`gmake[2]: *** Error 1` 那幾行（只是「失敗了」的通知，原因在上面）。
+工具手冊：`預製程式碼/tools/cmake.md` §6（22 種錯誤對照）。
+
+---
+
+## H01-03
+
+【要資料｜3/5｜執行錯誤：R1～R5】
+以下是資料代號 R1～R5 的取法（電腦上的 C / Python 程式）。
+- R1 輸入 / 預期 / 實際（各 ≤ 10 行）：
+  `head -10 輸入檔`；預期從題目抄；`./程式 < 輸入檔 | head -10`
+  差在哪：`diff <(./程式 < 輸入檔) 預期檔 | head -20`
+- R2 sanitizer（結果怪、偶爾當掉）：
+  `gcc -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer *.c -o t_san && ./t_san < 輸入檔 2>&1 | head -30`
+  多執行緒結果每次不同：把 `address,undefined` 換成 `thread`，加 `-pthread`。
+- R3 當掉（Segmentation fault）：`gdb -batch -ex run -ex bt --args ./程式 參數 2>&1 | tail -20`
+- R4 Python 錯誤：`python3 檔名.py 2>&1 | tail -20`（ROS node 就貼它終端機最後 20 行）
+- R5 卡住：`gdb --args ./程式` → 打 `run` → 卡住時按 Ctrl-C → 打 `thread apply all bt` → 貼前 40 行。
+  Python 卡住：程式開頭加 `import faulthandler, signal; faulthandler.register(signal.SIGUSR1)`，卡住時另一個終端機 `kill -USR1 PID`。
+貼法：只貼「第一個在你程式裡的那幾行」（檔名是你的 .c / .py 的那幾行）和它上下 5 行。
+
+---
+
+## H01-04
+
+【要資料｜4/5｜ROS 2 與電腦↔Pico 傳輸：T1～T7】
+以下是資料代號 T1～T7 的取法（每個終端機都要先 `source /opt/ros/jazzy/setup.bash`）。
+- T1 `ros2 node list`
+- T2 `ros2 node info /節點名`
+- T3 `ros2 topic info -v /topic名`（看兩端的 QoS：Reliability、Durability）
+- T4 `ros2 topic echo /topic名 --once`
+- T5 `timeout 10 ros2 topic hz /topic名`
+- T6 封包比對（不要讓模型自己數 byte）：
+  預期封包：在預製程式碼 ros2/ 裡 `python3 -c "from frame import *; print(encode(0x01, 1, b'hi').hex(' '))"`（cmd、seq、payload 換成你的）
+  比對：`python3 frame.py diff "預期 hex" "實際 hex"`（兩段都要加雙引號），貼整個輸出。
+- T7 序列埠原始 bytes：先關掉其他開著序列埠的程式（bridge、miniterm、agent），再
+  `timeout 2 cat /dev/ttyACM0 | xxd | head -20`
+  不要用 1200 baud 開序列埠（板子會重開進 BOOTSEL）。
+沒有板子時：`python3 fake_pico.py -n 1 --link /tmp/ttyFAKE` 開假 Pico，port 用 `/tmp/ttyFAKE0`。
+
+---
+
+## H01-05
+
+【要資料｜5/5｜Pico、micro-ROS、效能、提交：P1～P6、S1～S4】
+以下是資料代號 P1～P6、S1～S4 的取法。
+- P1 Pico 文字輸出：`python3 -m serial.tools.miniterm /dev/ttyACM0 115200`（Ctrl-] 離開），貼前 30 行。
+- P2 燒進去的是什麼：`picotool info -a build/程式.uf2`
+- P3 LED：描述「不亮 / 恆亮 / 快閃 / 慢閃」。
+- P4 micro-ROS agent log：`ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200 -v6 2>&1 | head -40`（或 docker 版，image 已在考場電腦上才用：`docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:jazzy serial --dev /dev/ttyACM0 -b 115200 -v6`；兩個都來自官方文件，⚠ 沒有實測）
+- P5 `ros2 topic list`
+- P6 範本設定值（在 micro-ros 範本資料夾執行）：`grep -n "APP_SRC\|MAX_LEN\|BOARD_NS\|CHUNK\|MERGE\|N_BOARDS\|RESEND_S" CMakeLists.txt *.c *.py`
+- S1 各階段時間：程式印的時間、`bench.py` 的表、serial_bridge log 的「… ms」那行。
+- S2 CI：GitLab → CI/CD → Pipelines → 點失敗的 job → 貼第一個 error 前後 20 行和分數那行。
+- S3 `git status --short; git log --oneline -3`
+- S4 題目寫的時間限制、評分公式（原文）。
+效能數字要附：在哪台機器、跑幾次、用什麼指令量的。
+
+---
+
+## M01-01
+
+【目錄｜1/12｜規格卡：預製範本（ROS、PICO、UROS）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- E01 規格卡 ROS（10 張）：01 ros2/ 總覽：檔案、題型、接法｜02 frame.py：封包格式與 CRC（逐 byte）｜03 frame.py：函式、常數、長度上限｜04 serial_bridge.py：參數、topic、批次、例外｜05 fake_pico.py：用法、和真 Pico 的差異｜06 bench.py、multi_device.py：測速、多板平行｜07 node_template.py：改哪幾行、QoS 規則｜08 ros2 CLI 除錯順序｜09 custom_msg_cheatsheet.md：自訂 msg｜10 陷阱與驗證（frame.py diff）
+- E02 規格卡 PICO（13 張）：01 總覽：檔案、題型、驗證狀態｜02 CMakeLists.txt：target 與編譯指令｜03 serial_proto.h/.c：封包、狀態機、CRC32｜04 app_serial.c：指令分派、加新指令｜05 app_multicore.c：鎖、FIFO、queue pipel…｜06 app_dma.c：5 步、channel_config、count｜07 app_dma.c：sniffer CRC32、預期輸出｜08 app_dma_pio.c：DMA + PIO（DREQ）｜09 pio/echo.pio、bitstream_in.pio：逐條指令｜10 pio/shift_out.pio：逐條指令｜11 app_pio.c：載入、echo 測試、回環｜12 timing.h：ARM vs RISC-V 計時｜13 陷阱與驗證
+- E03 規格卡 UROS（9 張）：01 總覽：檔案、概念、驗證狀態｜02 CMakeLists.txt：build、APP_SRC 切換｜03 agent 指令、裝置路徑、topic 檢查｜04 rclc 建立順序、handle 數、訊息大小上限｜05 pico_array_compute.c：函式、job_id 協定｜06 pico_dualcore_micro_ros.c：雙核心｜07 pico_pingpong.c：重連狀態機、板子 ID｜08 host_driver.py：常數、run() 排程、重送｜09 陷阱與驗證
+
+---
+
+## M01-02
+
+【目錄｜2/12｜規格卡：預製範本（ALGO、BITS、PERF）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- E04 規格卡 ALGO（9 張）：01 總覽：檔案、題型、驗證狀態｜02 crc32.c：函式、分段用法、選哪個｜03 CRC 規格表：crc_generic 參數與 check｜04 sha1_sha0.c、sha256.c：API 與 SHA-0 差…｜05 sort.c：排序與合併、選哪個｜06 bnn.c：位元排列、XNOR-popcount、門檻｜07 checksum_misc.c：簡單校驗碼｜08 放進 Pico 專案：CMake、weak、記憶體｜09 測試指令與陷阱
+- E05 規格卡 BITS（11 張）：01 總覽：bits-riscv/ 8 個檔｜02 bitops.h 前半：位元、欄位、符號延伸、clz｜03 bitops.h 後半：endian、rotate、2 的次方、反轉｜04 packet_fields.c：規格表 → SHIFT/W、pack…｜05 bitstream.c：MSB/LSB-first 讀寫、跨 wor…｜06 RV32I 六種格式、B/J 立即值打亂｜07 rv32_encode_decode.c：函式表｜08 rv32_encode_decode.c：disasm/step 行…｜09 asm_examples.S、asm_test.c、呼叫慣例｜10 編譯執行：PC、objdump、qemu｜11 Pico 2、Hazard3 擴充、SDK 的 -march
+- E06 規格卡 PERF（5 張）：01 總覽、bench.h、編譯執行｜02 parallel_template.c：8 種寫法、false sh…｜03 pipeline_template.c：SPSC ring buff…｜04 pipeline 改法、實測數字｜05 陷阱、驗證、對應 Pico 2 雙核心
+
+---
+
+## M01-03
+
+【目錄｜3/12｜軍火庫：API 卡（照抄的函式簽名、參數順序、列舉值）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- A01 API卡 DMA（7 張）：01 claim / unclaim / cleanup｜02 預設設定與 transfer size｜03 遞增與 DREQ（PIO/UART/SPI）｜04 chain_to / ring / irq_quiet / bswa…｜05 dma_channel_configure 與 count 編碼｜06 start / busy / wait / abort｜07 完成中斷 IRQ
+- A02 API卡 SNIFF（3 張）：01 sniffer 函式｜02 mode 值與 zlib CRC32 組合｜03 dma_crc32() 原樣（app_dma.c）
+- A03 API卡 PIO（6 張）：01 載入程式、claim SM｜02 一次找 PIO+SM+載入｜03 sm_config 預設與腳位｜04 shift / fifo_join / clkdiv｜05 GPIO、init、enable｜06 FIFO 存取、DREQ、pio0–2
+- A04 API卡 SYNC（5 張）：01 multicore 啟動與 FIFO｜02 queue_t 跨核佇列｜03 spinlock 與鎖號｜04 critical_section 與 mutex｜05 semaphore、關中斷、__dmb
+- A05 API卡 PICO-IO（4 張）：01 計時 API｜02 stdio 收發與錯誤碼｜03 GPIO 與板載 LED｜04 標頭 → CMake 函式庫名
+- A06 API卡 UROS（6 張）：01 support、node 初始化｜02 publisher、subscription、type suppor…｜03 timer 與 executor｜04 subscription callback 與 rcl_publis…｜05 custom transport 與 ping agent｜06 Int32MultiArray 的 sequence 欄位
+- A07 API卡 HOST-PY（4 張）：01 rclpy：publisher、subscription、timer…｜02 rclpy：QoS 與 init / spin / shutdown｜03 pyserial｜04 struct 格式字元與 array
+
+---
+
+## M01-04
+
+【目錄｜4/12｜軍火庫：片段卡（照抄的程式，只換 <> 的值）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- C01 片段卡 PICO-DMA（5 張）：01 CPU 複製迴圈 → DMA｜02 填值迴圈 → DMA fill｜03 開始後先不等：CPU 同時做別的事｜04 兩個通道同時搬｜05 通道 claim / unclaim 規矩
+- C02 片段卡 PICO-SNIFF（2 張）：01 DMA sniffer 算 zlib CRC32｜02 軟體 CRC32 對照組
+- C03 片段卡 PICO-DMAPIO（2 張）：01 兩通道：記憶體 → TX FIFO、RX FIFO → 記憶體｜02 同時啟動、等完成、歸還
+- C04 片段卡 PICO-PIO（2 張）：01 載入程式 + 設定 SM（shift、autopush/autopu…｜02 put / get / 有 timeout 的收 / 歸還
+- C05 片段卡 PICO-MC（5 張）：01 啟動 core1 + FIFO 握手（兩核各做一半）｜02 queue_t 管線：core1 計算端｜03 queue_t 管線：core0 收資料、派工、收結果｜04 各核先加區域變數，最後鎖一次合併｜05 spinlock / critical_section 短臨界區
+- C06 片段卡 PICO-TIME（1 張）：01 量一段程式：微秒與 cycle（ARM / RISC-V）
+- C07 片段卡 PICO-SERIAL（2 張）：01 封包接收迴圈（getchar_timeout_us + proto_…｜02 app_serial.c 加一個新指令
+- C08 片段卡 HOST-SERIAL（3 張）：01 開 port、送一包、等回覆（frame.py）｜02 數字一次轉 bytes、切包、加總 mod 2^32｜03 文字一行 vs 二進位固定長度
+- C09 片段卡 HOST-MULTI（2 張）：01 N 塊板子平行算（multi_device.run_parallel…｜02 合併結果：加總 / 串接 / 排序 k-way
+- C10 片段卡 HOST-ROS（4 張）：01 最小節點 class：參數、QoS、訂閱→處理→發布｜02 main：spin、Ctrl+C 收尾、測試指令｜03 Int32MultiArray / UInt8MultiArray …｜04 量 callback 花多久、topic 頻率
+
+---
+
+## M01-05
+
+【目錄｜5/12｜軍火庫：片段卡（照抄的程式，只換 <> 的值）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- C11 片段卡 HOST-UROS（4 張）：01 Pico 端：Int32MultiArray 預先配置 capaci…｜02 Pico 端：callback 收 → compute → 發｜03 Pico 端：建 node、sub/pub、executor｜04 電腦端：帶 job_id 送 N 塊板子、照順序合併
+- C12 片段卡 ALGO（6 張）：01 CRC-32 分段算、三種實作、照規格的 crc_generic｜02 排序：radix_sort_u32、合併兩塊 / k 塊、有號｜03 SHA-0 / SHA-1 / SHA-256 串流 init / …｜04 BNN：±1 打包成 bits、XNOR-popcount 內積｜05 照規格位元表取欄位：GET_FIELD / SET_FIELD / …｜06 位元流 MSB-first 讀固定寬度欄位
+- C13 片段卡 PERF（4 張）：01 pthread 切塊：各自區域累加、最後合併一次｜02 SPSC 環形佇列：struct + push（producer 端…｜03 SPSC：pop（consumer 端）+ 開兩條執行緒｜04 計時：BENCH 取最快、now_ns 單次
+
+---
+
+## M01-06
+
+【目錄｜6/12｜軍火庫：優化食譜卡（先看 0 號選哪個）、套用卡】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- F01 食譜卡 優化（15 張）：00 選哪個食譜：量測 / 現象 → 食譜編號｜01 序列埠：文字 / 一次一個 → 二進位 + 批次｜02 多片板子：切塊平行算 + 依序合併｜03 micro-ROS：CHUNK 調大 / 加板子 / best_ef…｜04 Pico 雙核：core0 收、core1 算（queue_t）｜05 Pico 鎖：縮小臨界區、區域變數累積後鎖一次｜06 電腦 pthread：計算移出鎖、local、padded｜07 DMA 取代 CPU 複製迴圈｜08 CRC 軟體加速：逐位元 → 查表 / slice4｜09 CRC 硬體：DMA sniffer 取代軟體 CRC｜10 排序：qsort / insertion → radix｜11 多段合併：kway_merge → 兩兩合併｜12 熱路徑拿掉 printf / log｜13 編譯選項、熱迴圈放 RAM（__not_in_flash_func）｜14 BNN popcount：Zbb cpop / SWAR
+- Q13 提示卡 套用（1 張）：01 把食譜 / 片段套到我的程式
+
+---
+
+## M01-07
+
+【目錄｜7/12｜參考卡：RP2350 硬體與 pico-sdk】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- L01 參考卡 RP2350 pico-sdk（8 張）：01 CMake 模板與 PICO_BOARD…｜02 建置類型、輸出檔、燒錄｜03 晶片總覽與 RP2040 差異｜04 記憶體映射與擺放巨集｜05 計時與效能量測｜06 stdio 與 GPIO 陷阱｜07 時脈、時間 API、中斷｜08 除錯清單
+- L02 參考卡 RP2350 DMA（8 張）：01 標準設定流程與 API｜02 預設值與陷阱｜03 練習 transfer engine →…｜04 DMA 與 PIO / 週邊（DREQ）｜05 chaining、ping-pong、r…｜06 完成中斷（IRQ）｜07 除錯檢查清單｜08 效能：何時不會更快、優化、CRC
+- L03 參考卡 RP2350 PIO（8 張）：01 C 端初始化順序｜02 9 條指令｜03 side-set / delay 預算、…｜04 echo 範例逐步追蹤｜05 blink 範例追蹤與 SM 資源｜06 時序計算與 clkdiv｜07 DMA 餵 PIO、優化｜08 常見錯誤與除錯
+- L05 參考卡 多核同步（8 張）：01 臨界區原則與「各自累加再合併」｜02 POSIX pthread API 與工…｜03 C11 atomics 與 memory…｜04 pico 多核 API：launch、F…｜05 pico 鎖：critical_sect…｜06 ISR 與主迴圈共享變數｜07 RP2350 雙核分工、SRAM ban…｜08 常見 bug → 症狀 → 修法
+- L06 參考卡 RISC-V Hazard3（8 張）：01 ISA 與暫存器 / 呼叫慣例｜02 RV32I 指令、立即值、pseudo｜03 Zbb / Zba 位元指令（全部 1 …｜04 Zbs / Zbkb / 自訂 h3.b…｜05 指令週期與管線（無 bus stall）｜06 cycle 計數（mcycle）｜07 inline asm 與 .S 函式｜08 C 位元技巧與 UB 陷阱
+- L07 參考卡 Cortex-M33（8 張）：01 ISA、旗標與 AAPCS 呼叫慣例｜02 立即值、條件碼、IT、load/stor…｜03 位元操作：C → Arm 指令｜04 DSP / FPU / float 選擇｜05 指令週期（RP2350 datashee…｜06 cycle 計數（DWT CYCCNT）｜07 inline asm 與 .S 函式｜08 中斷、原子、fault 除錯
+
+---
+
+## M01-08
+
+【目錄｜8/12｜參考卡：RP2350 硬體與 pico-sdk】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- L04 參考卡 RP2350 週邊（8 張）：01 通則、腳位對應、pad｜02 UART｜03 SPI｜04 I2C｜05 PWM｜06 ADC 與溫度感測｜07 Timer、alarm、watchdog｜08 中斷（IRQ）規則與號碼
+- L17 參考卡 官方文件導航（7 張）：01 DMA 與 PIO 在 RP2350 d…｜02 RP2350 datasheet 其他常…｜03 RP2350 勘誤（Appendix D…｜04 pico-sdk 標頭檔與 API 網址｜05 ROS 2 Jazzy 文件網址｜06 沒有 AI 摘要的搜尋方法｜07 貼原文給模型的範本
+
+---
+
+## M01-09
+
+【目錄｜9/12｜參考卡：ROS 2、通訊、演算法、效能、環境】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- L08 參考卡 ROS 2（8 張）：01 資料沒流動：除錯階梯｜02 症狀 → 優先懷疑｜03 QoS 預設值與相容性｜04 rclpy 最小 pub/sub/tim…｜05 Jazzy 特有陷阱｜06 Executor 與 callback …｜07 效能 / 延遲 / 吞吐量優化｜08 CLI 速查與 rclcpp 寫法
+- L09 參考卡 主機↔MCU（8 張）：01 除錯清單：症狀 → 修正｜02 Pico 端 stdio 設定與 CRL…｜03 Linux 端：raw tty、pySe…｜04 協定框架：COBS 與標頭｜05 CRC、位元組序、struct｜06 吞吐量、延遲與優化｜07 ROS 2 橋接 node｜08 最小收發範例
+- L10 參考卡 演算法（8 張）：01 慢寫法 → 演算法替代｜02 Ring buffer 與雙緩衝（C，已…｜03 CRC 參數表與除錯｜04 CRC-32/ISO-HDLC 程式碼（…｜05 CRC-16/CCITT-FALSE、M…｜06 Hash table（open addr…｜07 二分搜尋、prefix sum、滑動視窗…｜08 排序事實與「優化後輸出完全相同」檢查
+- L11 參考卡 C/Linux 效能（8 張）：01 熱點模式 → 修法（演算法、記憶體、I/…｜02 熱點模式 → 修法（CPU、編譯器、系統…｜03 開工偵查：工具能不能用（perf 多半被…｜04 計時 harness（暖機 + 11 次…｜05 編譯旗標與浮點結果不能變｜06 向量化：-O2 vs -O3、報告、阻礙…｜07 快速輸入：fread 64KB + 自寫…｜08 快速輸出與 stdio 緩衝
+- L12 參考卡 Python 效能（7 張）：01 決策表與量測｜02 慢 → 快 對照表｜03 rclpy 訊息欄位與陣列快路徑｜04 rclpy callback、log、s…｜05 GIL 與平行化｜06 快速 I/O 與二進位解析｜07 陷阱與驗證清單
+- L13 參考卡 平行（8 張）：01 決策：值不值得平行化｜02 分解模式與分割方式｜03 OpenMP 基礎：編譯、paralle…｜04 OpenMP：reduction、同步、…｜05 OpenMP 直方圖實測：熱迴圈內不要同…｜06 確定性輸出：平行版和 serial 一模…｜07 常見 bug 與除錯步驟｜08 通訊成本、流水線、IPC、ROS 2
+
+---
+
+## M01-10
+
+【目錄｜10/12｜參考卡：ROS 2、通訊、演算法、效能、環境】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- L14 參考卡 git/環境（4 張）：01 GitLab pipeline 與 jo…｜02 git 日常與救援｜03 Shell 與 Docker 容器｜04 gcc、make、CMake、看二進位
+- L15 參考卡 控制DSP（8 張）：01 平台選擇與定點格式（RP2350）｜02 定點乘法與轉換（C，主機已驗證）｜03 捨入、除法、溢位與數值陷阱｜04 便宜濾波器：EMA、移動平均、中值（C，…｜05 Biquad 二階 IIR（RBJ 係數…｜06 離散 PID 程式碼（float，M33…｜07 PID：anti-windup、增量式、…｜08 固定週期迴圈、dt、主機測試 kerne…
+- L16 參考卡 FreeRTOS（8 張）：01 核心規則（先看這張）｜02 CMake 與 FreeRTOSConf…｜03 task、時間 API｜04 queue、semaphore、mute…｜05 ISR 規則與中斷優先權｜06 SMP、綁核、critical sect…｜07 診斷與效能｜08 常見錯誤（症狀 → 修法）
+
+---
+
+## M01-11
+
+【目錄｜11/12｜提示卡：固定流程（我貼給你後照格式做）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- Q01 提示卡 開考（5 張）：01 repo 結構地圖｜02 評分流程（.gitlab-ci.yml）｜03 題目 → 理解卡｜04 對應猜題 → 選範本｜05 時間預算與先交一版
+- Q02 提示卡 讀題（5 張）：01 題目理解卡｜02 檔案盤點與閱讀順序｜03 系統架構圖｜04 文件段落精讀｜05 程式走讀
+- L18 參考卡 讀題（1 張）：06 讀題檢查清單
+- Q03 提示卡 建置（4 張）：01 解讀這份 CMakeLists.txt｜02 CMake / 連結錯誤：定位｜03 colcon build 失敗：定位｜04 改建置檔：新增檔案 / 函式庫 / 巨集…
+- L19 參考卡 建置（3 張）：05 CMake 通用：configure、c…｜06 pico-sdk CMake 順序與名稱｜07 colcon / ament（ROS 2…
+- Q04 提示卡 工具（7 張）：01 幫我讀 gdb backtrace｜02 幫我讀 sanitizer 報告｜03 程式卡住，幫我判斷卡在哪｜04 板子沒反應：一步一步檢查｜05 序列埠收到的資料不對｜06 ROS 2 節點看不到彼此｜07 依定位結果最小修改（程式碼）
+- L20 參考卡 工具（2 張）：08 gdb 速查（Linux）｜09 Pico 2 板子端檢查清單
+- Q05 提示卡 除錯（4 張）：01 錯誤回報格式｜02 設計區分假設的實驗｜03 看不懂的錯誤訊息｜04 修好了但不知道為什麼
+- L21 參考卡 除錯（2 張）：05 症狀→原因：編譯、連結、崩潰、卡住｜06 症狀→原因：結果錯、時好時壞、沒輸出
+- Q06 提示卡 優化（4 張）：01 瓶頸分析｜02 方案排序｜03 實作單一改動｜04 解讀量測結果
+- L22 參考卡 優化（2 張）：05 瓶頸分類與手法｜06 量測方法與 RP2350 速查
+- Q07 提示卡 範本（7 張）：01 開場補充：我有預製範本｜02 題目規格 → 範本對照｜03 依規格改這段 TODO｜04 把文字傳輸改成二進位批次｜05 把工作拆給 N 片板子 / 2 個核心｜06 範本和題目的介面不合｜07 檢查我改完的範本
+- Q08 提示卡 查詢（2 張）：01 根據參考卡回答｜02 用參考卡檢查我的程式
+
+---
+
+## M01-12
+
+【目錄｜12/12｜提示卡：固定流程（我貼給你後照格式做）】
+以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。
+- Q09 提示卡 實作（9 張）：01 規格位元表 → C 欄位程式｜02 封包 / 位元流規格 → 解析程式｜03 PIO 程式逐行解讀 + C 端要的設定｜04 PIO 程式最小修改 + C init｜05 DMA 設定：需求表 → pico-sd…｜06 雙核分工：共享變數表 → 保護方式｜07 RISC-V 組語逐行解讀｜08 RISC-V 機器碼 → 組語（程式解碼…｜09 從規格改 ROS 2 node（node…
+- Q10 提示卡 驗證（7 張）：01 題目有歧義：列出來問助教｜02 產生邊界測資｜03 寫對拍腳本｜04 量測 1：計時區段裡該移出的行｜05 量測 2：暖身、重複、統計｜06 micro-ROS 問題定位｜07 解釋程式給我聽（學習用）
+- Q11 提示卡 提交（3 張）：01 push 前檢查｜02 讀 CI / judge log｜03 git 救援
+- Q12 提示卡 速學（5 張）：01 陌生技術定位｜02 API 地圖｜03 解讀最小範例｜04 驗證我的理解｜05 對準題目
+- L23 參考卡 速學（1 張）：06 五步速學法與類別重點
+
+---
+
+## E01-01
+
+【規格卡｜ROS 1/10｜ros2/ 總覽：檔案、題型、接法】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+資料夾 `預製程式碼/ros2/`。所有 `.py` 要在同一資料夾執行（都 `from frame import ...`）。
+| 檔案 | 行數 | 做什麼 | 題目 | 驗證 |
+| `frame.py` | 153 | 封包 encode / 解析 / transact / diff | 電腦↔Pico 二進位封包 | 實跑 OK |
+| `serial_bridge.py` | 108 | node：/numbers→Pico 加總→/sum；/bytes→CRC32→/crc | topic 進→板子算→topic 出 | 只用假 rclpy 跑 callback |
+| `fake_pico.py` | 97 | pty 假裝 1～N 塊 Pico | 沒板子先測電腦端 | 實跑 OK |
+| `bench.py` | 45 | 各 payload 大小的 RTT、吞吐量 | 一包多大、效能報告 | 對 fake 實跑 |
+| `multi_device.py` | 87 | 切塊→N 個 port 平行→依序合併 | 2 塊板子加速 | 對 2 個 fake 實跑 |
+| `node_template.py` | 85 | 最小 node：訂閱→處理→發布 | 寫 / 修 node | 沒實測 |
+| `custom_msg_cheatsheet.md` | 84 | 陣列型別、自訂 .msg 步驟 | 傳陣列、自訂訊息 | 沒實測 |
+| `README.md` | 91 | 用途表、改題順序、ros2 CLI 小抄 | 第一個打開 | 文件 |
+- 其他 4 支 .py 都 import `frame.py`；Pico 端對應 `pico/serial_proto.h`、`serial_proto.c`、`app_serial.c`。
+- 沒有在實體 Pico / USB 上測過；ros2 CLI 指令都沒實測。
+- 加新 cmd 的順序：`frame.py:17` 加常數 → `fake_pico.py:33` 的 `handle()` 加運算 → `serial_bridge.py:68` / `multi_device.py:69-72` 改合併 → Pico `serial_proto.h:18-20` 同步。
+- 列出全部要改處：`grep -n "TODO(改這裡)" *.py`
+- 先用 fake_pico 測電腦端，再換真板子。
+要看程式：見各列的行號
+
+---
+
+## E01-02
+
+【規格卡｜ROS 2/10｜frame.py：封包格式與 CRC（逐 byte）】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+定義在 `frame.py:4-6`、`encode()` `frame.py:22-25`。**必須和 Pico 端 `pico/serial_proto.c` 逐 byte 相同**（送 `proto_send()` :92-101，收 `proto_feed()` :39-76，格式 `serial_proto.h:3-7`；已實測一致）。
+| 位移 | 欄位 | 大小 | 說明 |
+| 0-1 | sync | 2 B | 固定 `AA 55`（`HDR`，frame.py:16） |
+| 2 | cmd | u8 | 01 ECHO 原樣回 / 02 SUM_U32 回 u32 總和 mod 2^32 / 03 CRC32 回 u32 |
+| 3 | seq | u8 | 回覆帶回同值（`seq & 0xFF`） |
+| 4-5 | len | u16 小端 | payload 長度（低位元組在 4） |
+| 6.. | payload | len B | SUM_U32 時 = u32 小端陣列 |
+| 最後 4 | crc32 | u32 小端 | 範圍 = cmd 到 payload 結尾（不含 AA 55、不含 crc） |
+- 整包 = 10 + len bytes。回覆用同格式、同 cmd、同 seq。
+CRC = CRC-32/ISO-HDLC = Python `zlib.crc32`：
+| 參數 | 值 |
+| 多項式 | 0x04C11DB7（反射寫法 0xEDB88320，serial_proto.c:18） |
+| 輸入 / 輸出 | 都反射（LSB 先） |
+| 初值 | 0xFFFFFFFF（serial_proto.c:27） |
+| 最後 XOR | 0xFFFFFFFF（serial_proto.c:29） |
+| check("123456789") | 0xCBF43926 |
+- 可接著算：C `crc32_update(prev, p, n)`（serial_proto.h:32-33）= Python `zlib.crc32(b, prev)`。
+實例（實測）：
+- ECHO seq=7 "hi" = `aa 55 01 07 02 00 68 69 ce 5e fd fb`
+- SUM_U32 seq=1 [10,1] = `aa 55 02 01 08 00 0a 00 00 00 01 00 00 00 69 bc cb 6c`
+要看程式：請操作者貼「cat -n frame.py | sed -n 16,25p」
+
+---
+
+## E01-03
+
+【規格卡｜ROS 3/10｜frame.py：函式、常數、長度上限】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 函式 | 行號 | 回傳 | 注意 |
+| `encode(cmd, seq, payload=b"")` | frame.py:22-25 | 整包 bytes | len ≥ 65536、cmd > 255 → `struct.error` |
+| `pack_u32(values)` / `unpack_u32(data)` | :28-30 / :33-35 | u32 小端 bytes / int list | -1 → ff ff ff ff |
+| `FrameParser(max_len=MAX_LEN)` | :38-46 | 解析器 | 計數 `.bad_crc`、`.bad_len` |
+| `FrameParser.feed(data)` | :48-74 | `[(cmd, seq, payload), ...]` | 半包留著；CRC 錯或 len > max_len → 刪 1 byte 重找 AA 55 |
+| `transact(ser, cmd, payload, seq=0, timeout=1.0, retries=3)` | :77-92 | 回覆 payload | 只收同 cmd 同 seq；全失敗 `TimeoutError`（最壞 3 秒） |
+- `ser = serial.Serial(port, timeout=0.05)`。
+| 常數 | 位置 | 值 | 意思 |
+| `CMD_ECHO, CMD_SUM_U32, CMD_CRC32` | frame.py:17 | 0x01, 0x02, 0x03 | TODO(改這裡) 新指令加後面 |
+| `MAX_LEN` | frame.py:18 | 8192 | parser 上限 |
+| `CHUNK_BYTES` | frame.py:19 | 4096 | TODO(改這裡) 電腦端一包上限 |
+| `FRAME_MAX_PAYLOAD` | pico/serial_proto.h:23 | 8192 | Pico 上限；len > 8192 丟掉、不回 |
+- `CHUNK_BYTES` ≤ `MAX_LEN` = `FRAME_MAX_PAYLOAD`。8192 本身可以（判斷用 `>`）。
+- Pico 改大 → `MAX_LEN` 一起改。Pico buffer 只有 N → `CHUNK_BYTES = N // 4 * 4`。
+要看程式：請操作者貼「cat -n frame.py | sed -n 38,92p」
+
+---
+
+## E01-04
+
+【規格卡｜ROS 4/10｜serial_bridge.py：參數、topic、批次、例外】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+node 名 `serial_bridge`（:33）。
+| 參數 | 行號 | 預設 | 意思 |
+| `port` | :34 | "/dev/ttyACM0" | TODO(改這裡) |
+| `batch_size` | :35 | 0 | TODO(改這裡) ≤0 = 塞滿 4096 B；N = 一包 N 個 |
+| `timeout` | :36 | 1.0 | 等回覆秒數 |
+| `retries` | :37 | 3 | 逾時重送次數 |
+| topic | 方向 | 型別（std_msgs/msg/） | 程式 |
+| `/numbers` | 訂閱 | Int32MultiArray | `on_numbers()` :59-74 |
+| `/bytes` | 訂閱 | UInt8MultiArray | `on_bytes()` :76-91 |
+| `/sum` | 發布 | UInt32 | :48 TODO(改這裡) |
+| `/crc` | 發布 | UInt32 | :49 |
+- QoS 全用 `10`。
+- 上限（:40-42）：`batch_size*4 > MAX_LEN` → 改成 2048 並印 WARN。
+- 切包（:63）：`step = 4*batch`；batch ≤ 0 → 4096。
+- 合併（:68 TODO）：`total = (total + unpack_u32(reply)[0]) & 0xFFFFFFFF`。CRC 不能這樣合併。
+- `on_bytes`（:81-83）：> 4096 B 不送，log `… 超過一包上限 4096，CRC 不能分包算`。
+- 例外（:69、:86）：接 `(TimeoutError, serial.SerialException)` → log error、不發布、node 繼續跑。port 打不開（:45）node 起不來。
+- `send()`（:54-57）：seq +1 取低 8 bit。spin 單執行緒（:98），不用鎖。
+執行：`python3 serial_bridge.py --ros-args -p port:=/dev/pts/N -p batch_size:=0`；pub `/numbers` `"{data: [1, 2, 3]}"` → /sum `data: 6`。
+要看程式：請操作者貼「cat -n serial_bridge.py | sed -n 31,91p」
+
+---
+
+## E01-05
+
+【規格卡｜ROS 5/10｜fake_pico.py：用法、和真 Pico 的差異】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+只用 Python 標準函式庫。`os.openpty()` 開虛擬序列埠；你的程式開它印出的 `/dev/pts/N`。
+| 指令 | 效果 |
+| `python3 fake_pico.py` | 1 個，印 `[fake_pico] fake0: /dev/pts/N` |
+| `python3 fake_pico.py -n 2 --link /tmp/ttyFAKE` | 2 個 + 捷徑 /tmp/ttyFAKE0、/tmp/ttyFAKE1 |
+| 加 `--us-per-byte 1` | 每 byte payload 多睡 1 µs（模擬算得慢） |
+- 要一直開著，另開終端機跑你的程式。Ctrl+C / kill 會刪捷徑。
+| 函式 | 行號 | 做什麼 |
+| `handle(cmd, payload)` | :25-34 | ECHO 原樣；SUM_U32 u32 總和 mod 2^32；CRC32 `zlib.crc32`；不認得回 None = 不回覆 |
+| `serve(name, fd, us_per_byte)` | :37-55 | 讀 → FrameParser → handle → 寫到完 |
+| `main()` | :58-93 | 開 pty、`tty.setraw()`（:68-69）、每塊一條執行緒 |
+- TODO(改這裡) `fake_pico.py:33`：在 `return None` 前加 `if cmd == CMD_XXX: return ...`，和 Pico `app_serial.c` 邏輯一致；:22 import 加新常數；改完要重開。
+| 項目 | fake_pico | 真 Pico |
+| payload 上限 | 8192，超過丟掉不回 | 8192 |
+| 收一半停住 | 一直等 | 閒置 100 ms 自動 `proto_reset()`（app_serial.c:73-74） |
+| 不認得 cmd | 不回，終端機印 `不認得的 cmd=…，不回覆` | 不回，不印 |
+| CRLF / printf | raw pty，不會發生 | 會發生 |
+| 一次來回 | 幾十 µs | USB ≥ 1 ms（未驗證） |
+- fake 通過 ≠ 真板子通過。題目 Pico buffer N < 8192 時 fake 擋不住。
+要看程式：請操作者貼「cat -n fake_pico.py | sed -n 25,55p」
+
+---
+
+## E01-06
+
+【規格卡｜ROS 6/10｜bench.py、multi_device.py：測速、多板平行】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+bench.py：每種大小送 iters 次 ECHO 並比對。
+- `python3 bench.py /dev/pts/5 --sizes 4,64,1024,4096 --iters 200`
+- 參數：port（:35）、`--sizes`（:36 TODO，≤ 8192）、`--iters`（:37，100）。
+- `bench(ser, size, iters)`（:21-30）回（平均 RTT 秒, bytes/s）；內容不同丟 `RuntimeError`。包越大吞吐量越高。
+multi_device.py（不需 ROS）：
+- `python3 fake_pico.py -n 2 --link /tmp/ttyFAKE --us-per-byte 1`，再 `python3 multi_device.py /tmp/ttyFAKE0 /tmp/ttyFAKE1`；真板 `/dev/ttyACM0 /dev/ttyACM1`。
+- ≥ 2 個 port：先用第 1 個跑，再全部跑（:83）。
+| 函式 | 行號 | 做什麼 |
+| `split(data, chunk_bytes=CHUNK_BYTES, align=4)` | :24-27 | 每塊 ≤ chunk_bytes 且 4 的倍數 |
+| `worker(port, jobs, results, cmd, stats)` | :30-48 | 一 port 一執行緒搶佇列，失敗放 None |
+| `run_parallel(ports, chunks, cmd)` | :51-66 | 依 chunk 順序的 reply list；有 None 丟 `RuntimeError` |
+| `merge_sum(replies)` | :69-72 | TODO(改這裡) u32 加總 & 0xFFFFFFFF |
+- 合併換法：最大值 `max(unpack_u32(r)[0] for r in replies)`；排序 `list(heapq.merge(*[unpack_u32(r) for r in replies]))`；CRC32 不能加。
+- 其他 TODO：:76 ports、:77 資料、:85 cmd（:80 `expect` 跟著改）。
+- 成功：`正確=True`，`每個 port 做了幾塊: {…: 98, …: 98}`，實測 882 ms → 442 ms。
+要看程式：請操作者貼「cat -n multi_device.py | sed -n 24,72p」
+
+---
+
+## E01-07
+
+【規格卡｜ROS 7/10｜node_template.py：改哪幾行、QoS 規則】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`/number`(Int32) → 乘 factor → `/double`(Int32)，node 名 `processor`。沒實測。
+| 行號 | 現在 | 改法 |
+| :18 | `from std_msgs.msg import Int32` | TODO 換型別，連同 :45、:46、:53、:59、:66 |
+| :23-28 | `QOS`：depth 10、RELIABLE、VOLATILE | pub、sub 共用 |
+| :26 | `RELIABLE` | TODO 對方 BEST_EFFORT 發布 → 改 BEST_EFFORT |
+| :27 | `VOLATILE` | 對方訂閱 TRANSIENT_LOCAL → 改 TRANSIENT_LOCAL |
+| :33 | `"processor"` | TODO 題目指定的 node 名 |
+| :36 / :37 | `"/number"` / `"/double"` | TODO 輸入 / 輸出 topic |
+| :38-39 | `factor`=2、`tick_period`=0.0 | 照型別覆蓋：`factor:=3` |
+| :60 | `out.data = msg.data * self.factor` | TODO 處理邏輯 |
+| :61 | `self.pub.publish(out)` | 沒 publish = 沒輸出 |
+| :76 | `rclpy.spin(node)` | 沒 spin = callback 永不執行 |
+- 改收 Int32MultiArray：:18 加 import、:46 換型別、:60 改 `sum(msg.data) * self.factor`。
+QoS：
+- 發 BEST_EFFORT + 收 RELIABLE → 收不到；反過來可以。
+- 發 VOLATILE + 收 TRANSIENT_LOCAL → 收不到；其他組合可以。
+- 數字 `10` = RELIABLE、VOLATILE、depth 10（:22）。
+- topic 名要 `/` 開頭；`number` 會被加 namespace。
+驗證：`ros2 topic pub --once /number std_msgs/msg/Int32 "{data: 21}"` → /double `data: 42`。
+要看程式：請操作者貼「cat -n node_template.py | sed -n 18,63p」
+
+---
+
+## E01-08
+
+【規格卡｜ROS 8/10｜ros2 CLI 除錯順序】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+出處 `README.md:33-69`（沒實測）。每個新終端機先 `source /opt/ros/jazzy/setup.bash`（否則 `ros2: command not found`）。
+順序：node 在不在 → topic 在不在 → 兩端同一個 topic → count 合理 → 真的有資料。
+| 步 | 指令 | 看什麼 → 不對時 |
+| 1 | `ros2 node list` | node 有沒有出現 |
+| 2 | `ros2 node info /processor` | 訂閱 / 發布哪些 topic、型別 |
+| 3 | `ros2 topic list -t` | 很像的名字（/double vs /doubel）、少 `/`、同名兩種型別 |
+| 4 | `ros2 topic info /x` | Publisher / Subscription count 有 0 → 那端名字錯 |
+| 5 | `ros2 topic info -v /x` | 各端 Reliability / Durability / Node name → QoS 不相容 |
+| 6 | `ros2 topic echo /x` | 有沒有資料（`--once`、`--field data`） |
+| 7 | `ros2 topic pub --once /number std_msgs/msg/Int32 "{data: 21}"` | 一直不結束 = 沒人訂閱 → topic 名字 |
+- `History (Depth): UNKNOWN` 是正常的。
+- 兩個 publisher 同 topic：count 2、資料交錯、不報錯。
+- QoS 測試時 CLI 也要配合：`ros2 topic echo --qos-reliability best_effort /x`。
+- 改名不改程式：`--ros-args -p in_topic:=/number` 或 `-r /numbr:=/number`。
+- 其他：`ros2 topic hz /x`、`ros2 param get /processor factor`；colcon build 完一定 `source install/setup.bash`。
+要看程式：請操作者貼「cat -n README.md | sed -n 33,91p」
+
+---
+
+## E01-09
+
+【規格卡｜ROS 9/10｜custom_msg_cheatsheet.md：自訂 msg】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+先用內建型別（:6-13），不用自訂：
+| 資料 | 型別（std_msgs/msg/） | Python `msg.data` |
+| 一串 bytes | `UInt8MultiArray` | `array('B')` |
+| 一串 int32 | `Int32MultiArray` | `array('i')` |
+- 不要用 `ByteMultiArray`（很慢）。
+- 快的打包：`array.array('i', m.data).tobytes()`（小端）。
+自訂 .msg 步驟（:39-78，沒實測）：
+1. `ros2 pkg create --build-type ament_cmake my_interfaces`（:43 TODO 套件名；必須 ament_cmake）
+2. `msg/Job.msg`：檔名大寫開頭，欄位小寫底線（`uint8[] payload`）
+3. CMakeLists.txt（`ament_package()` 前）：`find_package(rosidl_default_generators REQUIRED)`、`rosidl_generate_interfaces(${PROJECT_NAME} "msg/Job.msg")`、`ament_export_dependencies(rosidl_default_runtime)`
+4. package.xml：`<buildtool_depend>rosidl_default_generators</buildtool_depend>`、`<exec_depend>rosidl_default_runtime</exec_depend>`、`<member_of_group>rosidl_interface_packages</member_of_group>`
+5. `colcon build --packages-select my_interfaces && source install/setup.bash && ros2 interface show my_interfaces/msg/Job`
+- 使用端 package.xml 加 `<exec_depend>my_interfaces</exec_depend>`。
+- `ModuleNotFoundError: my_interfaces` → 沒 source。
+要看程式：請操作者貼「cat -n custom_msg_cheatsheet.md | sed -n 39,84p」
+
+---
+
+## E01-10
+
+【規格卡｜ROS 10/10｜陷阱與驗證（frame.py diff）】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+封包對不上 → 跑 `python3 frame.py diff "預期hex" "實際hex"`（frame.py:126-131），不要自己數 byte。兩段都要加引號；參數不是 3 個會印 `用法: python3 frame.py diff "預期 hex" "實際 hex"（兩個都要加引號）`。
+輸出：`| 欄位 | 預期 | 實際 | 相同? |` 表格、`第一個不同：…`、`線索：…`。
+| 線索原文 | 修法 |
+| `實際有 0d 0a、預期沒有 → CRLF 轉換沒關` | Pico `stdio_set_translate_crlf(&stdio_usb, false)`、`PICO_STDIO_DEFAULT_CRLF=0` |
+| `len 兩個 byte 對調 → 大小端顛倒` | Python 用 `<`；C 低位元組先送 |
+| `開頭不是 aa 55 → 混入文字（printf）或少收 / 錯位` | Pico 端不要 printf |
+| `實際封包的 crc32 對不上它自己的內容` | CRC 範圍、位元組順序或最後 XOR 錯 |
+- 開頭混了 printf 的 `\r\n` 時也會印 CRLF 那條 → 先處理「開頭不是 aa 55」。
+| 症狀 | 修法 |
+| `No module named 'frame'` | 在 `ros2/` 裡跑 |
+| `No module named 'serial'` | 考場不能自己裝：舉手問；或在題目給的容器裡跑 |
+| `could not open port` | `ls /dev/ttyACM*`、`chmod 666`、Docker `--device` |
+| 一直 `逾時，重試 k/3` | 先對 fake 測；包 ≤ 8192；Pico 認得 cmd、沒 printf |
+| 回覆 167772160 不是 10 | 大小端反 → pack_u32 / unpack_u32 |
+| `struct.error: 'H' format…` | payload ≥ 65536 → 先 split |
+| baudrate 設 1200 | 板子重開進 BOOTSEL → 不要用 1200 |
+驗證：`python3 frame.py` → `frame.py 自我測試 OK`；bridge log `20000 個數字, 20 包, 總和=…`；multi_device `正確=True`。
+要看程式：請操作者貼「cat -n frame.py | sed -n 104,131p」
+
+---
+
+## E02-01
+
+【規格卡｜PICO 1/13｜總覽：檔案、題型、驗證狀態】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+資料夾 `預製程式碼/pico/`（Pico 2 = RP2350，pico-sdk 2.x），下面檔名都相對於它。
+| 檔案 | 行數 | 做什麼 / 題型 |
+|---|---|---|
+| `CMakeLists.txt` | 52 | 一個專案編 5 個 app，stdio 走 USB |
+| `serial_proto.h`/`.c` | 47/101 | 封包格式、狀態機、軟體 CRC32 |
+| `app_serial.c` | 88 | USB 二進位伺服器：電腦送資料、板子算 |
+| `app_multicore.c` | 137 | race 示範+鎖、queue 派工（雙核、pipeline） |
+| `app_dma.c` | 141 | DMA copy/fill/sniffer CRC32/比速度 |
+| `app_dma_pio.c` | 99 | DMA 依 DREQ 餵 PIO echo |
+| `app_pio.c` | 110 | PIO echo、shift_out→bitstream_in 回環 |
+| `pio/echo.pio`、`bitstream_in.pio`、`shift_out.pio` | 26/35/34 | PIO 程式 |
+| `timing.h` | 69 | 量時間：`PRINT_US`、`cycles_*`、`speedup` |
+| `README.md` | 168 | 小抄、13 條陷阱、審查紀錄 |
+另有 `pico_sdk_import.cmake`（121 行，SDK 原檔，不用改）。
+連接：`serial_proto` ↔ 電腦 `ros2/frame.py`（同封包格式）；`echo.pio` 給 `app_pio`、`app_dma_pio` 共用；`timing.h` 給 4 個印字的 app。
+驗證：5 個 app 在電腦上編譯通過（ARM SDK 2.2.0、2.1.1 都 0 warning；RISC-V 用替代工具鏈）；serial 在電腦上模擬測過；**沒有程式在板子上跑過**。
+最常改：`app_serial.c:51`（新指令）、`app_multicore.c:80`（core1 計算）、`app_dma.c:27`、`app_dma_pio.c:34`（資料量）。全部 TODO：`grep -n "TODO(改這裡)" *.c *.h pio/*.pio CMakeLists.txt`。
+考場第一件事：燒 `app_dma.uf2`，看 sniffer 那行是 PASS。
+要看程式：見各列的行號
+
+---
+
+## E02-02
+
+【規格卡｜PICO 2/13｜CMakeLists.txt：target 與編譯指令】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`add_app()`（:19-26）：連 `pico_stdlib`、stdio 走 USB、產生 .uf2/.dis。`PICO_BOARD` 預設 `pico2`（:9-11）。
+| target | 行 | 額外 |
+|---|---|---|
+| `app_serial` | 29-32 | +serial_proto.c、`PICO_STDIO_DEFAULT_CRLF=0`、`pico_multicore` |
+| `app_multicore` | 35-36 | `pico_multicore pico_sync` |
+| `app_dma` | 39-40 | `hardware_dma` |
+| `app_dma_pio` | 43-45 | `hardware_dma hardware_pio`、echo.pio |
+| `app_pio` | 48-52 | `hardware_pio`、3 個 .pio |
+ARM（預設 `rp2350-arm-s`，最穩）：
+```bash
+export PICO_SDK_PATH=<含 pico_sdk_init.cmake 的資料夾>
+mkdir -p build && cd build
+cmake -DPICO_BOARD=pico2 ..
+make -j4        # 單一個：make -j4 app_serial
+```
+RISC-V：另開 `build-rv`，`cmake -DPICO_BOARD=pico2 -DPICO_PLATFORM=rp2350-riscv ..`。SDK 2.2.0 只找 `riscv32-unknown-elf-gcc`/`riscv32-corev-elf-gcc`，找不到→用 ARM。
+SDK：`dma_encode_transfer_count` 2.2.0 才有；`app_dma.c:21-24`、`app_dma_pio.c:26-29` 在 <2.2 補一個直接回傳 n 的版本。
+沒網路：cmake 會下載 picotool 失敗→加 `-Dpicotool_DIR=<picotool 資料夾>`。
+燒錄：按住 BOOTSEL 插 USB→`.uf2` 複製到 `RP2350`；或 `picotool load -x app.uf2 -f`。看輸出：`screen /dev/ttyACM0 115200`。新 app 照 `add_app` 加一段。
+要看程式：請操作者貼「cat -n CMakeLists.txt | sed -n 19,52p」
+
+---
+
+## E02-03
+
+【規格卡｜PICO 3/13｜serial_proto.h/.c：封包、狀態機、CRC32】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+封包（小端）：`AA 55 | cmd u8 | seq u8 | len u16 | payload[len] | crc32 u32`，總長 10+len。crc32=zlib CRC-32，範圍 cmd～payload 尾（不含 AA 55）。回覆同 cmd、seq。
+`.h`：`SYNC0/1`（14-15）；`CMD_ECHO` 0x01、`CMD_SUM_U32` 0x02、`CMD_CRC32` 0x03（18-20；TODO 在 17）；`FRAME_MAX_PAYLOAD`=8192（23；TODO 在 22；len 是 u16）；`frame_t`（25-30）= cmd、seq、len、`payload[8192]`。
+| 函式（.c） | 行號 | 做什麼 |
+|---|---|---|
+| `crc32_make_table` | 14-22 | `constructor`：`main()` 前在 core0 建好表，兩核同時用也安全 |
+| `crc32_update(crc,p,n)` | 25-30 | `weak`：專案另有 `algo/crc32.c` 就用那份（不會 multiple definition）。第一段 crc 給 0，可分段；`"123456789"`→0xCBF43926 |
+| `proto_feed(b,f)` | 39-76 | 一次一 byte；1=完整且 CRC 對（在 *f）、0=未完、-1=壞包 |
+| `proto_reset`/`proto_busy` | 78/79 | 回 WAIT_AA / 1=收到一半 |
+| `proto_send(cmd,seq,p,len)` | 92-101 | 加表頭與 crc；`stdio_put_string(..,false,false)` 送原始 bytes＋`stdio_flush()` |
+狀態機：`WAIT_AA`→(AA)→`WAIT_55`→(55)→`HEADER` 收 4 bytes→len>8192 回 -1；len=0 直接 `CRC`；否則 `PAYLOAD` 收 len bytes→`CRC` 收 4 bytes 比對。WAIT_55 收到 AA 留著（`AA AA 55` 能對齊），其他回 WAIT_AA。CRC 後都回 WAIT_AA。
+限制：len>8192 整包丟掉不回；電腦端 `CHUNK_BYTES`=4096（須 ≤8192）。
+要看程式：請操作者貼「cat -n serial_proto.c | sed -n 33,79p」
+
+---
+
+## E02-04
+
+【規格卡｜PICO 4/13｜app_serial.c：指令分派、加新指令】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+不印任何文字（printf 會混進二進位）；除錯用 LED（:80）。全域 `static frame_t rx`、`reply[8192]`（:19-20）。
+| 段落 | 行號 | 內容 |
+|---|---|---|
+| `handle` ECHO | 26-28 | 原樣 `proto_send`（`handle(f)` 24-57） |
+| SUM_U32 | 30-42 | n=len/4（尾巴 1~3 byte 忽略）；`memcpy` 取 u32；和 mod 2^32 回 4 bytes |
+| CRC32 | 44-49 | `crc32_update(0,payload,len)`，回 4 bytes |
+| default | 54-55 | 不認得的 cmd 不回 |
+| `main` | 59-82 | 不等 USB 連線 |
+主迴圈 :69-81：`stdio_get_until(buf,512,make_timeout_time_us(1000))`→每 byte `proto_feed`→回 1 就 `handle`、回 -1 就 `n_bad++`（:78）；收到一半且閒置 >100 ms→`proto_reset()`（:73-74）。
+TODO：:32 長度檢查；:37 `sum += v` 換計算；:51-52 新指令；:78 回 NACK（CRC 錯時 `rx.seq` 可能錯）。
+加新指令（例 0x04 排序）：
+1. `serial_proto.h:20` 下加 `#define CMD_SORT_U32 0x04`
+2. `app_serial.c:51` 前加 `case CMD_SORT_U32: { …; proto_send(f->cmd, f->seq, 結果, 長度); break; }`，結果陣列用 `static`
+3. 電腦端 `ros2/frame.py:17` 加同一個數字
+4. 回覆長度 ≤8192
+CRLF 關法：CMake :31、`stdio_set_translate_crlf(&stdio_usb,false)`（:61）、送出用 `stdio_put_string(..,false,false)`。
+預期（⚠️沒上板；電腦模擬實測）：ECHO `b"hello"`→`b'hello'`；SUM `[1,2,3]`→6；CRC32 `b"123456789"`→0xcbf43926；未知 cmd 沒回覆。
+要看程式：請操作者貼「cat -n app_serial.c | sed -n 24,82p」
+
+---
+
+## E02-05
+
+【規格卡｜PICO 5/13｜app_multicore.c：鎖、FIFO、queue pipeline】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 名稱 | 行號 | 內容 |
+|---|---|---|
+| `N_ADD` | 21 | 200000 每核次數 TODO |
+| `counter`/`lock_mode` | 27-28 | volatile；`add_many()`（32-49）依 0=不鎖（錯）、1=spinlock、2=critical_section 加 |
+| `job_t`/`result_t` | 52-53 | `{id,data,n}`/`{id,sum}` TODO |
+| `core1_main` | 64-85 | 等 FIFO `CMD_RACE`=1/`CMD_WORKER`=2，回 `DONE`=0xD0E；:80 計算 TODO |
+| `main` | 87-137 | :92-95 鎖、cs、兩 queue 各 8 格；:96 啟動 core1；:116 `N_JOBS`=16 |
+鎖：`spin_lock_init(spin_lock_claim_unused(true))`；`save=spin_lock_blocking(l)`…`spin_unlock(l,save)` 關中斷+忙等，`critical_section_*` 同；`mutex_t` 可久、不能在 IRQ；`queue_t` 內建鎖（推薦）。core1 啟動前 init。
+FIFO：`multicore_fifo_push/pop_blocking` 傳 u32，RP2350 每方向深度 4，SDK 也用它→資料改用 queue。
+pipeline（:114-134）：core0 填 `data_buf[sent%4]`→`q_job`→core1 算→`q_result`→core0 `queue_try_remove`。`sent-got<4` 才不會蓋到算到一半的 buffer；`data==NULL`=停。
+縮小臨界區：鎖裡只留改共用變數那行；先 `local += …`（不鎖），最後鎖一次 `counter += local`。core1 stack 2 KB→大陣列 static。
+預期（⚠️沒上板）：`不鎖(錯誤示範) counter=<小於 400000>`；spinlock、critical_section 兩行 `counter=400000 (應為 400000)`；`worker: 16 jobs, total=8503296`。
+要看程式：請操作者貼「cat -n app_multicore.c | sed -n 32,85p」
+
+---
+
+## E02-06
+
+【規格卡｜PICO 6/13｜app_dma.c：5 步、channel_config、count】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`dma_xfer(to,from,count,size,rinc,winc)`（:31-45）＝claim→config→start→wait→unclaim，回 0/-1 沒通道/-2 太大：
+| 行 | 呼叫與說明 |
+|---|---|
+| 33-34 | count==0 回 0；>0x0FFFFFFF 回 -2 |
+| 35-36 | `dma_claim_unused_channel(false)`：沒有回 -1（true=panic）；:36 TODO 改 CPU 做 |
+| 37-38 | `dma_channel_get_default_config(ch)`；`channel_config_set_transfer_data_size(&c,size)`：`DMA_SIZE_8/16/32`=1/2/4 bytes |
+| 39-40 | `channel_config_set_read_increment` / `_write_increment(&c,b)` |
+| 41 | `dma_channel_configure(ch,&c,寫位址,讀位址,dma_encode_transfer_count(count),true)`：先 dst 後 src；true=立刻開始 |
+| 42-43 | `dma_channel_wait_for_finish_blocking(ch)`（等 BUSY=0）→`dma_channel_unclaim(ch)`（一定要還） |
+預設：32-bit、讀遞增 true、寫遞增 **false**、`DREQ_FORCE` 全速、chain_to=自己（不串）、sniff/ring/bswap 關。
+`dma_copy32`（:46）讀寫都遞增；`dma_fill32`（:47-50）讀不遞增、值放 `static v`。
+count=傳輸次數，不是 bytes。RP2350 TRANS_COUNT 低 28 bits=次數、[31:28]=MODE（0 一般、1 自己重啟、F 無限）。2.2.0 `dma_encode_transfer_count` 做 `n & 0x0FFFFFFF`；2.0/2.1 補丁直接回 n→n 須 <2^28。
+背景搬（:129-138）：start 後 CPU 先做事（:134 TODO），用 dst 前才 wait。`N_WORDS`=4096（:27 TODO）。
+要看程式：請操作者貼「cat -n app_dma.c | sed -n 31,50p」
+
+---
+
+## E02-07
+
+【規格卡｜PICO 7/13｜app_dma.c：sniffer CRC32、預期輸出】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`dma_crc32(p,nbytes)`（:65-87）＝zlib `crc32`：
+1. nbytes==0 回 0（:66）
+2. `dma_claim_unused_channel(true)`（:67，會 panic）；寫到 `static volatile uint8_t sink`
+3. `DMA_SIZE_8`、讀遞增、寫不遞增（:70-72）
+4. 先設 sniffer：`dma_sniffer_set_data_accumulator(0xFFFFFFFF)`（:73）→`dma_sniffer_set_output_reverse_enabled(true)`（:74）→`dma_sniffer_enable(ch,DMA_SNIFF_CTRL_CALC_VALUE_CRC32R,false)`（:76，不會清 OUT_REV）→`channel_config_set_sniff_enable(&c,true)`（:77，一定要）
+5. `dma_channel_configure(ch,&c,&sink,p,dma_encode_transfer_count(nbytes),true)`+wait（:79-80）
+6. `dma_sniffer_get_data_accumulator() ^ 0xFFFFFFFF`（:81）→`dma_sniffer_disable()`（:84，全晶片一組）→unclaim
+不要分段續算（寫回初值是否受 OUT_REV 影響未知）。對照組 `cpu_crc32`（:90-94）。
+FAIL 看值：`649c2fd3`=少反轉→:74 改 false；`340bc6d9`=多 XOR→拿掉 :81 的 `^`；其他→查 :77、順序。
+預期輸出（⚠️沒上板；zlib 等價靠暫存器說明推得）：
+```
+copy 4096 words: loop=<t>us memcpy=<t>us dma=<t>us  正確=OK
+fill: dst[0]=deadbeef dst[last]=deadbeef
+crc32("123456789") dma=cbf43926 (<n> cycles) cpu=cbf43926 期望=CBF43926 PASS
+crc32 16384 bytes: cpu=<t>us dma=<t>us (x<倍數>) 相同=OK
+overlap: work=332833500, dma 搬完了 正確=OK
+```
+要看程式：請操作者貼「cat -n app_dma.c | sed -n 65,87p」
+
+---
+
+## E02-08
+
+【規格卡｜PICO 8/13｜app_dma_pio.c：DMA + PIO（DREQ）】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 行 | 內容 |
+|---|---|
+| 34 | `N`=4096 個 u32（TODO，<2^28） |
+| 44-49 | pio0 載入 echo（<0→印「PIO 指令空間不夠」停）、`pio_claim_unused_sm(pio,true)`、`echo_program_init` |
+| 52-58 | 兩個 `dma_claim_unused_channel(false)`；任一失敗：先 unclaim 要到的，印「DMA 通道不夠」停 |
+| 60-66 | ch_tx：32-bit、讀遞增、寫**不**遞增、`channel_config_set_dreq(&ctx,pio_get_dreq(pio,sm,true))`；configure 寫 `&pio->txf[sm]`、讀 src、最後參數 **false** |
+| 68-73 | ch_rx：32-bit、讀**不**遞增、寫遞增、`pio_get_dreq(pio,sm,false)`；configure 寫 dst、讀 `&pio->rxf[sm]`、false |
+| 77 | `dma_start_channel_mask((1u<<ch_tx) \| (1u<<ch_rx))` 同時開 |
+| 78-80 | TODO CPU 做事；先 wait ch_rx 再 wait ch_tx |
+| 88 | 對照組：CPU put/get |
+| 94-97 | unclaim、停 SM、`pio_remove_program_and_unclaim_sm` |
+DREQ：TX=FIFO 沒滿才寫；RX=有資料才讀。用 `pio_get_dreq()`（PIO0 TX0..3=0..3、RX0..3=4..7），不寫數字。沒設（DREQ_FORCE）→溢位、讀到空的。
+只開 TX→RX 滿→SM 卡 push→TX 滿→ch_tx 永遠 BUSY，所以兩個一起開。
+echo 用 TX 和 RX→不能 `fifo_join`（各 4 格）。DMA_SIZE_32 配 echo 門檻 32；改 8-bit 要連 .pio 門檻一起改（⚠️未驗證，建議維持 32-bit）。
+預期（⚠️沒上板）：`DMA+PIO 4096 words: <t> us, 結果 OK`、`CPU put/get 4096 words: <t> us (DMA 快 x<倍數>) 結果 OK`
+要看程式：請操作者貼「cat -n app_dma_pio.c | sed -n 60,80p」
+
+---
+
+## E02-09
+
+【規格卡｜PICO 9/13｜pio/echo.pio、bitstream_in.pio：逐條指令】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+移位：OUT 左移（shift_right=false）從 bit31 拿=MSB 先，右移從 bit0。IN 左移新 bit 進 bit0，右移從 bit31 進。SDK 預設右移；範本都設左移。
+**echo.pio**（0x6020、0x4020、0x8020）
+| 行 | 指令 | 做什麼 / 何時停 |
+|---|---|---|
+| 9 | `out x, 32` | OSR→X；autopull；TX FIFO 空時停 |
+| 10-12 | TODO | 可插 `mov x, ~x`（反相）、`mov x, ::x`（反轉） |
+| 13 | `in x, 32` | X→ISR |
+| 14 | `push` | ISR→RX FIFO（RX 滿時停） |
+wrap 範圍 :8～:15；每字 ≥3 cycle。
+init（:19-25）：`sm_config_set_out_shift(&c,false,true,32)`（左移、autopull、32）；`sm_config_set_in_shift(&c,false,false,32)`（autopush **關**，否則 push 兩次）；不碰 GPIO。
+**bitstream_in.pio**（0x2021、0x20a1、0x4001）
+| 行 | 指令 | 做什麼 |
+|---|---|---|
+| 8 | `wait 0 pin 1` | 等 CLK=0（pin 1=in_base+1） |
+| 9 | `wait 1 pin 1` | 等 CLK 上升沿 |
+| 10 | `in pins, 1` | DATA 1 bit 進 ISR；autopush 32 |
+init（:19-34）：`sm_config_set_in_pins(&c,data_pin)`；`sm_config_set_in_shift(&c,false,true,32)`（左移、autopush→最先收到的 bit 在 bit31）；`sm_config_set_fifo_join(&c,PIO_FIFO_JOIN_RX)`（RX 8 格）；clkdiv 1；`pio_gpio_init` DATA、DATA+1；**不設 pindirs**。CLK 必須=DATA+1，否則改 `wait 1 gpio N`。每 bit ≥3 cycle→送端 clkdiv ≥2。
+要看程式：請操作者貼「cat -n pio/bitstream_in.pio | sed -n 6,34p」
+
+---
+
+## E02-10
+
+【規格卡｜PICO 10/13｜pio/shift_out.pio：逐條指令】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+32-bit 一位一位送到 DATA，side-set 在 CLK 產生時脈（簡單 SPI 輸出）。pioasm：0x6101、0xb142。
+| 行 | 指令 | 做什麼 / 何時停 |
+|---|---|---|
+| 9 | `.side_set 1` | 每條 1 bit side（CLK）；非 opt→每條都要寫 `side`；delay 最大 15 |
+| 10 | `.wrap_target` | |
+| 11 | `out pins, 1 side 0 [1]` | OSR 1 bit→DATA、CLK=0，共 2 cycle；TX 空時停在這（CLK 維持 0，⚠️推定） |
+| 12 | `nop side 1 [1]` | CLK=1，共 2 cycle（收端在上升沿取樣） |
+| 13 | `.wrap` | 回 :11 |
+每 bit 4 cycle：位元速率 = clk_sys/clkdiv/4（150 MHz/10/4 = 3.75 Mbit/s）。
+init `shift_out_program_init(pio,sm,offset,data_pin,clk_pin,clkdiv)`（:18-33）依序：
+1. `sm_config_set_out_pins(&c,data_pin,1)`
+2. `sm_config_set_sideset_pins(&c,clk_pin)`
+3. `sm_config_set_out_shift(&c,false,true,32)`：左移=MSB 先、autopull、門檻 32
+4. `sm_config_set_fifo_join(&c,PIO_FIFO_JOIN_TX)`：TX 8 格
+5. `sm_config_set_clkdiv(&c,clkdiv)`（:25 TODO）
+6. `pio_sm_set_pins_with_mask(pio,sm,0,mask)` 先設 0；`pio_sm_set_pindirs_with_mask(pio,sm,mask,mask)` 設輸出（兩腳不必相鄰）
+7. `pio_gpio_init` ×2（也解除 RP2350 pad 隔離）→`pio_sm_init`→`pio_sm_set_enabled`
+改 8-bit、MSB 先：:23 門檻改 8，put `(uint32_t)byte << 24`；LSB 先：改右移 true，直接 put `byte`。
+要看程式：請操作者貼「cat -n pio/shift_out.pio | sed -n 8,33p」
+
+---
+
+## E02-11
+
+【規格卡｜PICO 11/13｜app_pio.c：載入、echo 測試、回環】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+固定流程：`pio_add_program`（回 offset）→`pio_claim_unused_sm`→`xxx_program_init`（.pio 檔的 c-sdk 區塊）→`pio_sm_put_blocking`/`pio_sm_get_blocking`→用完 `pio_sm_set_enabled(false)`+`pio_remove_program_and_unclaim_sm`。RP2350：3 個 PIO、每個 4 SM、32 條指令。
+| 名稱 | 行號 | 內容 |
+|---|---|---|
+| `DATA_PIN`/`CLK_PIN` | 21-22 | 2/3（CLK=DATA+1，TODO） |
+| `load()` | 25-33 | `pio_add_program`<0 回 false；`pio_claim_unused_sm(pio,false)` 失敗先 `pio_remove_program` |
+| `test_echo()` | 35-57 | pio0；4 個值 put/get（:41 TODO）；10000 字量時間；:55-56 歸還 |
+| `test_loopback()` | 59-89 | pio1；第二個 load 失敗先還第一個（:63-66）；先開 bitstream_in 再開 shift_out（clkdiv 10，:69 TODO）；每字等 RX 最多 100 ms（:76-78）；:85-88 歸還兩個 |
+| `main` | 91-101 | 等 USB、印 clk_sys、跑兩個測試 |
+左移+MSB 先→收到的字=送出的字；同一顆晶片讀得到自己的腳，不用接線。
+預期（⚠️沒上板，推算）：
+```
+clk_sys = 150000000 Hz
+echo: 送 12345678 收 12345678      （共 4 行）
+echo 10000 字: <t> us (xor=00000000)
+loopback: 送 deadbeef 收 deadbeef OK   （共 4 行）
+loopback: 4/4 正確
+```
+收到 `00000000 錯`=100 ms 內沒資料（腳位錯、CLK≠DATA+1、沒 `pio_gpio_init`）。`載入失敗`=指令空間或 SM 不夠→換 PIO 區塊或先 remove。
+要看程式：請操作者貼「cat -n app_pio.c | sed -n 59,89p」
+
+---
+
+## E02-12
+
+【規格卡｜PICO 12/13｜timing.h：ARM vs RISC-V 計時】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+header-only，`#include "timing.h"`。平台用 `#if defined(__riscv)`（:22）選。
+| 名稱 | 行號 | 做什麼 |
+|---|---|---|
+| `PRINT_US(label,t0)` | 29-30 | 印 `[時間] %-20s %8llu us`（`time_us_64()-t0`） |
+| `cycles_init()` | 33-44 | 啟動 cycle 計數器，用前呼叫一次 |
+| `cycles_now()` | 47-53 | 目前值（兩平台方向不同，不要自己減） |
+| `cycles_since(c0)` | 56-62 | 經過幾個 cycle |
+| `speedup(slow,fast)` | 65-67 | slow/fast；fast=0 回 0 |
+| 項目 | ARM Cortex-M33 | RISC-V Hazard3 |
+|---|---|---|
+| 計數器 | SysTick，24-bit 往下數 | `mcycle` CSR 低 32 bits，往上數 |
+| init | :39-42 `csr=0`→`rvr=0xFFFFFF`→`cvr=0`→`csr=0x5`（ENABLE+CLKSOURCE） | :37 `riscv_clear_csr(0x320,1)` 清 mcountinhibit bit0 |
+| 為何要 init | RVR 重置值 UNKNOWN | mcountinhibit 重置 0x5，CY 暫停 |
+| 差值 | `(c0-now) & 0x00FFFFFF`（:60） | `now-c0`（:58） |
+| 最長 | 2^24−1 ≈16.7M cycles ≈0.11 s @150 MHz，超過**默默繞回** | 2^32 ≈28.6 s |
+CSR 寫數字 0x320：SDK 巨集會把參數直接貼進 `csrci`。SDK 不用 SysTick；自己用 SysTick 中斷時 `cycles_init` 會改掉設定。
+量法：>0.1 s 用 `time_us_64()`（64-bit、1 µs）；短的用 cycles；先暖身一次；重複 N 次取平均；結果要用到（印出或存 volatile），否則可能被最佳化掉。
+要看程式：請操作者貼「cat -n timing.h | sed -n 22,67p」
+
+---
+
+## E02-13
+
+【規格卡｜PICO 13/13｜陷阱與驗證】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| `SDK location was not specified` | 沒設 `PICO_SDK_PATH` | export 後刪 build 重跑 |
+| `riscv32-unknown-elf-gcc … not found` | 沒 RISC-V 工具鏈 | 改 ARM |
+| `echo.pio.h: No such file` | 少 `pico_generate_pio_header` | 加上 |
+| `dma_encode_transfer_count` undeclared | SDK<2.2 | 抄 app_dma.c:21-24 |
+| 電腦端 transact 逾時 | cmd 沒 case、len>8192、port 錯 | 對 cmd 數字、切小包 |
+| 回覆多 `0d`、解不出 | CRLF 沒關、用 printf | 查 `app_serial.c:61`、CMake :31 |
+| copy 只有 dst[0] 對 | 寫遞增預設 false | `channel_config_set_write_increment(&c,true)` |
+| 搬 2/4 倍 | count 填 bytes | count=bytes÷每次大小 |
+| DMA 不結束 | count≥2^28 變 MODE；DMA+PIO 只開一個通道 | n<2^28；mask 同時開 |
+| claim panic/-1 | 沒 unclaim | 每個 claim 配 unclaim |
+| PIO 每字收兩次 | autopush 開又手動 push | in_shift 第 3 參數 false |
+| PIO 位元順序錯 | 兩端移位方向不同 | 左移=MSB 先 |
+驗證（⚠️沒上板，成功的樣子）：
+- `app_dma`：`crc32("123456789") dma=cbf43926 … PASS`，其他 `正確=OK`
+- `app_multicore`：`spinlock … counter=400000`、`total=8503296`（不鎖也 400000→再跑、加大 N_ADD）
+- `app_pio`：`loopback: 4/4 正確`；`app_dma_pio`：兩行都 `結果 OK`
+- `app_serial`：`unpack_u32(transact(ser,CMD_CRC32,b"123456789"))[0] == 0xcbf43926`
+要看程式：見各列的行號
+
+---
+
+## E03-01
+
+【規格卡｜UROS 1/9｜總覽：檔案、概念、驗證狀態】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+資料夾 `預製程式碼/micro-ros/`（ROS 2 Jazzy、Pico 2）：
+| 檔案 | 行數 | 做什麼 |
+|---|---|---|
+| `README.md` | 166 | 概念、§3 排查表、§4 大小限制、§5 加速、§6 RP2350 |
+| `agent_cheatsheet.md` | 81 | agent 指令、多板子、權限、`ros2 topic` 檢查 |
+| `CMakeLists.txt` | 61 | 官方寫法 + `APP_SRC` 選檔 → `app.uf2` |
+| `pico_pingpong.c` | 160 | `/microROS/ping`、`/microROS/pong` + 重連狀態機 |
+| `pico_array_compute.c` | 123 | 主範本：收 Int32MultiArray → `compute()` → 發回 |
+| `pico_dualcore_micro_ros.c` | 113 | core0 跑 micro-ROS、core1 算後半 |
+| `host_driver.py` | 131 | 電腦端 rclpy：切塊分給 N 塊板子、依 job_id 合併、計時、對答案 |
+概念：
+- client = Pico 上的 rclc 程式 + 預編 `libmicroros.a`（Micro XRCE-DDS）。
+- agent = 電腦上的 `micro_ros_agent`，在 USB 序列埠（XRCE-DDS）和 DDS 之間翻譯。板子的 node/pub/sub 是請 agent 代建 → agent 沒開，什麼都建不起來。
+- 1 塊板子 = 1 個 agent = 1 個序列埠。
+- namespace：node 的 ns `pico0` + 相對名稱 `"input"` → `/pico0/input`。每塊板子不同 ns，host 才能指定送給誰。
+選檔：陣列運算 → `pico_array_compute.c` + `host_driver.py`；ping-pong → `pico_pingpong.c`；運算很重 → `pico_dualcore_micro_ros.c` + `host_driver.py`。
+驗證狀態：3 支 .c 在 pico2 編譯、連結通過；沒燒錄、沒在板子上跑、沒接 agent。`host_driver.py` 只用假 rclpy 測過邏輯。cheatsheet 指令沒實測。
+要看程式：請操作者貼「cat -n README.md | sed -n 12,41p」
+
+---
+
+## E03-02
+
+【規格卡｜UROS 2/9｜CMakeLists.txt：build、APP_SRC 切換】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+在官方 repo `micro_ros_raspberrypi_pico_sdk`（jazzy）資料夾裡 build（要用它的 `libmicroros/`、`pico_uart_transport.c`）；在 `預製程式碼/micro-ros/` 直接 build 會失敗。
+```bash
+export PICO_SDK_PATH=~/pico-sdk   # 要含 lib/tinyusb
+cp CMakeLists.txt CMakeLists.official.txt
+cp <repo>/預製程式碼/micro-ros/{CMakeLists.txt,pico_*.c} .
+sed -i 's/^set(APP_SRC .*)/set(APP_SRC pico_array_compute.c)/' CMakeLists.txt
+mkdir -p build && cd build && cmake -DPICO_BOARD=pico2 .. && make -j4
+cp app.uf2 /media/$USER/RP2350/   # 按住 BOOTSEL 插 USB
+```
+成功：`[100%] Built target app`，產 `build/app.uf2`。
+| 名稱 | 行號 | 值 / 注意 |
+|---|---|---|
+| `PICO_BOARD` | 15 | `pico2`（舊 Pico：`pico`）；換了要 `rm -rf build` |
+| `APP_SRC` | 28 | `pico_array_compute.c`（預設）/ `pico_pingpong.c` / `pico_dualcore_micro_ros.c` |
+| 連結 | 35-39 | `pico_stdlib pico_unique_id pico_multicore microros` |
+| CRLF ×3 | 49-51 | 全 0（二進位封包不能補 `\r`） |
+- 換 `APP_SRC` 後直接 `make -j4`，不用重跑 cmake。
+- `APP_SRC` ↔ `MERGE` 成對：`pico_array_compute.c` ↔ `host_driver.py:24` `MERGE = "sorted"`；`pico_dualcore_micro_ros.c` ↔ `"concat"`。只改一邊會造成 `correct=False`。
+要看程式：請操作者貼「cat -n CMakeLists.txt | sed -n 11,53p」
+
+---
+
+## E03-03
+
+【規格卡｜UROS 3/9｜agent 指令、裝置路徑、topic 檢查】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+（`agent_cheatsheet.md`，指令沒實測。）一塊板子一個終端機：
+- docker（`:9-10`；image 沒預先載好就不能用，考場不能自己 pull）：`docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:jazzy serial --dev /dev/ttyACM0 -b 115200`
+- colcon（`:13-15`）：source `/opt/ros/jazzy/setup.bash` 和 `~/microros_ws/install/local_setup.bash`（`:14` TODO 你的 workspace），再 `ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200`
+- `--dev/-D` 必填；`-b` 寫多少都一樣（USB CDC）；`-v6` 印每個封包，測速時拿掉。
+裝置路徑（`:30-31`）：
+- `ls /dev/ttyACM*` → ttyACM0、ttyACM1…，插拔順序會變。
+- `ls -l /dev/serial/by-id/` → 每塊板子固定名稱，多板子用這個。
+- 兩個 agent 開同一個 port 會互搶資料 → 一個 port 一個 agent。
+- 先只插一塊、開 agent、`ros2 topic list`，記下 by-id ↔ namespace。
+權限：`Permission denied` → `sudo usermod -aG dialout $USER`（重登）或 `sudo chmod 666 /dev/ttyACM0`。被占用 → `sudo lsof /dev/ttyACM0`。
+檢查（陣列版預期）：
+- `ros2 topic list` → `/pico0/input`、`/pico0/output`
+- `ros2 topic info /pico0/input -v` → RELIABLE
+- `ros2 topic pub --once /pico0/input std_msgs/msg/Int32MultiArray "{data: [7, 3, 1, 2]}"` → 排序版回 `[7, 1, 2, 3]`，平方版 `[7, 9, 1, 4]`
+要看程式：請操作者貼「cat -n agent_cheatsheet.md | sed -n 7,81p」
+
+---
+
+## E03-04
+
+【規格卡｜UROS 4/9｜rclc 建立順序、handle 數、訊息大小上限】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+建立順序（3 支共通）：
+```text
+rmw_uros_set_custom_transport(true, NULL, open, close, write, read)
+rmw_uros_ping_agent(...)   等 agent
+rclc_support_init(&support, 0, NULL, &allocator)
+rclc_node_init_default(&node, 名稱, namespace, &support)
+rclc_publisher_init_* / rclc_subscription_init_*
+rclc_timer_init_default2(...)   只有 pingpong
+rclc_executor_init(&executor, &support.context, handle數, &allocator)
+rclc_executor_add_subscription / add_timer
+while (1) rclc_executor_spin_some(...)
+```
+- handle 數 = timer 數 + subscription 數（publisher 不算）：pingpong 3（`pico_pingpong.c:97`）、陣列 1（`pico_array_compute.c:115`）、雙核 1（`pico_dualcore_micro_ros.c:106`）。加了 sub/timer 沒加大 → `add_*` 失敗。
+- 每板上限：1 node、10 pub、5 sub、1 service、1 client。
+大小（預編 libmicroros：MTU 512 B、STREAM_HISTORY 4）：
+| QoS | 一則上限 | int32 個數（含 job_id） |
+|---|---|---|
+| reliable（`_default`） | 512×4−12 = 2036 B | ≈ 505 |
+| best_effort | 512−12 = 500 B | ≈ 121 |
+- Int32MultiArray ≈ 16 + 4×元素數 B。規則：`CHUNK + 1 ≤ MAX_LEN（400）≤ 傳輸上限`。
+- 超過傳輸上限：板子收不到；板子發太大 → `rcl_publish` 回錯誤（被忽略）。
+- 沒超過傳輸上限、但 > MAX_LEN：callback 照叫、`data.size == 0` → 範本不回（上限是推算值，沒實測）。
+要看程式：見各列的行號
+
+---
+
+## E03-05
+
+【規格卡｜UROS 5/9｜pico_array_compute.c：函式、job_id 協定】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+協定（和 `host_driver.py` 約好）：
+```text
+收 /<BOARD_NS>/input ：data[0] = job_id，data[1..n] = 資料
+回 /<BOARD_NS>/output：data[0] = 同一個 job_id，data[1..out_n] = 結果
+```
+| 名稱 | 行號 | 做什麼 / 注意 |
+|---|---|---|
+| `BOARD_NS` | 17 | `"pico0"`；TODO 每塊板子燒錄前改 pico0/pico1/… |
+| `MAX_LEN` | 27 | 400；TODO capacity，含 job_id，≥ CHUNK+1 |
+| `error_loop()` | 30-32 | LED 快閃；`RCCHECK` 失敗進這裡，要按 reset |
+| `in_buf`/`out_buf` | 43 | `static int32_t[MAX_LEN]`（主 stack 只有 2 KB） |
+| `compute(in, n, out, cap)` | 46-55 | TODO 你的運算（範例插入排序），回傳輸出個數 |
+| `sub_cb()` | 57-70 | size<1 就 return → compute 寫進 out_buf[1..] → out_buf[0]=job_id → size=out_n+1 → `rcl_publish` |
+| `alloc_msgs()` | 75-91 | `.data=buf; .capacity=MAX_LEN; .size=0`；`layout.dim` capacity 0 |
+| `main()` | 93-123 | 等 agent（102）→ node `compute_node`、ns BOARD_NS（106）→ sub `"input"`、pub `"output"`（111-112，reliable）→ executor 1 handle（115） |
+- LED：不亮 = 等 agent；恆亮 = OK；快閃 = 建立失敗。
+- 沒有重連：重開後要按 reset。
+- host 填 `layout.dim` 會造成整則丟掉 → host 只填 `data`。
+- 換運算：`compute()`、`host_compute()`（`host_driver.py:38-42`）、`MERGE` 一起改。
+要看程式：請操作者貼「cat -n pico_array_compute.c | sed -n 46,70p」
+
+---
+
+## E03-06
+
+【規格卡｜UROS 6/9｜pico_dualcore_micro_ros.c：雙核心】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+規則：rcl / rclc / rmw 呼叫只能在 core0；core1 只做純運算，不碰 micro-ROS、不 printf（libmicroros 非執行緒安全）。
+| 名稱 | 行號 | 做什麼 / 注意 |
+|---|---|---|
+| `BOARD_NS` / `MAX_LEN` | 24 / 25 | `"pico0"` / 400，同陣列版 TODO |
+| `task_t` | 34 | `{lo, hi}`：給 core1 的範圍 [lo, hi) |
+| `q_task` / `q_done` | 35 / 36 | core0→core1（task_t）/ core1→core0（hi 當完成訊號），深度 4 |
+| `compute_range(in,out,lo,hi)` | 44-47 | TODO 純運算（範例平方）；兩核都呼叫，不用全域暫存 |
+| `core1_main()` | 51-58 | 等 q_task → 算 → 放 q_done |
+| `sub_cb()` | 60-75 | n=size−1、mid=1+n/2；[mid,1+n) 給 core1、core0 算 [1,mid)；等 q_done；out_buf[0]=job_id；size=n+1；publish |
+| `main()` | 77-112 | queue_init（85-86）→ `multicore_launch_core1`（87）→ 綁 sequence（90-94）→ 等 agent（96）→ node `dual_node`（100）→ executor 1 handle（106） |
+int32 平方（45-46）：`out[i] = (int32_t)((uint32_t)in[i] * (uint32_t)in[i])`。|x| > 46340 照 int32 繞回（46341² → −2147479015），不是未定義行為；`host_compute`（`host_driver.py:40-41`）也照 int32 繞回 → `correct=True`。要真正的平方 → 換 Int64MultiArray。
+- 每派 1 個 task 就要取 1 次 q_done，否則卡死。core1 stack 2 KB → 不開大區域陣列。
+- 搭配 `MERGE = "concat"`。瓶頸在 USB 時雙核沒用。
+要看程式：請操作者貼「cat -n pico_dualcore_micro_ros.c | sed -n 44,75p」
+
+---
+
+## E03-07
+
+【規格卡｜UROS 7/9｜pico_pingpong.c：重連狀態機、板子 ID】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+絕對名稱 topic（ns 不影響）：`/microROS/ping`、`/microROS/pong`（`std_msgs/Header`）。
+| 名稱 | 行號 | 值 / 做什麼 |
+|---|---|---|
+| `LED_PIN` / `PING_PERIOD_MS` | 23 / 25 | 25 / 2000（TODO） |
+| `RCCHECK` | 28 | 失敗 `return false`（回去等 agent） |
+| `ping_timer_cb` | 53-64 | frame_id=`"亂數_device_id"`、設 .size、發 ping |
+| `ping_sub_cb` | 68-73 | 不是自己的 ping → 原封不動發 pong |
+| `pong_sub_cb` | 75-79 | 自己的 pong → `pong_count++`（沒輸出） |
+| `create_entities` | 81-103 | node `pingpong_node`（85，TODO 多板改名）；ping pub reliable，其餘 best_effort；3 handle（97） |
+| `destroy_entities` | 105-117 | destroy timeout 設 0，全部 fini |
+板子 ID（131-134）：`pico_get_unique_board_id()` 出廠序號算成 `device_id` → 每塊一定不同。
+狀態機（138-158）：
+```text
+WAITING_AGENT 每500ms ping(100,1)成功 → AGENT_AVAILABLE
+AGENT_AVAILABLE create 成功 → AGENT_CONNECTED
+  失敗 → destroy → WAITING_AGENT
+AGENT_CONNECTED 每200ms ping 失敗 → AGENT_DISCONNECTED
+  連著 → 每圈 spin_some(10ms)
+AGENT_DISCONNECTED destroy → WAITING_AGENT
+```
+LED 亮 = 已連上。測：`ros2 topic pub --once /microROS/ping std_msgs/msg/Header "{frame_id: 'host'}"` → pong 回 `frame_id: host`。
+要看程式：請操作者貼「cat -n pico_pingpong.c | sed -n 81,158p」
+
+---
+
+## E03-08
+
+【規格卡｜UROS 8/9｜host_driver.py：常數、run() 排程、重送】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 常數 | 行號 | 值 | 意思 |
+|---|---|---|---|
+| `N_BOARDS` | 21 | 2 | TODO；ns 必須是 pico0..pico{N-1} |
+| `CHUNK` | 22 | 300 | TODO；CHUNK+1 ≤ MAX_LEN；reliable ≤ 504、BE ≤ 120 |
+| `MERGE` | 24 | `"sorted"` | TODO；sorted = heapq k-way merge、concat = 依 job_id 串接 |
+| `TIMEOUT_S` | 27 | 10.0 | run() 最多等幾秒 |
+| `RESEND_S` | 28 | 1.0 | TODO；一塊送出幾秒沒回就重送 |
+函式：`make_data` 31-35；`host_compute` 38-42；`__init__` 46-57（QoS RELIABLE 在 50；lambda `b=i`）；`on_result` 59-65；`send` 67-72（`data=[job_id]+chunk`）；`wait_boards` 74-82；`run` 84-114；`main` 117-127。
+run() 排程：
+```text
+chunks 每 CHUNK 個一塊（3000/300 = 10 塊，job_id 0..9）
+while 沒收齊 且 沒到 TIMEOUT_S:
+  for 每塊板子 b:
+    忙 且 送出 > RESEND_S → [WARN] 重送；沒結果就 todo.appendleft(job)
+    丟掉 todo 前面已有結果的
+    b 空閒 → send(b, todo.popleft())   # 每塊板子同時最多 1 塊
+  rclpy.spin_once(1 ms)
+依 job_id 排序後合併
+```
+- `on_result` 只在回的是「手上那一塊」才標空閒；重送後才到的舊回覆只存結果。
+- `wait_boards` 等 input 有訂閱者且 output 有發佈者；計時不含它。
+- RESEND_S 比板子算一塊的時間短會造成重算 → 調大。
+成功：`boards=2 n=3000 chunk=300 time=… ms throughput=… KiB/s correct=True`
+要看程式：請操作者貼「cat -n host_driver.py | sed -n 84,114p」
+
+---
+
+## E03-09
+
+【規格卡｜UROS 9/9｜陷阱與驗證】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| agent 沒反應、LED 不亮 | port 錯 / 沒權限 / 被占用 | by-id 路徑、dialout、`sudo lsof` |
+| agent 連上但 `ros2 topic list` 沒板子的 topic | create 失敗（陣列版 LED 快閃）：handle 數不夠、超過實體上限、名稱不合法；ROS_DOMAIN_ID 不同；陣列版沒重連 | agent `-v6`；加大 handle 數；同 ROS_DOMAIN_ID；`ros2 topic list --no-daemon`；按 reset |
+| topic 有、echo 收不到 | QoS 不合：best_effort 發佈 → reliable 訂閱收不到 | `ros2 topic echo --qos-reliability best_effort /topic`；兩端同 QoS（`host_driver.py:50`） |
+| 大訊息沒回、`逾時！只收到 x/y 塊` | 訊息太大：CHUNK+1 > MAX_LEN 或 > 傳輸上限（505/121） | 調小 CHUNK，或加大 MAX_LEN（≤ 上限）重燒 |
+| 板子完全不回 | host 填了 `layout.dim` | 只填 data |
+| 收到空陣列 | 沒綁 capacity / 沒設 `.size` | 綁 buffer；publish 前設 size |
+| `correct=False`、沒逾時 | `APP_SRC` ↔ `MERGE` 沒成對；host_compute ≠ 板子運算 | 兩邊一起改 |
+| 每塊板子收同一塊 | BOARD_NS 一樣 | 每塊不同 |
+| 雙核隨機當機 | core1 呼叫 rcl / printf | 移回 core0 |
+| `undefined reference to __atomic_exchange_4` | M0+ 預編函式庫 | README.md §6 shim |
+驗證：官方範例能動 → LED 恆亮 → `ros2 topic list` 有 `/pico0/input` → `topic pub --once` `[7, 3, 1, 2]` 回 `[7, 1, 2, 3]` → `python3 host_driver.py` 最後一行 `correct=True`。偶爾 `[WARN] … 重送` 但 `correct=True` 正常。
+要看程式：請操作者貼「cat -n README.md | sed -n 43,72p」
+
+---
+
+## E04-01
+
+【規格卡｜ALGO 1/9｜總覽：檔案、題型、驗證狀態】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`預製程式碼/algo/`：純 C11、`stdint.h` 型別、核心檔不用 malloc，電腦和 RP2350（M33 / Hazard3）都能編。
+| 檔案 | 行數 | 做什麼 |
+|---|---|---|
+| `crc32.c` / `.h` | 117 / 59 | CRC-32 三種實作、CRC-32C、CRC-16、通用 `crc_generic` |
+| `sha1_sha0.c` / `.h` | 78 / 35 | SHA-1 與 SHA-0（同一份程式，旗標切換） |
+| `sha256.c` / `.h` | 70 / 24 | SHA-256 |
+| `sort.c` / `.h` | 78 / 34 | insertion、merge、radix、2 路 / k 路合併 |
+| `bnn.c` / `.h` | 63 / 66 | BNN：打包、XNOR-popcount、門檻、argmax |
+| `checksum_misc.c` | 106 | Adler-32、Fletcher-16、XOR、sum8、LRC、sum32、IP checksum（沒有 .h） |
+| `*_test.c`、`test_util.h` | — | 只在電腦上跑（測試 + 測速），不要放進 Pico |
+| `README.md` | 111 | 題型表、API 速查、編譯指令 |
+題型 → 檔：CRC / zlib / poly / refin → crc32；SHA-0/1/256 / hash → sha*；排序、合併多板結果 → sort；eBNN / XNOR / popcount / BatchNorm → bnn；Adler / Fletcher / NMEA `*hh` / LRC / IP checksum → checksum_misc。
+`TODO(改這裡)` 共 5 處：`crc32.c:10`（POLY32R）、`sort.c:6`（RUN）、`bnn_test.c:14`（範例網路）、`crc32_test.c:7`、`sort_test.c:7`（測速資料量）。
+驗證：5 支測試在電腦上全 PASS（含 ASan/UBSan）、qemu-riscv32 全 PASS；M33 / rv32 交叉編譯 0 警告；pico-sdk 2.2.0 專案編譯連結通過。**沒有在實體 Pico 上跑過**，板上速度沒有實測。
+要看程式：請操作者貼「cat -n README.md | sed -n 7,50p」
+
+---
+
+## E04-02
+
+【規格卡｜ALGO 2/9｜crc32.c：函式、分段用法、選哪個】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+參數都是 `(crc, const uint8_t *p, size_t n)`。
+| 函式 | crc32.c 行號 | 第一段的 crc | 注意 |
+|---|---|---|---|
+| `uint32_t crc32_bitwise` | 43-51 | 0 | zlib CRC-32；不用表；最慢 |
+| `uint32_t crc32_table` | 54-59 | 0 | 1 KB 表 |
+| `uint32_t crc32_slice4` | 62-75 | 0 | 4 KB 表；p 不用對齊 |
+| `uint32_t crc32_update` | 77-79 | 0 | = slice4（最快） |
+| `uint32_t crc32c_update` | 82-87 | 0 | CRC-32C |
+| `uint16_t crc16_ccitt_false` | 90-94 | **0xFFFF** | 傳 0 = XMODEM |
+| `uint32_t crc_generic(const crc_param_t *c, p, n)` | 103-117 | （用 c->init） | 任意規格，width 1..32；**不能分段** |
+| `void crc32_init(void)` | 26-40 | — | constructor：main 前自動建表 |
+分段（上表前 6 個）：`c = crc32_update(0, a, na); c = crc32_update(c, b, nb);` = 一次算 a+b（函式內開頭 `crc = ~crc`、結尾 `return ~crc`）。
+常數：`POLY32R 0xEDB88320`（:10，TODO）、`POLY32CR 0x82F63B78`（:11）、`POLY16 0x1021`（:12）。
+速度（電腦，4 MB）：bitwise 115.0 MB/s、table 484.8（4.2 倍）、slice4 1445.4（12.6 倍）、crc32c 488.6、crc16 353.9、crc_generic 28.3。
+→ 要快用 `crc32_update`；`crc_generic` 用來對答案，或資料只有幾 KB 時用。
+別的 refin=refout=1、init=xorout=0xFFFFFFFF 的 32-bit CRC 要快：把 :10 改成反轉多項式（例 AUTOSAR `0xC8DF352F`）。
+要看程式：請操作者貼「cat -n crc32.c | sed -n 43,79p」
+
+---
+
+## E04-03
+
+【規格卡｜ALGO 3/9｜CRC 規格表：crc_generic 參數與 check】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`crc_param_t p = {width, poly, init, refin, refout, xorout};`（crc32.h:32-39）
+`crc_generic(&p, (const uint8_t *)"123456789", 9)` == 下面的 check（全部實測 PASS）：
+CRC-32（zlib、PNG）：`{32,0x04C11DB7,0xFFFFFFFF,1,1,0xFFFFFFFF}` → 0xCBF43926
+CRC-32C：`{32,0x1EDC6F41,0xFFFFFFFF,1,1,0xFFFFFFFF}` → 0xE3069283
+CRC-32/BZIP2：`{32,0x04C11DB7,0xFFFFFFFF,0,0,0xFFFFFFFF}` → 0xFC891918
+CRC-32/MPEG-2：`{32,0x04C11DB7,0xFFFFFFFF,0,0,0}` → 0x0376E6E7
+CRC-16/CCITT-FALSE：`{16,0x1021,0xFFFF,0,0,0}` → 0x29B1
+CRC-16/XMODEM：`{16,0x1021,0,0,0,0}` → 0x31C3
+CRC-16/KERMIT：`{16,0x1021,0,1,1,0}` → 0x2189
+CRC-16/MODBUS：`{16,0x8005,0xFFFF,1,1,0}` → 0x4B37
+CRC-16/ARC：`{16,0x8005,0,1,1,0}` → 0xBB3D
+CRC-12/UMTS：`{12,0x80F,0,0,1,0}` → 0xDAF
+CRC-8/SMBUS：`{8,0x07,0,0,0,0}` → 0xF4
+CRC-8/MAXIM（1-Wire）：`{8,0x31,0,1,1,0}` → 0xA1
+CRC-7/MMC：`{7,0x09,0,0,0,0}` → 0x75
+CRC-5/USB：`{5,0x05,0x1F,1,1,0x1F}` → 0x19
+- poly 填**一般（不反轉）寫法**。題目給 0xEDB88320 → 填 0x04C11DB7 + refin=refout=1（0x82F63B78 ↔ 0x1EDC6F41、0xA001 ↔ 0x8005）。
+- x^16+x^12+x^5+1 = 0x1021（最高次項省略）。width 1..32 都可以。
+要看程式：請操作者貼「cat -n crc32.c | sed -n 103,117p」
+
+---
+
+## E04-04
+
+【規格卡｜ALGO 4/9｜sha1_sha0.c、sha256.c：API 與 SHA-0 差別】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 函式 | 行號 | 做什麼 |
+|---|---|---|
+| `void sha1_init(sha1_ctx *c, int is_sha0)` | sha1_sha0.c:40-44 | **1 = SHA-0、0 = SHA-1** |
+| `void sha1_update(sha1_ctx *c, const uint8_t *p, size_t n)` | :46-55 | 餵任意長度 |
+| `void sha1_final(sha1_ctx *c, uint8_t out[20])` | :57-71 | 補 padding，輸出 20 byte |
+| `sha1(p, n, out)` / `sha0(p, n, out)` | :73-75 / :76-78 | 一次算完 |
+| `sha256_init(&c)` / `_update(&c, p, n)` / `_final(&c, out)` | sha256.c:42-47 / 49-55 / 57-66 | out 32 byte |
+| `sha256(p, n, out)` | sha256.c:68-70 | 一次算完 |
+ctx：`sha1_ctx`（sha1_sha0.h:21-27）、`sha256_ctx`（sha256.h:12-17）。
+串流：init 一次 → update 多次（照資料順序，長度任意）→ final 一次 = 一次算完的結果。final 後要重新 init。
+SHA-0 和 SHA-1 唯一差別（sha1_sha0.c:26）：訊息擴展 W[t] 時 SHA-1 多做 `ROTL(wt, 1)`；初值、常數、80 回合都一樣。Python `hashlib` 沒有 SHA-0。
+輸入用大端組字；out 逐 byte 印 `%02x` 就是標準 hex。
+"abc" 的答案：
+- SHA-1 `a9993e364706816aba3e25717850c26c9cd0d89d`
+- SHA-0 `0164b8a914cd2a5e74c4f7ff082c4d97f1edf880`
+- SHA-256 `ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad`
+速度（電腦）：sha1 423.1、sha0 415.8、sha256 122.6 MB/s。SHA 不能拆給多塊板子平行算。
+要看程式：請操作者貼「cat -n sha1_sha0.c | sed -n 40,78p」
+
+---
+
+## E04-05
+
+【規格卡｜ALGO 5/9｜sort.c：排序與合併、選哪個】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 函式 | sort.c 行號 | 注意 |
+|---|---|---|
+| `void insertion_sort_u32(uint32_t *a, size_t n)` | 8-15 | O(n²)；n ≤ 32 最快 |
+| `void merge_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | 26-39 | 穩定；tmp ≥ n 個 |
+| `void radix_sort_u32(uint32_t *a, size_t n, uint32_t *tmp)` | 44-57 | LSD 4 趟；tmp ≥ n 個；結果回到 a |
+| `void merge_two_sorted(a, na, b, nb, uint32_t *out)` | 59-65 | out 不可和 a、b 重疊 |
+| `void kway_merge(const uint32_t *const lists[], const size_t lens[], int k, uint32_t *out)` | 67-78 | **k 沒有上限**；O(n×k)；相等取編號小的 |
+常數：`RUN 32`（sort.c:6，TODO，16~64 都可）；`KWAY_MAX 16`（sort.h:31）只是建議值，不限制 k。
+排序（電腦，n = 2^20）：qsort 106.25 ms、merge 77.68、radix 6.88（快 15.4 倍）、兩半各 radix + merge_two_sorted 11.01。→ n ≤ 32 用 insertion；n ≥ 256 用 radix。
+合併 k 段（n = 2^20）：
+| k | kway_merge | 兩兩合併 |
+|---|---|---|
+| 4 | 12.52 ms | 7.94 ms |
+| 8 | 29.05 ms | 12.19 ms |
+| 16 | 62.32 ms | 15.93 ms |
+→ k ≤ 4 用 `kway_merge`；k ≥ 8 用 `merge_two_sorted` 兩兩合併（tree merge，多要一個 n 大小的暫存區）。
+有號 int32：排序前每個 `^= 0x80000000u`，排完再做一次。遞減：前後各取 `~x`。
+電腦端合併多板結果：Python `heapq.merge`。
+要看程式：請操作者貼「cat -n sort.c | sed -n 44,78p」
+
+---
+
+## E04-06
+
+【規格卡｜ALGO 6/9｜bnn.c：位元排列、XNOR-popcount、門檻】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+排列（bnn.h:14）：第 i 個 → word `i/32` 的 bit `i%32`（LSB 起）；+1=1、-1=0。`BNN_WORDS(n)`=(n+31)/32。
+| 函式 | bnn.c | 做什麼 |
+|---|---|---|
+| `bnn_pack(const int8_t *v, int n, uint32_t *out)` | 4-8 | v[i] > 0 → 1；**0 也當 -1** |
+| `int32_t bnn_dot(a, w, n)` | 14-23 | 2*popcount(~(a^w))-n；尾巴 mask（19-21） |
+| `bnn_dense_sign(&L, in, out_bits)` | 25-33 | d = flip[j] ? -dot : dot；d >= thr[j] → 1；**thr 不可 NULL** |
+| `bnn_dense_score(&L, in, int32_t *score)` | 35-39 | dot+thr[j]（bias，可 NULL） |
+| `int bnn_argmax(s, n)` | 41-45 | 平手取小的 |
+| `bnn_fold_bn(gamma, beta, mean, std, bias, &thr, &flip)` | 53-63 | BN+sign → 整數門檻 |
+`bnn_layer_t`（bnn.h:45-50）= `{n_in, n_out, W, thr, flip}`，W 每列 BNN_WORDS(n_in) word。
+門檻：t = mean - bias - beta*std/gamma（std = sqrtf(var+eps)）。gamma > 0：thr = ceil(t)、flip 0；< 0：thr = ceil(-t)、flip 1。
+推論：pack → dense_sign（隱藏層）→ dense_score（最後層）→ argmax（`bnn_test.c:24-32`）。
+popcount（bnn.h:34-42）：RISC-V Zbb 是 1 條 cpop；M33 沒有 → 加 `-DBNN_SWAR_POPCOUNT`。電腦 784×256 一層：12.09 µs、SWAR 8.12、硬體 3.47。
+換權重：`bnn_test.c:15-20`（尺寸、W1/W2）、`:73`（BN 參數）。numpy packbits（MSB 先）要先轉排列。
+要看程式：請操作者貼「cat -n bnn.c | sed -n 14,39p」
+
+---
+
+## E04-07
+
+【規格卡｜ALGO 7/9｜checksum_misc.c：簡單校驗碼】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+單一 .c、沒有 .h：把需要的函式整段複製，不要複製 `#ifdef TEST_MAIN`（72-106）。`p, n` = `const uint8_t *p, size_t n`。
+| 函式 | 行號 | 算法 | 測試向量 |
+|---|---|---|---|
+| `uint32_t adler32(uint32_t adler, p, n)` | 21-30 | a = 1+Σbyte、b = Σa，mod 65521；(b<<16)\|a；第一次傳 **1**，可分段 | "Wikipedia" → 0x11E60398 |
+| `uint16_t fletcher16(p, n)` | 32-41 | s1 = Σbyte、s2 = Σs1，mod 255；(s2<<8)\|s1；不能分段 | "abcde" → 0xC8F0 |
+| `uint8_t xor8(p, n)` | 43-47 | 全部 XOR | NMEA 例句 → 0x28 |
+| `uint8_t sum8(p, n)` | 49-53 | 加總低 8 位 | "123456789" → 0xDD |
+| `uint8_t lrc8(p, n)` | 55 | 0 - sum8（Modbus ASCII） | sum8 + lrc8 = 0 |
+| `uint32_t sum32(const uint32_t *w, size_t nwords)` | 57-61 | uint32 相加，溢位捨去；參數是 **word 數** | {0xFFFFFFFF, 2, 3} → 4 |
+| `uint16_t inet_csum(p, n)` | 64-70 | RFC 1071：每 2 byte 當**大端**相加、進位折回、取反；奇數補 0 | 00 01 f2 03 f4 f5 f6 f7 → 0x220D |
+常數：`ADLER_MOD 65521`（:16）、`ADLER_NMAX 5552`（:17，每 5552 byte 才取一次 mod）。
+- NMEA 只算 `$` 和 `*` 之間。
+- inet_csum 放回封包時高 byte 先；連 checksum 欄位一起算，結果應為 0。
+- 檔案裡沒有 Fletcher-32。Python `zlib.adler32` = adler32。
+要看程式：請操作者貼「cat -n checksum_misc.c | sed -n 16,70p」
+
+---
+
+## E04-08
+
+【規格卡｜ALGO 8/9｜放進 Pico 專案：CMake、weak、記憶體】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+只複製核心檔（crc32、sha1_sha0、sha256、sort、bnn 的 .c/.h）。不要放 `*_test.c`、`test_util.h`（POSIX `clock_gettime`）。
+CMake（pico-sdk 2.2.0、pico2 ARM 編譯連結通過；檔案放專案的 `algo/`）：
+```cmake
+add_executable(app_algo app_algo.c
+    algo/crc32.c algo/sha1_sha0.c algo/sha256.c algo/sort.c algo/bnn.c)
+target_include_directories(app_algo PRIVATE ${CMAKE_CURRENT_LIST_DIR}/algo)
+if (PICO_PLATFORM STREQUAL "rp2350-arm-s")
+    target_compile_definitions(app_algo PRIVATE BNN_SWAR_POPCOUNT)
+endif()
+target_link_libraries(app_algo pico_stdlib)
+```
+既有 `pico/CMakeLists.txt`：在 `add_app(...)` 後面加 `target_sources(app_xxx PRIVATE algo/sort.c ...)` 和上面的 include。
+和 `pico/serial_proto.c` 一起用：兩邊都有 `crc32_update`；`serial_proto.c:25` 是 `__attribute__((weak))` → 連結器用 `crc32.c` 的（結果相同），不會 multiple definition。
+記憶體（M33 實測 stack）：
+- 大陣列（a、tmp、權重、ctx）一律 `static`。主 stack 和 core1 stack 預設都是 0x800 = 2 KB。
+- `radix_sort_u32` 1064 B、sha256() 整條 496 B、sha1() 整條 280 B、kway_merge 48 + 8k B、merge_sort 64 B、crc_generic 32 B。
+- 靜態只有 crc32.c 的表 5636 B；程式碼共 < 5 KB。
+- 雙核：CRC 表在 main 前由 constructor 建好，兩核都能直接用。
+要看程式：請操作者貼「cat -n ../pico/serial_proto.c | sed -n 20,30p」
+
+---
+
+## E04-09
+
+【規格卡｜ALGO 9/9｜測試指令與陷阱】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+在 `預製程式碼/algo/` 執行，執行檔放 repo 外：`B=/tmp/algo_build; mkdir -p $B`，`G="gcc -O2 -Wall -Wextra -std=c11"`
+| 測試 | 指令 | 成功 |
+|---|---|---|
+| CRC | `$G crc32.c crc32_test.c -o $B/crc && $B/crc` | 17 PASS |
+| SHA | `$G sha1_sha0.c sha256.c sha_test.c -o $B/sha && $B/sha` | 10 PASS |
+| 排序 | `$G sort.c sort_test.c -o $B/sort && $B/sort` | 6 PASS |
+| BNN | `$G bnn.c bnn_test.c -o $B/bnn && $B/bnn` | 4 PASS |
+| 校驗碼 | `$G -DTEST_MAIN checksum_misc.c -o $B/ck && $B/ck` | 13 PASS |
+成功：最後一行 `結果：全部通過`。失敗印 `FAIL  說明 (檔:行)`。
+陷阱（程式這樣寫 = 錯 → 改法）：
+1. `crc16_ccitt_false(0, …)` → 得 0x31C3（XMODEM）→ 第一段傳 0xFFFF。
+2. 分段時第二段又傳 0 → 改傳上一段的回傳值。`crc_generic` 分段算 → 改成整份一次算。
+3. CRC 得 0x340BC6D9 → 少了最後 XOR；poly 填 0xEDB88320 → 改 0x04C11DB7 + refin=refout=1。
+4. 要 SHA-0 卻 `sha1_init(&c, 0)` → 得 SHA-1 → 傳 1。每包都 init/final → 改成各一次。
+5. int32 直接 radix → 負數排最後 → 前後 `^= 0x80000000u`。
+6. `merge_two_sorted` 的 out 和輸入重疊 → 另開陣列。
+7. 大陣列寫在函式裡 → Pico hard fault → 改 `static`。
+8. 隱藏層 thr 傳 NULL → 當掉；權重 MSB 先沒轉 → 分類全錯。
+9. `adler32(0, …)` → 錯 → 第一次傳 1。
+10. 改了 `POLY32R` → crc32_test 的 CRC-32 斷言 FAIL 是預期的，改用 crc_generic 對照。
+要看程式：見各列的行號
+
+---
+
+## E05-01
+
+【規格卡｜BITS 1/11｜總覽：bits-riscv/ 8 個檔】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 檔案 | 行數 | 做什麼 | 題目關鍵字 |
+|---|---|---|---|
+| `bitops.h` | 97 | 位元巨集 / inline 函式，`#include` 直接用 | mask、欄位、popcount、endian、反轉 |
+| `packet_fields.c` | 111 | 規格位元表 → pack/unpack；大小端讀寫；位元重排 | header、bit 31..24、打包 |
+| `bitstream.c` | 113 | byte 陣列逐位元讀寫（MSB/LSB-first）、跨 word | 位元流、跨 byte |
+| `rv32_encode_decode.c` | 160 | RV32I 編碼、立即值解碼、反組譯、迷你模擬器 | opcode、機器碼、模擬器 |
+| `asm_examples.S` | 133 | 7 個 C 可呼叫的組語函式 | 組語函式、cpop、BNN |
+| `asm_test.c` | 86 | 測 `.S`（和 C 參考版比對）+ inline asm | |
+| `rv32_asm_cheatsheet.md` | 99 | ABI、偽指令、Hazard3 擴充、opcode/funct 表 | 只查不改 |
+| `README.md` | 48 | 檔案→題型、位元題 SOP、編譯指令 | |
+- `TODO(改這裡)` 共 4 處：`packet_fields.c:5`、`:14`；`rv32_encode_decode.c:56`、`:78`。
+- 3 個 `.c` 各有 `main` 自我測試，最後印 `<名稱>: ALL PASS`、回傳 0。`asm_test.c` 只能和 `asm_examples.S` 一起用 RISC-V gcc 編。
+- 驗證：host gcc 13.3 全 PASS、0 警告；rv32（gcc 13.2 + picolibc + qemu-riscv32）基本 ISA 版與 Zbb 版全 PASS；機器碼和 GNU as 對過。**沒在 Pico 2 實機跑過**。
+- repo 裡沒有 `bitops.h` 的測試檔（`README.md:43` 說的「另寫測試」不在）。
+- 鐵律：一律 `uint32_t`；位移量 0～31（`1u << 32` 是未定義行為 UB）；手算 1～2 組寫成 `CHECK`。
+要看程式：請操作者貼「cat -n README.md | sed -n 1,27p」
+
+---
+
+## E05-02
+
+【規格卡｜BITS 2/11｜bitops.h 前半：位元、欄位、符號延伸、clz】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+bit 0 = LSB，全部 `uint32_t`，沒有 `TODO(改這裡)`。
+| 名稱 | 行 | 做什麼 | 邊界 / 注意 |
+|---|---|---|---|
+| `BIT(n)` | 9 | `1u<<n` | n≥32 是 UB |
+| `SET_BIT/CLR_BIT/TOGGLE_BIT(x,n)` | 10-12 | OR / AND NOT / XOR | 回傳新值、不改 x：`x = SET_BIT(x,5);` |
+| `TEST_BIT(x,n)` | 13 | `(x>>n)&1u`，0 或 1 | n≥32 是 UB |
+| `MASK(w)` | 18 | 低 w 位全 1 | w≥32 → `0xFFFFFFFF`；w=0 → 0 |
+| `GET_FIELD(x,hi,lo)` | 20 | 取 [hi:lo]，移到最低位 | 順序 hi 在前；hi<lo 是 UB |
+| `SET_FIELD(x,hi,lo,v)` | 22-23 | 清空 [hi:lo] 再放 v | 回傳新值；v 超寬被丟：`(0,7,4,0x1F)` = `0xF0` |
+| `COMBINE16(a,b)` | 25 | `(0x12,0x34)` = `0x1234` | a、b 各自 &0xFF |
+| `sign_extend(v,bits)` | 30-35 | 有號延伸成 `int32_t` | bits≤0 → 0；bits≥32 → `(int32_t)v`；`(0xFFF,12)` = -1 |
+| `popcount32(x)` | 39-43 | 1 的個數 | 可攜迴圈 `x &= x-1` |
+| `POPCOUNT(x)` | 44 | `__builtin_popcount` | Zbb 下 = 1 條 `cpop` |
+| `clz32/ctz32(x)` | 49-50 | 前導 / 尾端 0 個數 | x=0 → 32（避開 builtin 的 UB） |
+- 最高的 1 在第幾位 = `31 - clz32(x)`；x=0 得 -1，先判斷 x≠0。
+- 巨集參數會算兩次，不要放 `i++`。
+- 陷阱：`SET_BIT(x,3);` 單獨一行 → x 沒變 → 改 `x = SET_BIT(x,3);`。自己寫 `(1u<<32)-1` → UB → 改 `MASK(32)`。
+要看程式：請操作者貼「cat -n bitops.h | sed -n 8,51p」
+
+---
+
+## E05-03
+
+【規格卡｜BITS 3/11｜bitops.h 後半：endian、rotate、2 的次方、反轉】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 名稱 | 行 | 做什麼 | 邊界 / 注意 |
+|---|---|---|---|
+| `bswap32(x)` | 55-57 | byte 順序顛倒 | `0x11223344` → `0x44332211`；Zbb = `rev8` |
+| `bswap16(x)` | 58 | `0x1234` → `0x3412` | |
+| `rotl32/rotr32(x,n)` | 62-63 | 循環左 / 右移 | 先 `n &= 31`（n=36 等於 4）；n=0 特判 |
+| `is_pow2(x)` | 66 | 2 的次方回 1 | 0 → 0 |
+| `round_up_pow2(x)` | 67-72 | 往上取 2^k：5→8、8→8 | 0 → 0；> `0x80000000` 溢位成 0 |
+| `ALIGN_UP(x,a)` | 74 | 對齊 a 的倍數：`(13,4)` = 16 | a 必須 2^k：`(7,6)` 得 8 是錯的 |
+| `bitrev32(x)` | 78-83 | 32 位左右顛倒 | `0x1` → `0x80000000`；`0x12345678` → `0x1E6A2C48` |
+| `bitrev_n(x,n)` | 85 | 只反轉低 n 位 | n≤0 → 0；`(0b0011,4)` = `0b1100`；x 高於 n 的位不影響 |
+| `brev8(x)` | 87 | 每個 byte 內部反轉 | `0x01020380` → `0x8040C001`；C 版編成 28 條 |
+- RP2350 和 x86 都是小端。
+- 要 1 條指令的 brev8：`__builtin_riscv_brev8(x)`（Zbkb）。
+- 寬度 0：`sign_extend`、`bitrev_n` 回傳 0（無 UB）。別的檔沒處理：`packet_fields.c:23` 的 `M(32)`、`rv32_encode_decode.c:17` `BITS` 寬 32、`:18` `sext(v,0)` 都是 UB。
+- 小技巧（`:89-96` 註解）：`x & -x` 只留最低的 1；`x & (x-1)` 清最低的 1；`popcount(a ^ b)` = 漢明距離；`~(a ^ b)` = XNOR（BNN 用）。
+要看程式：請操作者貼「cat -n bitops.h | sed -n 53,97p」
+
+---
+
+## E05-04
+
+【規格卡｜BITS 4/11｜packet_fields.c：規格表 → SHIFT/W、pack、endian】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+規格表 → `#define`（`:15-22`；`TODO(改這裡)` 在 `:5`、`:14`）：
+```text
+bit 31..29 version(3) → VER_SHIFT 29  VER_W 3
+bit 28..24 type(5)    → TYPE_SHIFT 24 TYPE_W 5
+bit 23..12 length(12) → LEN_SHIFT 12  LEN_W 12
+bit 11..0  id(12)     → ID_SHIFT 0    ID_W 12
+```
+規則：SHIFT = lo；W = hi−lo+1；W 加總 = 32。
+| 名稱 | 行 | 做什麼 |
+|---|---|---|
+| `M(w)` | 23 | `(1u<<w)-1`；w=32 是 UB |
+| `pack(h)` | 28-33 | 每欄 `(v & M(W)) << SHIFT` 再 OR |
+| `unpack(x)` | 34-41 | `(x >> SHIFT) & M(W)` |
+| `set_type(x,t)` | 43-47 | 先清欄位再 OR |
+| `HeaderBF` | 53-61 | bitfield 版，不要用 |
+| `load_be32/load_le32/load_be16(p)` | 66-68 | 逐 byte 讀 |
+| `store_be32/store_le32(p,v)` | 69-70 | 逐 byte 寫 |
+| `permute_bits(x,perm,n)` | 73-78 | 輸入 bit i → 輸出 bit perm[i] |
+- 測試：`{5,0x13,0x2A0,0xBEE}` → `0xB32A0BEE`（`:88`）。
+- 大端上線：`store_be32(buf,pack(h))` → `B3 2A 0B EE`；收 `unpack(load_be32(buf))`。`memcpy` 是小端。
+- 欄位數不同 → `Header`（`:25`）、`pack`、`unpack`、`main` 一起改；有 32 位欄位 → 用 `MASK`。
+- 陷阱：SHIFT 填成 hi → 錯位 → 改填 lo。規格是「輸出 bit j 取自輸入 bit src[j]」時 `permute_bits` 方向反 → 改寫 `y |= ((x>>src[j])&1u)<<j`。
+要看程式：請操作者貼「cat -n packet_fields.c | sed -n 14,47p」
+
+---
+
+## E05-05
+
+【規格卡｜BITS 5/11｜bitstream.c：MSB/LSB-first 讀寫、跨 word】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`BitStream`（`:11-14`）= `{uint8_t *buf; size_t pos;}`，**pos 是位元位置**，初始化 `{buf, 0}`。沒有 `TODO(改這裡)`。
+| 函式 | 行 | 順序 | 做法 |
+|---|---|---|---|
+| `read_msb(s,n)` | 18-27 | MSB-first | bit=7-(pos&7)；先讀的放高位 |
+| `write_msb(s,v,n)` | 29-37 | MSB-first | 從 v 的 bit n-1 往下寫 |
+| `read_lsb(s,n)` | 40-49 | LSB-first | bit=pos&7；第 i 個讀到的放 bit i |
+| `write_lsb(s,v,n)` | 50-58 | LSB-first | 從 v 的 bit 0 往上寫 |
+| `get_bits_words(w,pos,n)` | 62-68 | LSB-first | w[idx+1]:w[idx] 拼 64 位，右移 pos%32 再 mask |
+- n = 0～32（n=0 回 0）；不檢查越界；自動處理跨 byte / 跨 word。
+- write 會設或清寫到的每一位；沒寫到的位要先 `memset(buf,0,…)`。
+- `get_bits_words` 一定讀 `w[idx+1]` → 陣列尾巴多留 1 個 0。
+- MSB-first：網路協定、影像。LSB-first：deflate/zip、UART/FIFO。
+測試（`:77-108`，資料 `A5 3C`）：
+```text
+read_msb 3,7,6 → 0x5 0x14 0x3C
+read_lsb 3,7,6 → 0x5 0x14 0x0F
+get_bits_words({0xA0000000,0xB,0},28,8) = 0xBA
+```
+- word 陣列 MSB-first（pos 0 = w[0] 的 bit31）不能用 `get_bits_words` → 另寫：`two = (uint64_t)w[idx]<<32 | w[idx+1]`，回傳 `(two >> (64-off-n)) & mask`。
+- 陷阱：讀出的值位元反過來 → MSB/LSB 用錯，拿題目範例手算決定。重用舊 `BitStream` → pos 沒歸零 → 新資料用新的 `{buf,0}`。
+要看程式：請操作者貼「cat -n bitstream.c | sed -n 11,68p」
+
+---
+
+## E05-06
+
+【規格卡｜BITS 6/11｜RV32I 六種格式、B/J 立即值打亂】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+位置（`rv32_encode_decode.c:4-11`）：
+```text
+R: funct7[31:25] rs2[24:20] rs1[19:15] funct3[14:12] rd[11:7] opcode[6:0]
+I: [31:20]=imm11:0 rs1 funct3 rd opcode
+S: [31:25]=imm11:5 rs2 rs1 funct3 [11:7]=imm4:0 opcode
+B: [31]=imm12 [30:25]=imm10:5 rs2 rs1 funct3 [11:8]=imm4:1 [7]=imm11 opcode
+U: [31:12]=imm31:12 rd opcode
+J: [31]=imm20 [30:21]=imm10:1 [20]=imm11 [19:12]=imm19:12 rd opcode
+```
+- 符號位都在 bit31。B/J 不存 imm[0]（一定是 0）：B 13 位、J 21 位。偏移相對本指令位址。
+B 編碼 `beq x5,x6,+0x812` = `0x006289e3`：
+1. 拆：imm12=0 imm11=1 imm10:5=000000 imm4:1=1001
+2. 放：bit31←imm12、30:25←imm10:5、11:8←imm4:1、bit7←imm11
+B 解碼 `0xfe0598e3`：bit31=1、30:25=111111、11:8=1000、bit7=1 → 拼 imm12,imm11,imm10:5,imm4:1,0 = `1 1 111111 1000 0` = −16。
+J 編碼 `jal x1,+0x12344` = `0x344120ef`：imm20=0、imm19:12=00010010、imm11=0、imm10:1=0110100010。`0xffdff06f` = `jal x0,-4`。
+- S：`sw x5,-12(x2)` = `0xfe512a23`。
+- `li` = `lui+addi`；低 12 位 ≥ 0x800 時 lui +1：`li x6,0x12345fff` → `lui x6,0x12346; addi x6,x6,-1`。
+- opcode（`:20-21`）：LUI 37、AUIPC 17、JAL 6F、JALR 67、BRANCH 63、LOAD 03、STORE 23、OP-IMM 13、OP 33（hex）。
+要看程式：請操作者貼「cat -n rv32_encode_decode.c | sed -n 4,54p」
+
+---
+
+## E05-07
+
+【規格卡｜BITS 7/11｜rv32_encode_decode.c：函式表】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 名稱 | 行 | 做什麼 / 注意 |
+|---|---|---|
+| `BITS(x,hi,lo)`、`sext(v,bits)` | 17-18 | 取欄位、符號延伸 |
+| `enc_r(f7,rs2,rs1,f3,rd,op)` | 24-25 | 參數順序 = 機器碼由左到右 |
+| `enc_i(imm,rs1,f3,rd,op)` | 26-27 | imm `&0xFFF`，範圍不檢查 |
+| `enc_s(imm,rs2,rs1,f3,op)` | 28-30 | |
+| `enc_b(imm,rs2,rs1,f3,op)` | 31-34 | imm = byte 偏移（偶數） |
+| `enc_u(imm20,rd,op)` | 35 | 吃**高 20 位**：`(0x12345,5,OP_LUI)` = `lui x5,0x12345` |
+| `enc_j(imm,rd,op)` | 36-39 | |
+| `OPC/RD/F3/RS1/RS2/F7(x)` | 42-47 | 取欄位 |
+| `imm_i/imm_s/imm_b/imm_j(x)` | 48-54 | 已符號延伸 |
+| `imm_u(x)` | 52 | `x & 0xFFFFF000`（已 <<12） |
+| `disasm(x,out)` | 57-75 | 子集反組譯，暫存器印 `x10` |
+| `CPU` | 78 | `x[32]`、`pc`、`mem[1024]` |
+| `ld32/st32` | 79-80 | 小端 memcpy，本身不檢查 |
+| `MEM_OK(c,a)` | 81 | `a <= sizeof mem - 4` |
+| `step(c)` | 83-106 | 執行 1 條：0 正常；−1 停機 |
+- `main` `:112-160`：13 個編碼 CHECK（期望值 = GNU as）、立即值往返、disasm、模擬 1+…+10 = 55 存 `mem[0x100]`、停在 pc `0x1c`。
+- 陷阱：`enc_u` 傳 <<12 後的值 → 多 12 個 0 → 傳高 20 位。解碼負立即值變大正數 → 沒符號延伸 → 用 `imm_*()`。
+要看程式：請操作者貼「cat -n rv32_encode_decode.c | sed -n 17,54p」
+
+---
+
+## E05-08
+
+【規格卡｜BITS 8/11｜rv32_encode_decode.c：disasm/step 行為、加指令】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+支援子集（disasm `:57-75` 和 step `:83-106` 相同）：add/sub/mul、addi、lw、sw、beq/bne、jal、jalr、lui、auipc。
+- OP_OP（`:60`、`:88`）：只收 funct3=0 且 funct7 = 0x00 add、0x20 sub、0x01 mul。其他 funct7（mulh、div…）→ disasm 印 `unknown 0x…`、step 回 −1。
+- step 取指令：pc 不符 `MEM_OK` → 當 `0xFFFFFFFF`（停機）。`lw`/`sw` 位址先 `MEM_OK`，超出回 −1。
+- `jalr`：先算 `t=(a+imm)&~1` 再寫 rd（rd 可能 = rs1）；沒檢查 funct3。
+- 每步最後 `x[0]=0`、`pc=next`。分支偏移相對本指令。
+`TODO(改這裡)`：
+| 行 | 現在 | 改法 |
+|---|---|---|
+| `:56` | disasm 只支援子集 | 在對應 opcode 的 case 依 F3/F7 加；step 也要加 |
+| `:78` | `mem[1024]` | 程式 > 1 KiB 就改大（例 65536）；很大時 `main` 的 `CPU c`（`:142`）改 `static` |
+加指令要點：
+- OP-IMM funct3：0 addi、1 slli、2 slti、3 sltiu、4 xori、5 srli/srai（F7=0x20 是 srai）、6 ori、7 andi。shamt = `RS2(x)`（bit24..20）。
+- OP funct3：1 sll、2 slt、3 sltu、4 xor、5 srl/sra、6 or、7 and。
+- 分支 funct3：0 beq、1 bne、4 blt、5 bge、6 bltu、7 bgeu。
+- srai 用 `(int32_t)a >> sh`；slti 有號比較、sltiu 無號；位移量只取低 5 位。
+- 驗證：GNU as 產生機器碼丟進 `disasm` 比對；原本 13 個 CHECK 仍要 `ALL PASS`。
+要看程式：請操作者貼「cat -n rv32_encode_decode.c | sed -n 56,106p」
+
+---
+
+## E05-09
+
+【規格卡｜BITS 9/11｜asm_examples.S、asm_test.c、呼叫慣例】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+ABI：參數 a0～a7，回傳 a0；t0-t6 隨便用；s0-s11 用了要先存後還；ra = 回傳位址；sp 16 byte 對齊。
+| 函式 | 行 | 注意 |
+|---|---|---|
+| `uint32_t asm_sum_u32(const uint32_t *a, uint32_t n)` | 8-18 | 葉函式；n=0 → 0 |
+| `asm_memcpy_words(dst,src,n)` | 21-30 | 複製 n 個 word |
+| `asm_get_field(x,lo,w)` | 33-40 | w=32 回 0 |
+| `asm_popcount_array_base(a,n)` | 43-57 | 只用基本指令 |
+| `asm_popcount_array_fast(a,n)` | 60-75 | Zbb 用 `cpop`；否則跳 base |
+| `int32_t asm_bnn_dot(w,x,n)` | 80-107 | 2·popcount(XNOR)−32n |
+| `asm_apply(f,a,n)`：a[i]=f(a[i]) | 111-133 | 開 16 B 堆疊存 ra、s0-s2 |
+- 大寫 `.S` 才能 `#ifdef __riscv_zbb`。`1:` 配 `1b`（往回）/`1f`（往前）。
+- `asm_test.c`：宣告 `:8-14`（完整原型）、C 參考版 `:17-24`、inline asm `:29-42`、`main` `:48-86`；印 `(基本 ISA 版本：迴圈 popcount)` 或 `(Zbb 版本：使用 cpop/xnor)`，再 `asm_test: ALL PASS`。
+- 加函式：葉函式抄 `asm_sum_u32`，會呼叫別人抄 `asm_apply`；加 `.globl`；`asm_test.c` 加宣告、參考版、CHECK。
+- inline：`asm volatile("add %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));`
+- 陷阱：少 `.globl` → `undefined reference`。s 暫存器沒還原 → C 變數被改。讀 `uint8_t` 用 `lb` → 負數 → 改 `lbu`。沒 `_zbb` 用 `cpop` → `extension 'zbb' required`。
+要看程式：請操作者貼「cat -n asm_examples.S | sed -n 1,40p」
+
+---
+
+## E05-10
+
+【規格卡｜BITS 10/11｜編譯執行：PC、objdump、qemu】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+PC（在 `bits-riscv/`，3 個 `.c` 同樣寫法）：
+```sh
+gcc -O2 -Wall -Wextra packet_fields.c -o /tmp/pf && /tmp/pf
+```
+成功：最後一行 `packet_fields: ALL PASS`（另兩個是 `bitstream: ALL PASS`、`rv32_encode_decode: ALL PASS`）。
+看組語機器碼：
+```sh
+riscv64-unknown-elf-gcc -march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -c asm_examples.S -o /tmp/a.o && riscv64-unknown-elf-objdump -d /tmp/a.o
+```
+GNU as 對答案（`numeric` = 印 x1 不印 ra）：
+```sh
+echo "addi x1, x0, 5" | riscv64-unknown-elf-as -march=rv32i - -o /tmp/x.o && riscv64-unknown-elf-objdump -d -M no-aliases,numeric /tmp/x.o
+```
+qemu 跑 asm_test（`<M>` = `rv32imac_zicsr_zifencei` 或上面的 Zbb 版字串）：
+```sh
+riscv64-unknown-elf-gcc -march=<M> -mabi=ilp32 -O2 --specs=picolibc.specs -nostartfiles asm_test.c asm_examples.S linux_shim.c -o t.elf && qemu-riscv32 ./t.elf
+```
+- `linux_shim.c` 不在 repo（全文在說明書 6.3.6）：自寫 `_start`（設 gp、清 .bss、設 sp）、printf 接 Linux `write`。只給 qemu，不放進 Pico 專案。
+- 少 `--specs=picolibc.specs` → `stdio.h: No such file`；少 shim → Segmentation fault；.bss 沒清 → 沒 PASS 也沒 FAIL。
+- 用 host `gcc` 編 `asm_test.c` 會失敗（`.S` 是 RISC-V）。
+要看程式：請操作者貼「cat -n README.md | sed -n 21,48p」
+
+---
+
+## E05-11
+
+【規格卡｜BITS 11/11｜Pico 2、Hazard3 擴充、SDK 的 -march】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+Pico 2（沒實測）：`asm_examples.S` 加進 `add_executable(...)`，`PICO_PLATFORM=rp2350-riscv` 編譯，C 端照 `asm_test.c:8-14` 宣告，printf 經 USB/UART。
+Hazard3 = RV32IMAC + Zba Zbb Zbs Zbkb Zcb Zcmp Zicsr。**沒有 Zbc → 沒有 `clmul`**（CRC 用查表）。
+| 指令 | 擴充 | 意思 |
+|---|---|---|
+| `cpop`、`clz`/`ctz` | Zbb | popcount；0 → 32 |
+| `rev8` | Zbb | bswap32 |
+| `xnor`、`andn`、`maxu`、`rol`/`ror` | Zbb | |
+| `sh1add`/`sh2add`/`sh3add` | Zba | (a<<k)+b |
+| `bset`/`bclr`/`binv`/`bext` | Zbs | 單一位元 |
+| `pack`/`packh`/`brev8`/`zip` | Zbkb | `pack a,b` = b 低 16 在高半 |
+- 判斷：`#ifdef __riscv_zbb`（`__riscv_zba`、`__riscv_zbs`、`__riscv_zbkb`）。
+- `-march`：`rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32`（gcc 13）。`asm_examples.S:3` 寫的較短字串也能組譯，以 README 為準。
+- SDK 2.1.1 / 2.2.0：固定上面那串，沒 `-mstrict-align`；預設 triple 是 `riscv32-unknown-elf`，riscv64 工具鏈加 `-DPICO_GCC_TRIPLE=riscv64-unknown-elf`。
+- SDK 2.3.x：預設加 `-mstrict-align`（`-DPICO_NO_STRICT_ALIGN=1` 關掉）；依序試 `-mcpu=hazard3-rp2350` → `rv32ima_…_zca_zcb_zcmp` → 上面那串。gcc 13.2 不認前兩個 → 用第三個。
+- 讀線上資料一律 `load_be32/load_le32`（逐 byte），不受對齊旗標影響。
+要看程式：請操作者貼「cat -n rv32_asm_cheatsheet.md | sed -n 69,99p」
+
+---
+
+## E06-01
+
+【規格卡｜PERF 1/5｜總覽、bench.h、編譯執行】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 檔案 | 行數 | 做什麼 |
+|---|---|---|
+| `bench.h` | 55 | 計時工具，**必須是第一個 `#include`** |
+| `parallel_template.c` | 136 | 切 T 塊各算各的再合併；8 種寫法比較 |
+| `pipeline_template.c` | 169 | 一個收、一個算：mutex 佇列、SPSC、SPSC+批次 |
+| `README.md` | 81 | 實測、10 條優化清單 |
+bench.h API：
+| 名稱 | 行 | 做什麼 |
+|---|---|---|
+| `now_ns()` | 23-27 | `CLOCK_MONOTONIC` 奈秒，只拿來算差值 |
+| `do_not_optimize(x)` | 30-31 | 加進 volatile 變數，防止 `-O2` 刪掉結果 |
+| `clobber_memory()` | 34-38 | 記憶體屏障，BENCH 內已呼叫 |
+| `BENCH(name,reps,code)` | 42-53 | 跑 reps 次取**最快**，印 `名稱 x.xxx ms`，存 `bench_last_ns`（ns） |
+用法：`BENCH("f", 5, { r = f(a, n); do_not_optimize(r); });`；加速 = `(double)base / bench_last_ns`。
+編譯執行（在 `linux-perf/`）：
+```sh
+gcc -O2 -Wall -Wextra -std=c11 -pthread parallel_template.c -o /tmp/par && /tmp/par 4
+gcc -O2 -Wall -Wextra -std=c11 -pthread pipeline_template.c -o /tmp/pipe && /tmp/pipe
+```
+- `par` 參數 = 執行緒數（1～64，其他用 4）；整支約 11 秒，不是當機。
+- 驗證：0 警告；TSan 只報 parallel 的 racy（`:75`）。
+- 陷阱：bench.h 不在第一行 → `'CLOCK_MONOTONIC' undeclared` → 移到第一行。code 裡有 `int a = 1, b = 2;` → `macro "BENCH" passed 4 arguments` → 拆成兩行。
+要看程式：請操作者貼「cat -n bench.h | sed -n 13,55p」
+
+---
+
+## E06-02
+
+【規格卡｜PERF 2/5｜parallel_template.c：8 種寫法、false sharing】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+工作：`work(x)` 加總。`run(fn)`（`:90-97`）開 T 條，第 t 條算 `[N*t/T, N*(t+1)/T)`。
+| 寫法 | 行 | 熱迴圈做什麼 | 快 / 慢（T=4） |
+|---|---|---|---|
+| serial | 117-118 | 同一個 `w_local` 跑全部 | 基準 1x |
+| local ★ | 45-50 | 區域變數 `s +=`，最後寫 `part[id]` 一次 | 3.89x 最快 |
+| mutex | 51-58 | 每元素 lock、`g_sum += v` | 0.13x |
+| spinlock | 59-66 | 每元素 spin_lock | 0.03x |
+| atomic | 67-72 | 每元素 `atomic_fetch_add` | 0.18x |
+| racy ✗ | 73-77 | 不加鎖 `g_racy +=` | **答案錯**（lost update） |
+| false-share | 78-82 | `slot_packed[id] +=`，格子相鄰 | 2.75x |
+| padded | 83-87 | `slot_padded[id].v +=`，每格 64 B | 3.79x |
+- false sharing：64 B cache line 裝 8 個 `uint64_t`，多核寫同一條 → line 來回搬。修法：`typedef struct { _Alignas(64) volatile uint64_t v; } padded_t;`（`:42`，sizeof = 64），或用區域變數。
+- 最後一行成功：`結果：全部正確（racy 錯是預期的）`，回傳 0。
+`TODO(改這裡)`：
+| 行 | 現在 | 改法 |
+|---|---|---|
+| `:22` | `N (1u << 23)` | 題目的資料量；從檔案讀改 `malloc` |
+| `:27`（`:28-31` `work()`） | 8 輪 xorshift | 換成題目的計算；不是加總時 `s +=` 和 `sum_parts()`（`:99`）一起改 |
+- 只交 local 版：留 serial + local（`:117-120`），刪 `:121-131` 和用不到的函式。T ≤ `nproc`。
+要看程式：請操作者貼「cat -n parallel_template.c | sed -n 22,99p」
+
+---
+
+## E06-03
+
+【規格卡｜PERF 3/5｜pipeline_template.c：SPSC ring buffer 規則】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+常數：`CAP 1024u`（`:22`，必須 2 的次方）、`N_ITEMS 1u<<20`（`:23`）、`BATCH 64u`（`:24`）、`item_t` = `uint32_t`（`:25`）、`PROD_COST`/`COMP_COST` 64（`:29-30`）。
+| 名稱 | 行 | 做什麼 |
+|---|---|---|
+| A `mq_push/mq_pop` | 42-62 | mutex + condvar，每筆上鎖 |
+| B `spsc_push/spsc_pop` | 65-86 | 無鎖，回 bool（滿 / 空回 false） |
+| C `spsc_push_n/spsc_pop_n` | 88-103 | 一次多筆，回筆數；1 次 release |
+| `producer/consumer` | 109-143 | `mode` 0/1/2 = A/B/C；空或滿 `sched_yield()` |
+SPSC 規則：
+- 只能 1 個 producer、1 個 consumer。`head` 只有 producer 寫，`tail` 只有 consumer 寫。
+- head、tail 只增不歸零；索引 = 計數 & (CAP-1)。空 `head == tail`；滿 `head - tail == CAP`。
+- push：讀自己 head（relaxed）→ 讀 tail（acquire，`:73`）→ 寫 `buf[h & (CAP-1)]` → `store(head, h+1, release)`（`:76`）。
+- pop：讀自己 tail（relaxed）→ 讀 head（acquire，`:81`）→ 讀 buf → `store(tail, t+1, release)`（`:84`）。
+- 改成 relaxed 或 `volatile` → 偶爾讀到舊資料 → 保持 acquire/release。
+- `head`、`tail` 各 `_Alignas(64)`（`:67-68`）放不同 cache line。
+- 陷阱：CAP 改 1000 → `&(CAP-1)` 不等於 `%CAP` → 資料錯。兩個 producer 用 SPSC → 錯亂 → 改 A 版或每個 producer 一個佇列。
+要看程式：請操作者貼「cat -n pipeline_template.c | sed -n 64,103p」
+
+---
+
+## E06-04
+
+【規格卡｜PERF 4/5｜pipeline 改法、實測數字】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+`TODO(改這裡)`（`pipeline_template.c`）：
+| 行 | 現在 | 改法 |
+|---|---|---|
+| `:23` | `N_ITEMS (1u << 20)` | 題目筆數；不知道總數 → consumer 改成收到結束標記就停（`:131`） |
+| `:25` | `typedef uint32_t item_t;` | 封包 struct，例 `{uint8_t data[64]; uint16_t len;}`；同時改 `compute()`（`:36` 的 `^` 對 struct 編不過） |
+| `:27`（`:29-39`） | 模擬的 `produce`/`compute` | 換成真的收 / 算；compute 結果和順序有關，可檢查掉資料或亂序 |
+- `CAP`、`BATCH` 也可調（CAP 維持 2 的次方；`tmp[BATCH]` 在堆疊上）。
+實測（4 vCPU Xeon、gcc 13.3 `-O2`；機器有別的負載，數字會變）：
+```text
+serial 單執行緒 收一筆算一筆    200.226 ms
+A mutex+condvar   292.335 ms  加速 0.68x
+B SPSC 無鎖       235.446 ms  加速 0.85x
+C SPSC 無鎖+批次  128.479 ms  加速 1.56x
+結果：全部正確
+```
+- C 版三次 1.55x～1.58x 最穩；理論上限 2x。README（Ryzen 6 核）：A 0.92x、B 1.50x、C 1.70x。
+- parallel（T=4，最空閒那次）：local 3.89x、padded 3.79x、false-share 2.75x、mutex 0.13x。T=8 > 4 核：local 3.32x，spinlock 5 秒。
+- `-O3 -march=native`：serial 46.9 → 15.5 ms。先優化單執行緒，再平行。
+- pipeline 只有在「收」和「算」都夠重、差不多重時才有用：64 B struct 版 C 只有 0.99x。
+- 驗證成功的樣子：每項「結果正確」，最後 `結果：全部正確`、回傳 0。
+要看程式：請操作者貼「cat -n pipeline_template.c | sed -n 22,39p」
+
+---
+
+## E06-05
+
+【規格卡｜PERF 5/5｜陷阱、驗證、對應 Pico 2 雙核心】
+以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
+| 症狀 | 原因 | 修法 |
+|---|---|---|
+| 結果每次不同、偏小 | 共享變數沒保護 | local 版或 atomic |
+| 加鎖後比單執行緒慢 | 每元素 lock | 鎖只在合併時用一次 |
+| 各寫各的格子還是慢 | false sharing | `_Alignas(64)` |
+| `undefined reference to 'pthread_create'` | 沒 `-pthread` | 加 `-pthread` |
+| 程式卡住 | consumer 等的筆數比送的多 | 兩邊 `N_ITEMS` 一致 |
+| CPU 100% | `sched_yield()` 忙等 | 正常；要省電用 A 版 |
+- 找 race：`gcc -O1 -g -fsanitize=thread -std=c11 -pthread x.c -o x && ./x`，沒有 `WARNING: ThreadSanitizer: data race` 才算修好。
+Pico 2 對照（以下沒在板子上驗證）：
+| 電腦端 | Pico 端 |
+|---|---|
+| `pthread_create(consumer)` | `multicore_launch_core1(core1_main)`，只有 2 核 |
+| A 版 mutex + condvar | `queue_t`（`queue_add_blocking`/`queue_remove_blocking`） |
+| B / C 版 SPSC（C11 atomics） | 同一份可用（M33 → `lda`/`stl`；Hazard3 → `fence`） |
+| `sched_yield()` | `tight_loop_contents()` 或 `__wfe()`/`__sev()` |
+| `pthread_spin_lock` | `spin_lock_blocking()`（關中斷，太久漏 USB） |
+| 小量命令 | `multicore_fifo_push_blocking`（每次 32 位元） |
+- 做法：producer 放 core0（USB 在 core0），consumer 放 core1；先 `queue_t`，要更快換 SPSC+批次。
+- core1 堆疊預設 2 KiB：大的 `item_t`、`tmp[BATCH]` 不要放 core1 區域變數。
+- RP2350 核心沒有資料快取，false sharing 情況不同（未驗證）。
+要看程式：見各列的行號

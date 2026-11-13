@@ -1,12 +1,12 @@
 # 貼上卡：讀題與文件
 > 題目太長：前幾段只貼資料區塊（開頭寫「第 k/N 段」，模型會回「收到」），最後一段才貼讀題 1/6。開考時用 `10-exam-day-flow.md` 的開考 1/5、3/5（讀題 2/6、1/6 是同一件事的舊版）。
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。提示卡＝直接用的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q02（提示卡 讀題）、L18（參考卡 讀題）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。開考當天的前 30 分鐘流程另見 `10-exam-day-flow.md`。
 > 來源：full/02-read-spec.md、lite/02-read-spec.md（詳細版）｜最後更新 2026-11
 
 ---
 
-【提示卡｜讀題 1/6｜題目理解卡】→ 讀題 2
+【提示卡｜讀題 1/6｜題目理解卡】→ Q02-02
 Task (EN): Fill the understanding card using only the problem text. Write 「資料中沒有」 for anything not stated. Answer in Traditional Chinese.
 任務：只根據題目文字填理解卡。
 <<<資料 開始>>>
@@ -33,7 +33,7 @@ Task (EN): Fill the understanding card using only the problem text. Write 「資
 
 ---
 
-【提示卡｜讀題 2/6｜檔案盤點與閱讀順序】→ 讀題 3 或 5
+【提示卡｜讀題 2/6｜檔案盤點與閱讀順序】→ Q02-03 或 Q02-05
 Task (EN): Classify every file into one category A–G, then list the 5 files to read first. Use only the data. Answer in Traditional Chinese.
 任務：把檔案分類，選出先讀的 5 個。
 取得：`find . -maxdepth 3 -not -path './.git' -not -path './.git/*' -not -path '*/build/*' -not -path '*/libmicroros/*' | sort | head -100`
@@ -51,7 +51,7 @@ Task (EN): Classify every file into one category A–G, then list the 5 files to
 
 ---
 
-【提示卡｜讀題 3/6｜系統架構圖】→ 讀題 5
+【提示卡｜讀題 3/6｜系統架構圖】→ Q02-05
 Task (EN): Draw an ASCII architecture diagram and fill the component table using only the data. Mark unknowns with ?. Answer in Traditional Chinese.
 任務：畫架構圖，填元件表。
 <<<資料 開始>>>
@@ -88,7 +88,7 @@ Task (EN): Summarize this document section in the 5 fixed slots using only the t
 
 ---
 
-【提示卡｜讀題 5/6｜程式走讀】→ 優化 1 或除錯 1
+【提示卡｜讀題 5/6｜程式走讀】→ Q06-01 或 Q05-01
 Task (EN): Describe this code in the 5 fixed slots. Do not suggest changes. Say 「看不到定義」 for functions not shown. Answer in Traditional Chinese.
 任務：描述這段程式（{{檔名}}），先不要提出修改。
 <<<資料 開始>>>

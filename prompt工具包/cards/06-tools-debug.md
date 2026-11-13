@@ -1,5 +1,5 @@
 # 貼上卡：用工具除錯（gdb、sanitizer、卡住、板子、序列埠、ROS 2 連線）
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。每張都能在新對話直接用。每張 ≤ 1200 字元。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q04（提示卡 工具）、L20（參考卡 工具）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 流程：工具 1、2、3、5（定位）→ 工具 7（改 + 驗證）。工具 4、6 是一問一答的檢查清單。症狀→原因總表在 `04-debug.md` 除錯 5/6、6/6，這裡不重複。
 > 完整工具手冊（給自己讀）：`../預製程式碼/tools/debug-host.md`、`debug-pico.md`、`debug-ros2.md`。
@@ -7,7 +7,7 @@
 
 ---
 
-【提示卡｜工具 1/9｜幫我讀 gdb backtrace】→ 工具 7
+【提示卡｜工具 1/9｜幫我讀 gdb backtrace】→ Q04-07
 Task (EN): From the gdb output, find the crash line in MY code and pick one cause A–G. Quote evidence. Do not fix yet. Answer in Traditional Chinese.
 任務：找出崩潰在「我的程式」哪一行、是哪類原因。
 取得：`gdb -batch -ex run -ex bt -ex "info locals" --args ./prog 參數`
@@ -35,7 +35,7 @@ Task (EN): From the gdb output, find the crash line in MY code and pick one caus
 
 ---
 
-【提示卡｜工具 2/9｜幫我讀 sanitizer 報告】→ 工具 7
+【提示卡｜工具 2/9｜幫我讀 sanitizer 報告】→ Q04-07
 Task (EN): From the FIRST sanitizer report, give the line in MY code and pick one type A–H. Quote evidence. Do not fix yet. Answer in Traditional Chinese.
 任務：讀第一個 sanitizer 報告，找出位置與類型。
 取得：`gcc -g -O1 -fno-omit-frame-pointer -fsanitize=address,undefined …`；資料競爭用 `-fsanitize=thread -pthread`（不能和 address 一起）
@@ -62,7 +62,7 @@ Task (EN): From the FIRST sanitizer report, give the line in MY code and pick on
 
 ---
 
-【提示卡｜工具 3/9｜程式卡住，幫我判斷卡在哪】→ 工具 7
+【提示卡｜工具 3/9｜程式卡住，幫我判斷卡在哪】→ Q04-07
 Task (EN): Find the ONE blocking call where the program hangs and pick one cause A–I. Quote evidence. Do not fix yet. Answer in Traditional Chinese.
 任務：找出卡住的那一個呼叫，以及它在等什麼。
 取得：Linux `gdb -p $(pgrep -n prog) -batch -ex "thread apply all bt"`；Python 按 Ctrl-C 看 traceback；Pico 看最後印出的那行。
@@ -111,7 +111,7 @@ Task (EN): Act as a checklist host. Ask me ONE check at a time in the fixed orde
 
 ---
 
-【提示卡｜工具 5/9｜序列埠收到的資料不對】→ 工具 7
+【提示卡｜工具 5/9｜序列埠收到的資料不對】→ Q04-07
 Task (EN): The table below was made by a script. Pick ONE cause A–H and say which side to fix. Do not recount bytes yourself. Answer in Traditional Chinese.
 任務：看程式比對好的表，判斷原因。
 取得（3 步）：

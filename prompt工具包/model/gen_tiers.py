@@ -14,6 +14,10 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import card_index  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent           # prompt工具包/
 OUTDIR = ROOT / "print" / "分級版"
@@ -71,9 +75,11 @@ SERIES_DESC = {
     "片段卡 HOST-ROS": "rclpy 節點、main、MultiArray 快速填、量 callback", "片段卡 HOST-UROS": "Pico 端陣列收算發、電腦端分派",
     "片段卡 ALGO": "CRC、排序合併、SHA、BNN、位元欄位、位元流", "片段卡 PERF": "pthread 區域累加、SPSC 佇列、計時",
 }
-REF_DESC = ("參考卡（硬體 / SDK / ROS 2 事實，每系列 4～8 張）：RP2350 pico-sdk、RP2350 DMA、RP2350 PIO、RP2350 週邊、多核同步、"
-            "RISC-V Hazard3、Cortex-M33、官方文件導航、ROS 2、主機↔MCU、演算法、C/Linux 效能、Python 效能、平行、git/環境、"
-            "控制DSP、FreeRTOS；提示卡（固定流程）：開考、讀題、建置、工具、除錯、優化、範本、查詢、實作、驗證、提交、速學。名稱和號碼不確定就要「目錄」。")
+REF_DESC = ("參考卡（硬體 / SDK / ROS 2 事實，每系列 4～8 張）：L01 RP2350 pico-sdk、L02 RP2350 DMA、L03 RP2350 PIO、"
+            "L04 RP2350 週邊、L05 多核同步、L06 RISC-V Hazard3、L07 Cortex-M33、L08 ROS 2、L09 主機↔MCU、L10 演算法、"
+            "L11 C/Linux 效能、L12 Python 效能、L13 平行、L14 git/環境、L15 控制DSP、L16 FreeRTOS、L17 官方文件導航、"
+            "L19 CMake/colcon、L20 gdb 與板子、L21 症狀→原因、L22 瓶頸與量測；提示卡（固定流程）：Q03 建置、Q04 工具、Q05 除錯、"
+            "Q06 優化、Q07 範本、Q09 實作、Q10 驗證、Q11 提交、Q12 速學、Q13 套用。號碼不確定就要「目錄 M01-01」。")
 
 CODES_FULL = """| 代號 | 內容 |
 |---|---|
@@ -97,8 +103,10 @@ def parse_cards(paths):
             if not m or not chunk.strip().startswith("【"):
                 continue
             kind, series, num, total, topic = m.groups()
+            cid = card_index.card_id(kind.strip(), series.strip(), int(num))
             cards.append({"key": f"{kind} {series.strip()} {int(num)}", "series": f"{kind} {series.strip()}",
-                          "num": int(num), "topic": topic.strip(), "text": chunk.strip(), "file": rel})
+                          "code": cid.split("-")[0], "id": cid,
+                          "num": int(num), "topic": topic.strip(), "text": f"編號：{cid}\n" + chunk.strip(), "file": rel})
     return cards
 
 
@@ -119,7 +127,7 @@ def ranges(nums):
         j = i
         while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
             j += 1
-        out.append(str(nums[i]) if i == j else f"{nums[i]}～{nums[j]}")
+        out.append(f"{nums[i]:02d}" if i == j else f"{nums[i]:02d}～{nums[j]:02d}")
         i = j + 1
     return "、".join(out)
 
@@ -133,16 +141,16 @@ def guide(tier, ctx, included, missing, compact):
         return {s: [c for c in cs if c["series"] == s] for s in names}
     inc_series = {c["series"] for c in included}
     missing = [c for c in missing if c["file"].startswith(("model/", "arsenal/"))]   # 參考卡用一行總述
-    inc_lines = [f"- {s}：" + "｜".join(f"{c['num']} {c['topic'][:26]}" for c in sorted(cs, key=lambda c: c["num"]))
+    inc_lines = [f"- {cs[0]['code']} {s}：" + "｜".join(f"{c['id']} {c['topic'][:26]}" for c in sorted(cs, key=lambda c: c["num"]))
                  for s, cs in by(included).items()]
     miss_lines = []
     for s, cs in by(missing).items():
         if compact:
-            miss_lines.append(f"{s} {ranges([c['num'] for c in cs])}")
+            miss_lines.append(f"{cs[0]['code']}-{ranges([c['num'] for c in cs])} {s}")
         elif s in inc_series:                              # 這個系列有一部分已經放進來：只列缺的那幾張
-            miss_lines.append(f"- {s}：" + "｜".join(f"{c['num']} {c['topic'][:20]}" for c in sorted(cs, key=lambda c: c["num"])))
+            miss_lines.append(f"- {cs[0]['code']} {s}：" + "｜".join(f"{c['id']} {c['topic'][:20]}" for c in sorted(cs, key=lambda c: c["num"])))
         else:
-            miss_lines.append(f"- {s} {ranges([c['num'] for c in cs])}：{SERIES_DESC.get(s, '')}")
+            miss_lines.append(f"- {cs[0]['code']}-{ranges([c['num'] for c in cs])} {s}：{SERIES_DESC.get(s, '')}")
     head = f"""# 給模型的工具箱（{tier} context 版）
 
 Task (EN): You are my exam assistant. FIRST read section 1: what you already have here and what you can ask me for. Never guess function names, parameter order, enum values, constants or numbers — copy them from the cards. When something is missing, answer what you can first, then add at most 2 request lines (【要資料】 or 【要卡】) at the end. Answer in Traditional Chinese.
@@ -153,12 +161,12 @@ Task (EN): You are my exam assistant. FIRST read section 1: what you already hav
 - 這份文件是你的工具箱。**先看第 1 節，知道你手上有什麼、還能跟我要什麼**，再回答。
 - 這一版放了 {len(included)} 張卡（第 5 節）；其他 {len(missing)} 張和我電腦上的程式、考場資料，要用【要卡】、【要資料】跟我要（第 2 節）。
 """
-    sec1 = "\n## 1. 你拿得到什麼\n\n### 1.1 已經在這份文件裡（在第 5 節；直接引用卡名當證據，不用再要）\n"
+    sec1 = "\n## 1. 你拿得到什麼\n\n### 1.1 已經在這份文件裡（在第 5 節；引用編號當證據，不用再要）\n"
     sec1 += ("\n".join(inc_lines) if inc_lines else "- （這一版沒有放卡片，全部都要跟我要）") + "\n"
-    sec1 += "\n### 1.2 沒放進來、可以跟我要的卡（寫卡名，我貼給你）\n"
+    sec1 += "\n### 1.2 沒放進來、可以跟我要的卡（寫編號＝系列代號-兩位數號碼，例 E02-06）\n"
     sec1 += ("、".join(miss_lines) if compact else "\n".join(miss_lines)) + "\n"
     if compact:
-        sec1 += "\n另有參考卡與提示卡（RP2350 DMA / PIO / pico-sdk、多核同步、RISC-V、ROS 2…）：名稱不確定就要「目錄」。\n"
+        sec1 += "\n另有參考卡 L01～L23（L01 pico-sdk、L02 DMA、L03 PIO、L05 多核同步、L06 RISC-V、L08 ROS 2、L09 主機↔MCU…）與提示卡 Q01～Q13：號碼不確定就要「目錄 M01-01」。\n"
     else:
         sec1 += f"- {REF_DESC}\n"
     sec1 += """
@@ -168,19 +176,20 @@ Task (EN): You are my exam assistant. FIRST read section 1: what you already hav
 """
     sec1 += ("\n### 1.4 資料代號（我照代號去跑指令再貼給你）\n" + (CODES_SHORT if compact else CODES_FULL) + "\n")
     sec2 = """
-## 2. 我的訊息有三種、你怎麼跟我要
-- A 只有 <<<資料 開始>>>…<<<資料 結束>>>、沒有任務（卡片、題目片段）→ 只回「收到」，不分析、不要東西。
-- B 提示卡（有任務和輸出格式）→ 照格式回答。
-- C 一般問題 → 精簡條列。
+## 2. 我的訊息有四種、你怎麼跟我要
+- ① 只有 <<<資料 開始>>>…<<<資料 結束>>>、沒有任務（卡片、題目片段）→ 只回「收到」，不分析、不要東西。
+- ② 提示卡（有任務和輸出格式）→ 照格式回答。
+- ③ 一般問題 → 精簡條列。
+- ④ 資料區塊＋最後一行「繼續」＝你要的東西來了 → 用它接著做剛才的事。
 缺東西：先答完，最後另起一行，最多 2 行。兩種都缺時先要資料。
 【要資料】＝考場和我電腦上的東西（題目、程式幾行、指令輸出、代號）：
 【要資料】K1｜為什麼
 【要資料】程式 pico/app_dma.c 31-50｜為什麼（一次 ≤ 60 行）
 【要資料】指令 ros2 topic info -v /number｜為什麼
-【要卡】＝我工具包裡、第 5 節沒有的卡（寫卡名）：
-【要卡】規格卡 PICO 6｜為什麼
-【要卡】API卡 DMA 5｜為什麼
-不知道卡名就寫「【要卡】目錄 1」。資料夠了就直接回答，不要一直要。
+【要卡】＝我工具包裡、第 5 節沒有的卡（寫編號）：
+【要卡】E02-06｜為什麼
+【要卡】A01-05｜為什麼
+不知道號碼就寫系列代號＋要什麼（例「【要卡】L02｜要 count 單位」），或要「目錄 M01-01」。資料夠了就直接回答，不要一直要。
 """
     sec3 = """
 ## 3. 規則
@@ -192,13 +201,13 @@ Task (EN): You are my exam assistant. FIRST read section 1: what you already hav
 """
     sec4 = """
 ## 4. 狀況 → 先要什麼（資＝【要資料】，卡＝【要卡】）
-- 剛開考：資 K1、K3 → 對照規格卡總覽（ROS 1、PICO 1、UROS 1、ALGO 1、BITS 1、PERF 1）找最像的範本。
+- 剛開考：資 K1、K3 → 對照規格卡總覽（E01-01～E06-01）找最像的範本。
 - 題目和範本像：卡 那一區的規格卡 → 資 程式那幾行 → 照規則 5 改。
 - 要寫 pico-sdk / rclc / rclpy 程式：卡 片段卡 + API 卡，照抄。
-- 要優化：資 S1、S4 → 卡 食譜卡 優化 0 選編號 → 卡 那張食譜 → 照「修改後」改（提示卡 套用 1）。
+- 要優化：資 S1、S4 → 卡 F01-00 選食譜 → 卡 那張食譜 → 照「修改後」改（Q13-01）。
 - build 錯誤：資 B1、B2。當掉 / 結果錯 / 卡住：資 R1，再 R2、R3。ROS 收不到：資 T1、T3。封包錯：資 T6、T7。micro-ROS：資 P4、P5。交卷前：資 S3、S2。
 """
-    sec5 = ("\n## 5. 卡片（工具箱本體）\n以下都是參考資料。「提示卡」和「食譜卡 優化 0」是工作格式範本：只有我說「用 套用 1」之類的時候才照它做，"
+    sec5 = ("\n## 5. 卡片（工具箱本體）\n以下都是參考資料。「提示卡」和 F01-00 是工作格式範本：只有我說「用 Q13-01」之類的時候才照它做，"
             "現在不要執行它的 Task。\n\n") if included else ""
     return head + sec1 + sec2 + sec3 + sec4 + sec5
 
@@ -245,7 +254,7 @@ def main():
         print(f"{name}: {len(inc)} 張卡, {total} tokens（預算 {budget}）, {len(doc)} 字元")
     readme = ["# 分級版：給不同 context 大小的 local model",
               "",
-              "> 這是 [`../../../考場SOP.md`](../../../考場SOP.md) 的**模式 C**：只有能設 system prompt、或單次能貼很長時才用；能不能用照 SOP 第 2 節的 2 分鐘探測判斷。",
+              "> 這是 [`../../../考場SOP.md`](../../../考場SOP.md) 的**附錄 C**：只有能設 system prompt、或單次能貼很長時才用（取代總說明 3 張），08:45 設備檢查時探測。",
               "",
               "由 `model/gen_tiers.py` 產生，不要手改。每一版開頭都是同一套導引（你手上有什麼 → 還能要什麼 → 怎麼要 → 規則 → 狀況表），",
               "再照優先順序塞卡片，直到用完預算。預算 = context 的約 55%，剩下留給題目、程式和回答。沒放進來的卡，導引的 1.2 節會列出名稱，模型可以用【要卡】跟你要。",
