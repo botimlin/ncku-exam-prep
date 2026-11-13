@@ -44,7 +44,7 @@ RP2350（Pico 2）DMA：TRANS_COUNT 低 28 bit=次數、高 4 bit=MODE（RP2040 
 5. buffer / pattern 是區域變數 → 返回後 stack 被重用。用 static/全域。
 6. 通道 BUSY 時再觸發被**靜默忽略**；BUSY 時改位址會改到進行中的傳輸。
 7. IRQ 沒 acknowledge → handler 不斷重入卡死。
-8. count ≥ 2^28 會被當 MODE（2.2+ 用 `dma_encode_transfer_count(n)`）。
+8. count 必須 < 2^28，否則高位被當 MODE；`dma_encode_transfer_count(n)`（2.2+）只做遮罩，不會讓更大的 n 合法 → 拆段或 chain。
 9. `dma_channel_unclaim` 不會停通道；先 `dma_channel_cleanup`。
 10. 8/16-bit 寫 IO 暫存器會被複製到整個 32 bit。
 11. 從 RP2040 搬程式：IRQ 號、DREQ 號、通道數不同，一律用巨集。
@@ -175,4 +175,4 @@ RP2350（Pico 2）：整顆 DMA 每 clk_sys 最多 1 讀 + 1 寫（≤32 bit）�
 - 需逐筆運算：DMA 只能搬、bswap、算 CRC/sum。
 優化：重疊運算、ping-pong、control block + IRQ_QUIET 減中斷、ISR 只寫一個 trigger alias 重啟、config 算一次重用、`channel_config_set_bswap` 做位元組序。
 量測：`time_us_64()` 包住 CPU 版與 DMA 版，各重複 100 次比較。
-CRC32：config 也要 `channel_config_set_sniff_enable(&c, true)`（configure 會覆寫 CTRL）；`dma_sniffer_set_data_accumulator(0xFFFFFFFFu)`、`dma_sniffer_enable(ch, DMA_SNIFF_CTRL_CALC_VALUE_CRC32R, true)`，完成後 `dma_sniffer_get_data_accumulator()`。要與 zlib crc32 完全相同的 invert/reverse 組合 ⚠️未驗證。
+CRC32：config 也要 `channel_config_set_sniff_enable(&c, true)`（configure 會覆寫 CTRL）；`dma_sniffer_set_data_accumulator(0xFFFFFFFFu)`、`dma_sniffer_set_output_reverse_enabled(true)`、`dma_sniffer_enable(ch, DMA_SNIFF_CTRL_CALC_VALUE_CRC32R, true)`、DMA_SIZE_8，完成後 `dma_sniffer_get_data_accumulator() ^ 0xFFFFFFFFu`（同片段卡 PICO-SNIFF 1）。驗證 "123456789" → 0xCBF43926（沒上板測過）。

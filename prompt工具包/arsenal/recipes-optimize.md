@@ -267,7 +267,7 @@ uint32_t c = dma_crc32(f->payload, f->len);
 實測：速度**沒有**（要上板）。本次副本編譯連結 0 警告（text 27356 B）。
 ⚠️未上板：sniffer = zlib CRC32 只由暫存器文件推導 → 一定先看 `crc32("123456789") ... PASS`。
 陷阱：
-- FAIL 值 `0x649C2FD3` → `output_reverse` 改 false；`0x340BC6D9` → 最後的 `^ 0xFFFFFFFF` 多做了。
+- FAIL 值 `0x649C2FD3` → `output_reverse` 設定反過來（true ↔ false）；`0x340BC6D9` → 最後的 `^ 0xFFFFFFFF` 有就拿掉、沒有就加。
 - `dma_claim_unused_channel(true)` 沒通道會 panic；要保險改 `false`，失敗時呼叫 `crc32_update`。
 - ✗ 分段續算 → ✓ 一次 DMA 算完整段；全晶片只有一個 sniffer。
 - `dma_crc32` 裡不要 printf（app_serial 不能印字）。
@@ -416,11 +416,10 @@ target_compile_definitions(<app> PRIVATE BNN_SWAR_POPCOUNT)
 ---
 
 【提示卡｜套用 1/1｜把食譜 / 片段套到我的程式】
-Task (EN): Apply the recipe or snippet card below to my code. Output a minimal patch that changes only the <slots> or the lines the card marks (修改前 → 修改後), keep every name from the card verbatim, then 1 verify command, 1 measure command and what success looks like. Answer in Traditional Chinese.
+Task (EN): Apply the recipe or snippet card pasted earlier in this conversation to my code. Output a minimal patch that changes only the <slots> or the lines the card marks (修改前 → 修改後), keep every name from the card verbatim, then 1 verify command, 1 measure command and what success looks like. Answer in Traditional Chinese.
 任務：把卡片的「修改後」套到我的程式，只改卡片標出來的那幾行。
 <<<資料 開始>>>
-[食譜卡或片段卡原文]
-{{貼整張卡}}
+[卡名]（整張卡已在前面貼過）{{例如 食譜卡 優化 7/14}}
 [我的程式，帶行號]（`cat -n 檔名 | sed -n 起,迄p`）
 {{貼}}
 [量測]（改之前的數字和指令）

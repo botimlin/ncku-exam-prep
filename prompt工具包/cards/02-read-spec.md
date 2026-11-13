@@ -1,4 +1,5 @@
 # 貼上卡：讀題與文件
+> 題目太長：前幾段只貼資料區塊（開頭寫「第 k/N 段」，模型會回「收到」），最後一段才貼讀題 1/6。開考時用 `10-exam-day-flow.md` 的開考 1/5、3/5（讀題 2/6、1/6 是同一件事的舊版）。
 > 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。提示卡＝直接用的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元，每張都能在新對話直接用。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。開考當天的前 30 分鐘流程另見 `10-exam-day-flow.md`。
 > 來源：full/02-read-spec.md、lite/02-read-spec.md（詳細版）｜最後更新 2026-11
@@ -29,14 +30,13 @@ Task (EN): Fill the understanding card using only the problem text. Write 「資
 - 可以改的地方：
 - baseline：
 - 最容易誤解的 3 點：
-題目太長分段貼時：前幾段只寫「第 k/N 段，先不要分析，回覆『收到』」，最後一段才貼這張卡。
 
 ---
 
 【提示卡｜讀題 2/6｜檔案盤點與閱讀順序】→ 讀題 3 或 5
 Task (EN): Classify every file into one category A–G, then list the 5 files to read first. Use only the data. Answer in Traditional Chinese.
 任務：把檔案分類，選出先讀的 5 個。
-取得：`find . -maxdepth 3 -not -path './.git' -not -path './.git/*' | sort | head -100`
+取得：`find . -maxdepth 3 -not -path './.git' -not -path './.git/*' -not -path '*/build/*' -not -path '*/libmicroros/*' | sort | head -100`
 <<<資料 開始>>>
 [檔案清單]
 {{貼 find 輸出}}
@@ -89,7 +89,7 @@ Task (EN): Summarize this document section in the 5 fixed slots using only the t
 ---
 
 【提示卡｜讀題 5/6｜程式走讀】→ 優化 1 或除錯 1
-Task (EN): Describe this code in the 4 fixed slots. Do not suggest changes. Say 「看不到定義」 for functions not shown. Answer in Traditional Chinese.
+Task (EN): Describe this code in the 5 fixed slots. Do not suggest changes. Say 「看不到定義」 for functions not shown. Answer in Traditional Chinese.
 任務：描述這段程式（{{檔名}}），先不要提出修改。
 <<<資料 開始>>>
 {{貼程式碼}}

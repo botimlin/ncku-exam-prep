@@ -22,7 +22,7 @@
 - 印到一半卡 ~1 s：在 IRQ 中 printf。
 - ROS 2 node 其他 callback 不跑：serial read 在 callback 中阻塞。
 - 數值怪（大小顛倒、差 256 倍）：位元組序 / struct padding 不一致 → 協定一律 `<`。
-- RISC-V 版例外、ARM 版正常：packed struct 未對齊存取（Hazard3 不支援）。
+- RISC-V 例外、ARM 正常：`(uint32_t *)` 指向未對齊位址 → 用 memcpy。
 看原始位元組：`timeout 2 cat /dev/ttyACM0 | xxd | head -20`。
 
 ---

@@ -59,7 +59,7 @@ RP2350（Raspberry Pi Pico 2 = RP2350A），**不是 RP2040**。RP2040 數值放
 - DMA：16 channel、4 條 IRQ（12 / 2）
 - PWM 12 slice（8）；Timer：TIMER0+TIMER1 各 4 alarm（1 個 timer）
 - UART/SPI/I2C 各 2；IRQ 數 52（32）
-- **沒有硬體除法器**（`hardware_divider` 在 RP2350 是軟體）（RP2040 有 SIO divider）
+- 沒有 RP2040 的 SIO 除法器周邊（`hardware_divider` 在 RP2350 是軟體）；CPU 有除法指令，直接寫 `/`
 - 浮點：M33 單精度 FPU + DCP 加速 double；**Hazard3 無 FPU** → 用固定點（RP2040 無 FPU）
 - 新增：HSTX、TRNG、SHA-256、8 KB OTP、TrustZone、POWMAN
 - GPIO：RP2350A 30 支、RP2350B 48 支

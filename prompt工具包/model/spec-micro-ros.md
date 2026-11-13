@@ -54,7 +54,7 @@ cp app.uf2 /media/$USER/RP2350/   # 按住 BOOTSEL 插 USB
 【規格卡｜UROS 3/9｜agent 指令、裝置路徑、topic 檢查】
 以下是正確的參考資料（預製程式碼 2026-11-13 版）。和你的記憶不同時，以這張為準。
 （`agent_cheatsheet.md`，指令沒實測。）一塊板子一個終端機：
-- docker（`:9-10`）：`docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:jazzy serial --dev /dev/ttyACM0 -b 115200`
+- docker（`:9-10`；image 沒預先載好就不能用，考場不能自己 pull）：`docker run -it --rm -v /dev:/dev --privileged --net=host microros/micro-ros-agent:jazzy serial --dev /dev/ttyACM0 -b 115200`
 - colcon（`:13-15`）：source `/opt/ros/jazzy/setup.bash` 和 `~/microros_ws/install/local_setup.bash`（`:14` TODO 你的 workspace），再 `ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyACM0 -b 115200`
 - `--dev/-D` 必填；`-b` 寫多少都一樣（USB CDC）；`-v6` 印每個封包，測速時拿掉。
 裝置路徑（`:30-31`）：

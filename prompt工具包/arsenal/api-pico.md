@@ -232,8 +232,8 @@ zlib / Python `zlib.crc32` 相同結果的組合（`app_dma.c`）：
 | 讀出反轉 | `dma_sniffer_set_output_reverse_enabled(true)` |
 | 最後 | 軟體 `^ 0xFFFFFFFFu`（不用 invert） |
 | 資料寬 | `DMA_SIZE_8`（任何長度都對） |
-- 結果 = 0x649C2FD3 → 改 `output_reverse_enabled(false)`。
-- 結果 = 0x340BC6D9 → 拿掉最後的 `^`。
+- 結果 = 0x649C2FD3（正確值位元反轉）→ 反轉設定反過來：寫 true 就改 false，沒寫就加 `dma_sniffer_set_output_reverse_enabled(true)`。
+- 結果 = 0x340BC6D9（正確值取反）→ 最後的反相做了 0 次或 2 次：沒寫 `^ 0xFFFFFFFFu` 就加，寫了就拿掉。
 - ✗ 錯：用 `CRC32`（不反轉）比 zlib → ✓ 對：`CRC32R`
 前提：`#include "hardware/dma.h"`；link `hardware_dma`。
 驗證：`"123456789"` 9 bytes → `0xCBF43926`。
@@ -327,13 +327,13 @@ static inline void sm_config_set_sideset_pins(pio_sm_config *c, uint sideset_bas
 static inline void sm_config_set_jmp_pin(pio_sm_config *c, uint pin);
 ```
 - `<prog>_program_get_default_config(offset)`（pioasm 產生）= 預設 + wrap + `.side_set`。**用這個**。
-- 預設：clkdiv 1；wrap 0–31；in/out shift 右移、auto 關、門檻 32；out pins 32 支從 0；set pins 0 支；sideset/jmp pin 0。
+- 預設：clkdiv 1；wrap 0–31；in/out shift 右移、auto 關、門檻 32；OUT/SET pin 數 0（要自己呼叫 set_out_pins / set_set_pins）；sideset/jmp pin 0。
 - `out_count` 0–32；`set_count` 0–5；in / sideset 只給起點。
 - ✗ 錯：用 `pio_get_default_sm_config()` → wrap 不對 → ✓ 對：`<prog>_program_get_default_config(offset)`
 - ✗ 錯：`sm_config_set_in_pins(&c, pin, 1)` → ✓ 對：`(&c, pin)` 兩個參數
 - ✗ 錯：`sm_config_set_set_pins(&c, pin)` → ✓ 對：`(&c, base, count)`
 前提：`#include "hardware/pio.h"`；link `hardware_pio`。
-驗證：編譯過；腳位初始化見 PIO 5/6。
+驗證：編譯過；腳位見 PIO 5/6。
 
 ---
 
@@ -354,7 +354,7 @@ static inline void sm_config_set_clkdiv_int_frac(pio_sm_config *c, uint16_t div_
 | `…_TXGET`/`_TXPUT`/`_PUTGET` | 4/8/12 | 只有 RP2350 |
 - shift：`(c, shift_right, auto, threshold)`；false = 左移 = MSB 先；threshold 1–32。
 - clkdiv：1 = 全速；`div_frac8` 單位 1/256。
-- ✗ 錯：`sm_config_set_out_shift(&c, true, 32, true)` → ✓ 對：`(&c, false, true, 32)`
+- ✗ 錯：`sm_config_set_out_shift(&c, true, 32, true)` → ✓ 對：`(&c, true, true, 32)`（只改參數順序）
 - ✗ 錯：程式有 `push` 又開 autopush → ✓ 對：手動 push 時 autopush=false
 - ✗ 錯：JOIN_TX 後還讀 RX → ✓ 對：要收就 `PIO_FIFO_JOIN_NONE`
 前提：`#include "hardware/pio.h"`；link `hardware_pio`。

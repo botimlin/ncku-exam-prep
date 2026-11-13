@@ -180,7 +180,7 @@ Task (EN): You are my exam assistant. FIRST read section 1: what you already hav
 【要卡】＝我工具包裡、第 5 節沒有的卡（寫卡名）：
 【要卡】規格卡 PICO 6｜為什麼
 【要卡】API卡 DMA 5｜為什麼
-不知道卡名就寫「【要卡】目錄」。資料夠了就直接回答，不要一直要。
+不知道卡名就寫「【要卡】目錄 1」。資料夠了就直接回答，不要一直要。
 """
     sec3 = """
 ## 3. 規則

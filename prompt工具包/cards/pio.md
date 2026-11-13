@@ -17,7 +17,7 @@ sm_config_set_in_pins(&c, IN_BASE);
 sm_config_set_sideset_pins(&c, SIDE_BASE);
 sm_config_set_out_shift(&c, true /*右移=LSB先*/, true /*autopull*/, 32);
 sm_config_set_in_shift(&c, false /*左移*/, true /*autopush*/, 32);
-sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+// 只送不收才加：sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
 sm_config_set_clkdiv(&c, (float)clock_get_hz(clk_sys) / f_sm);
 pio_gpio_init(pio, OUT_BASE);
 pio_sm_set_consecutive_pindirs(pio, sm, OUT_BASE, OUT_COUNT, true);
@@ -25,7 +25,7 @@ pio_sm_init(pio, sm, offset, &c);
 pio_sm_set_enabled(pio, sm, true);
 ```
 - default config 已含 wrap 與 side-set 位數。
-- 每個輸出腳都要 `pio_gpio_init`；SET count ≤5；`pio_sm_init` 後 SM 為停用。
+- 每個輸出腳都要 `pio_gpio_init`；SET count ≤5；init 後 SM 停用。
 - 備案：`pio_add_program(pio, &p)` 回 offset（<0 失敗）+ `pio_claim_unused_sm(pio, true)`。
 - CMake：`pico_generate_pio_header(app ${CMAKE_CURRENT_LIST_DIR}/myprog.pio)`＋link `hardware_pio`，`#include "myprog.pio.h"`。
 
