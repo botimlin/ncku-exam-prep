@@ -1,12 +1,12 @@
 # 軍火庫：優化食譜（量測 / 現象 → 食譜 → 修改前 / 修改後）
-> 用法：「食譜卡 優化 0」是**任務**（直接貼、填好最下面的量測，不要包在資料區塊），模型回食譜編號 → 貼那張食譜卡（模型回「收到」）→ 貼「提示卡 套用 1/1」，附你的程式（帶行號）和量測。一次貼一張；沒變快就 `git checkout -- 檔案` 還原。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：F01（食譜卡 優化）、Q13（提示卡 套用）。每張 ≤ 1200 字元。 注意：F01-00（優化 0）也是任務，直接貼、填好最下面的量測。
 > 來源與驗證：`預製程式碼/說明書/` 第 1～7 章的食譜（N.4）與實測（N.5）；修改後的程式在副本上重新套用：Pico 端用 pico-sdk 2.2.0（pico2、ARM）編譯 0 錯誤 0 警告，電腦端用 x86_64 Python 3.13 / gcc 13.3 執行；Pico 端都沒有上板｜最後更新 2026-11-13
 
 ---
 
 【食譜卡｜優化 0/14｜選哪個食譜：量測 / 現象 → 食譜編號】
 Task (EN): Match my measurement below to the FIRST fitting row; output its recipe number. Answer in Traditional Chinese.
-任務：對到第一個符合的列，抄「食譜」那格（沒有數字 → 先做提示卡 優化 1/6）。
+任務：對到第一個符合的列，抄「食譜」那格（沒有數字 → 先做 Q06-01）。
 
 | 量測 / 現象 | 食譜 | 範本檔案 |
 |---|---|---|
@@ -419,7 +419,7 @@ target_compile_definitions(<app> PRIVATE BNN_SWAR_POPCOUNT)
 Task (EN): Apply the recipe or snippet card pasted earlier in this conversation to my code. Output a minimal patch that changes only the <slots> or the lines the card marks (修改前 → 修改後), keep every name from the card verbatim, then 1 verify command, 1 measure command and what success looks like. Answer in Traditional Chinese.
 任務：把卡片的「修改後」套到我的程式，只改卡片標出來的那幾行。
 <<<資料 開始>>>
-[卡名]（整張卡已在前面貼過）{{例如 食譜卡 優化 7/14}}
+[卡名]（整張卡已在前面貼過）{{例如 F01-07}}
 [我的程式，帶行號]（`cat -n 檔名 | sed -n 起,迄p`）
 {{貼}}
 [量測]（改之前的數字和指令）

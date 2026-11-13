@@ -1,12 +1,12 @@
 # 貼上卡：CMake 與建置（pico-sdk / colcon）
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。每張都能在新對話直接用。提示卡＝填空後送出的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q03（提示卡 建置）、L19（參考卡 建置）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句，給中文較弱的模型定錨；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。原則見 README「為什麼卡片這樣寫」。
 > 流程：錯誤 → 建置 2 或 3（定位）→ 建置 4（改）→ 跑驗證指令。完整手冊（給自己讀）：`../預製程式碼/tools/cmake.md`。
 > 來源：pico-sdk 2.2.0 原始碼（Docker `pico-build` 的 /opt/pico-sdk，grep 與試編確認）、`../預製程式碼/pico/CMakeLists.txt`、`../預製程式碼/micro-ros/CMakeLists.txt`、`../預製程式碼/ros2/README.md`｜最後更新 2026-11
 
 ---
 
-【提示卡｜建置 1/7｜解讀這份 CMakeLists.txt】→ 有錯用建置 2，要改用建置 4
+【提示卡｜建置 1/7｜解讀這份 CMakeLists.txt】→ 有錯用 Q03-02，要改用 Q03-04
 Task (EN): Fill the table using only the CMakeLists.txt and CI script below. Quote evidence. Answer in Traditional Chinese.
 任務：只根據資料填表。
 <<<資料 開始>>>
@@ -31,7 +31,7 @@ Task (EN): Fill the table using only the CMakeLists.txt and CI script below. Quo
 
 ---
 
-【提示卡｜建置 2/7｜CMake / 連結錯誤：定位】→ 建置 4
+【提示卡｜建置 2/7｜CMake / 連結錯誤：定位】→ Q03-04
 Task (EN): Classify the FIRST build error into one category A–H. Quote the error line. Do not fix yet. Answer in Traditional Chinese.
 任務：判斷第一個錯誤屬於哪一類，先不要修。
 取得：`cmake --build build 2>&1 | tee b.log`，再 `grep -n -m1 -B10 -A10 -iE "error|undefined reference" b.log`
@@ -59,7 +59,7 @@ Task (EN): Classify the FIRST build error into one category A–H. Quote the err
 
 ---
 
-【提示卡｜建置 3/7｜colcon build 失敗：定位】→ 建置 4
+【提示卡｜建置 3/7｜colcon build 失敗：定位】→ Q03-04
 Task (EN): Classify the FIRST colcon build error into one category A–H. Quote the error line. Do not fix yet. Answer in Traditional Chinese.
 任務：判斷 colcon 的第一個錯誤屬於哪一類，先不要修。
 取得：`colcon build --packages-select my_pkg --event-handlers console_direct+ 2>&1 | tee cb.log`（或看 `log/latest_build/my_pkg/stdout_stderr.log`）

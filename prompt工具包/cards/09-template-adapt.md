@@ -1,5 +1,5 @@
 # 貼上卡：讓模型改我的預製範本（不要從頭寫）
-> 用法：開新對話先貼「開場 1/3」，再貼「範本 1/7」。之後一次只複製一張卡，把 `{{...}}` 換成你的內容送出。每張 ≤ 1200 字元，每張都能在新對話直接用（範本 1/7 是補充背景，忘了貼也能用）。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q07（提示卡 範本）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 流程：範本 2（對照）或 4、5、6（設計）→ 範本 3（改一段）→ 編譯測試 → 範本 7（檢查）。
 > 取資料：檔頭 `sed -n 1,30p 檔名`；TODO 位置 `grep -n "TODO(改這裡)" 檔名`；一段帶行號 `cat -n 檔名 | sed -n 40,80p`。
@@ -29,7 +29,7 @@ Task (EN): I have tested template code. Prefer minimal edits to it. Reply only �
 
 ---
 
-【提示卡｜範本 2/7｜題目規格 → 範本對照】→ 範本 3
+【提示卡｜範本 2/7｜題目規格 → 範本對照】→ Q07-03
 Task (EN): Map each requirement in the spec to the template. Fill the table; status must be one of: 直接可用 / 要改 / 範本沒有. Quote evidence. Answer in Traditional Chinese.
 任務：把題目每一項要求對到範本，填表。
 <<<資料 開始>>>
@@ -50,7 +50,7 @@ Task (EN): Map each requirement in the spec to the template. Fill the table; sta
 
 ---
 
-【提示卡｜範本 3/7｜依規格改這段 TODO】→ 範本 7
+【提示卡｜範本 3/7｜依規格改這段 TODO】→ Q07-07
 Task (EN): Edit only the template block below to meet the spec. Output a minimal patch (max 10 changed lines), keep all names and TODO markers, then 1 verify command and what success looks like. Answer in Traditional Chinese.
 任務：只改下面這段範本，符合規格。
 <<<資料 開始>>>
@@ -81,7 +81,7 @@ app_serial.c:37
 
 ---
 
-【提示卡｜範本 4/7｜把文字傳輸改成二進位批次】→ 範本 3
+【提示卡｜範本 4/7｜把文字傳輸改成二進位批次】→ Q07-03
 Task (EN): Design a binary batched encoding for this data. Fill the fixed slots only. Do not write code yet. Answer in Traditional Chinese.
 任務：設計「二進位 + 批次」的格式，先不要寫程式。
 <<<資料 開始>>>
@@ -103,7 +103,7 @@ Task (EN): Design a binary batched encoding for this data. Fill the fixed slots 
 
 ---
 
-【提示卡｜範本 5/7｜把工作拆給 N 片板子 / 2 個核心】→ 範本 3
+【提示卡｜範本 5/7｜把工作拆給 N 片板子 / 2 個核心】→ Q07-03
 Task (EN): Decide if this work can be split, then pick ONE template from the list. CRC / SHA over one stream can NOT be split. Fill the fixed slots only. Answer in Traditional Chinese.
 任務：判斷能不能拆（CRC、SHA 這種一段接一段的運算不能拆），選一個範本。
 <<<資料 開始>>>
@@ -130,7 +130,7 @@ E linux-perf/parallel_template.c：pthread 切塊、各自累加最後合併
 
 ---
 
-【提示卡｜範本 6/7｜範本和題目的介面不合】→ 範本 3
+【提示卡｜範本 6/7｜範本和題目的介面不合】→ Q07-03
 Task (EN): List every interface difference between the spec and the template in a table. Suggest converting at the boundary. No code yet. Answer in Traditional Chinese.
 任務：列出題目和範本的介面差異。
 <<<資料 開始>>>

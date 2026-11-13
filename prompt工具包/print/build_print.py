@@ -16,6 +16,9 @@ import tempfile
 
 from markdown_it import MarkdownIt
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "model"))
+import card_index  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "print"
 
@@ -25,7 +28,7 @@ BOOKS = [
         "00-考場SOP.pdf",
         "考場 SOP",
         "唯一的操作流程：每一步貼什麼、照什麼順序、什麼時候換對話",
-        ["../考場SOP.md"],
+        ["../考場SOP.md", "編號卡/00-編號總表.md"],
     ),
     (
         "01-考場隨身手冊.pdf",
@@ -86,14 +89,26 @@ BOOKS = [
             "cards/10-exam-day-flow.md",
             "cards/02-read-spec.md",
             "cards/05-cmake-build.md",
-            "cards/04-debug.md",
             "cards/06-tools-debug.md",
+            "cards/04-debug.md",
             "cards/03-optimize.md",
             "cards/09-template-adapt.md",
             "cards/11-ask-reference.md",
             "cards/12-implement.md",
             "cards/13-verify-submit.md",
             "cards/07-unknown-tech.md",
+        ],
+    ),
+    (
+        "07-參考卡.pdf",
+        "參考卡（L01～L17）",
+        "硬體 / SDK / ROS 2 / 演算法 / 效能 / 環境的事實卡，依編號排序；L18～L23 在 04-提示詞卡",
+        [
+            "cards/pico-sdk.md", "cards/pico-dma.md", "cards/pio.md", "cards/pico-peripherals.md",
+            "cards/multicore-sync.md", "cards/riscv-hazard3.md", "cards/arm-cortex-m33.md", "cards/ros2.md",
+            "cards/host-mcu-comm.md", "cards/algorithms-ds.md", "cards/c-linux-perf.md", "cards/python-perf.md",
+            "cards/parallel-distributed.md", "cards/git-env.md", "cards/control-dsp.md", "cards/freertos.md",
+            "cards/08-docs-map.md",
         ],
     ),
     (
@@ -129,6 +144,7 @@ BOOKS = [
 ]
 
 CSS = r"""
+.cid { font: bold 10pt "Noto Sans Mono CJK TC", monospace; margin: 10px 0 -6px; break-after: avoid; }
 pre.card { white-space: pre-wrap; word-break: break-all; font-size: 8.6pt; line-height: 1.42;
   border: 1px solid #999; border-radius: 4px; padding: 6px 8px; margin: 8px 0; break-inside: avoid;
   font-family: "Noto Sans Mono CJK TC", "Noto Sans CJK TC", monospace; background: #fafafa; }
@@ -199,7 +215,8 @@ def build_html(title: str, subtitle: str, files: list[str], flow: bool) -> str:
             # 貼上卡要「逐行照原樣」：每張卡用 <pre> 排，不讓 Markdown 把換行合併、把 * 當斜體
             chunks = re.split(r"\n---\n", md)
             body = md_to_html(chunks[0]) + "".join(
-                f"<pre class='card'>{html.escape(c.strip())}</pre>" if c.strip().startswith("【") else md_to_html(c)
+                (f"<div class='cid'>{card_index.id_by_title_line(c.strip().splitlines()[0]) or ''}</div>"
+                 f"<pre class='card'>{html.escape(c.strip())}</pre>") if c.strip().startswith("【") else md_to_html(c)
                 for c in chunks[1:] if c.strip())
         else:
             body = md_to_html(md)

@@ -1,5 +1,5 @@
 # 軍火庫：Pico 多核同步、計時/stdio/GPIO、micro-ROS rclc、電腦端 rclpy/pyserial/struct
-> 用法：一次只貼一張卡（兩條 `---` 之間）進對話，等模型回「收到」再問；函式名、參數順序、數值照卡上抄。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製這張卡，包在 `<<<資料 開始>>>`…`<<<資料 結束>>>` 裡、最後一行寫「繼續」再貼。本檔編號：A04（API卡 SYNC）、A05（API卡 PICO-IO）、A06（API卡 UROS）、A07（API卡 HOST-PY）。每張 ≤ 1200 字元。
 > 來源與驗證：pico-sdk 2.2.0 標頭 grep（2.1.1 這些原型相同）＋ pico2 測試專案 `-Wall -Wextra -Werror` 編譯連結 0 警告；micro-ROS jazzy `libmicroros/include` 標頭＋同專案連結 `libmicroros.a`；pyserial 3.5 inspect＋pty 實跑；struct/array 實跑；rclpy 只從 repo 範本複製（之前在 Jazzy 容器跑過，這次沒實跑）。都沒在板子上跑｜最後更新 2026-11-13
 
 ---

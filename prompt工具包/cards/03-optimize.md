@@ -1,12 +1,12 @@
 # 貼上卡：效能優化
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。提示卡＝直接用的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q06（提示卡 優化）、L22（參考卡 優化）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 流程：優化 1（瓶頸）→ 優化 2（選方案）→ 優化 3（改一處）→ 量測 → 優化 4（判讀）→ 回到 1。
 > 來源：full/03-optimize.md、lite/03-optimize.md（詳細版）｜最後更新 2026-11
 
 ---
 
-【提示卡｜優化 1/6｜瓶頸分析】→ 優化 2
+【提示卡｜優化 1/6｜瓶頸分析】→ Q06-02
 Task (EN): From the measurements, pick ONE bottleneck type A–F and quote the numbers as evidence. Do not suggest fixes. Answer in Traditional Chinese.
 任務：根據量測判斷瓶頸類型，先不要提改法。
 <<<資料 開始>>>
@@ -33,7 +33,7 @@ p：0.86（上限約 7 倍）
 
 ---
 
-【提示卡｜優化 2/6｜方案排序】→ 優化 3
+【提示卡｜優化 2/6｜方案排序】→ Q06-03
 Task (EN): List up to 5 optimization options for this bottleneck in a table, then pick ONE to do first. Answer in Traditional Chinese.
 任務：列方案，選一個先做。
 <<<資料 開始>>>
@@ -54,7 +54,7 @@ Task (EN): List up to 5 optimization options for this bottleneck in a table, the
 
 ---
 
-【提示卡｜優化 3/6｜實作單一改動】→ 量測後用優化 4
+【提示卡｜優化 3/6｜實作單一改動】→ 量測後用 Q06-04
 Task (EN): Implement ONE change as a minimal patch (max 15 changed lines). Keep all names. Then 1 verify command and what success looks like. Answer in Traditional Chinese.
 任務：只實作這一個方案：{{方案描述}}
 <<<資料 開始>>>
@@ -83,7 +83,7 @@ main.c:57
 
 ---
 
-【提示卡｜優化 4/6｜解讀量測結果】→ 優化 1
+【提示卡｜優化 4/6｜解讀量測結果】→ Q06-01
 Task (EN): Judge this measurement in the 4 fixed slots. Pick reasons only from list A–F. Answer in Traditional Chinese.
 任務：判讀這次改動的結果。
 <<<資料 開始>>>

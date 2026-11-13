@@ -7,6 +7,10 @@
 """
 import pathlib
 import re
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import card_index  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent       # prompt工具包/
 OUT = ROOT / "model" / "01-資源目錄.md"
@@ -99,8 +103,9 @@ def group_lines(entries):
         for kind, name, topic in cards_in(path, 34 if path.startswith(("model/", "arsenal/")) else TOPIC_MAX):
             m = re.match(r"(.+?)\s*(\d+)/(\d+)$", name)
             base, num = (m.group(1), m.group(2)) if m else (name, "")
-            label = prefix or f"{kind} {base}"
-            series.setdefault(label, []).append(f"{num} {topic}".strip())
+            code = card_index.code_of(kind, base.strip())
+            label = f"{code} {kind} {base}" if code else (prefix or f"{kind} {base}")
+            series.setdefault(label, []).append(f"{int(num):02d} {topic}" if num else topic)
         for label, items in series.items():
             lines.append(f"- {label}（{len(items)} 張）：" + "｜".join(items))
     return lines
@@ -109,15 +114,15 @@ def group_lines(entries):
 def main():
     head = ("# 目錄卡：我手上所有卡片的名稱（給模型看）\n"
             "> 用法：模型說「【要卡】目錄 n」時貼第 n 張。由 `model/gen_catalog.py` 從卡片標題自動產生；卡片改了就重跑。"
-            "每張 ≤ 1200 字元。\n> 模型要卡片時寫「【要卡】<系列名> <號碼>」，例：「規格卡 ROS 2」「參考卡 RP2350 DMA 2/8」"
-            "「提示卡 建置 2/7」。操作者照 `model/README.md` 的對照表找到檔案，複製那一張。\n")
+            "每張 ≤ 1200 字元。\n> 模型要卡片時寫「【要卡】編號」，例：「E01-02」「L02-02」「Q03-02」。"
+            "操作者到 `編號卡/` 對應的查找檔 Ctrl-F 那個編號，複製下面那張。\n")
     raw = []                                  # (群組標題, 行)
     for title, entries in GROUPS:
         for line in group_lines(entries):
             raw.append((title, line))
     # 依預算切卡：同一群組盡量放同一張，放不下就開新卡
     cards, cur, cur_title = [], [], None
-    intro = "以下是我手上的卡片名稱。要哪張就寫「【要卡】系列名 號碼」（號碼寫「2」或「2/8」都可以）。\n"
+    intro = "以下是我手上的卡片。要哪張就寫「【要卡】編號」：編號＝系列代號-兩位數號碼，例：L02-02＝參考卡 RP2350 DMA 第 02 張。\n"
     def size(title, lines):
         return len(f"【目錄｜99/99｜{title}】\n") + len(intro) + sum(len(l) + 1 for l in lines)
     for title, line in raw:
@@ -136,16 +141,18 @@ def main():
     OUT.write_text(head + "\n---\n\n" + "\n\n---\n\n".join(body) + "\n", encoding="utf-8")
     for i, (title, lines) in enumerate(cards, 1):
         print(f"目錄 {i}/{n}  {title}  ({len(body[i-1])} 字元)")
+    update_tool_list(cards)
+    write_lookup()
     parts = []
     for rel in ALL_PARTS:
-        text = (ROOT / rel).read_text(encoding="utf-8").strip()
+        text = with_ids((ROOT / rel).read_text(encoding="utf-8").strip())
         text = re.sub(r"^# ", "## ", text, count=1)        # 每個檔案的標題降一級
         parts.append(f"<!-- 來源：{rel} -->\n{text}")
     joined = "\n\n---\n\n".join(parts) + "\n"
     aparts = []
     for rel in ARS_PARTS:
         if (ROOT / rel).exists():
-            text = re.sub(r"^# ", "## ", (ROOT / rel).read_text(encoding="utf-8").strip(), count=1)
+            text = re.sub(r"^# ", "## ", with_ids((ROOT / rel).read_text(encoding="utf-8").strip()), count=1)
             aparts.append(f"<!-- 來源：{rel} -->\n{text}")
     if aparts:
         ajoined = "\n\n---\n\n".join(aparts) + "\n"
@@ -153,6 +160,73 @@ def main():
         print(f"{ARS.relative_to(ROOT)}  ({len(ARS.read_text(encoding='utf-8')):,} 字元)")
     ALL.write_text(ALL_HEAD.format(n=f"{len(joined) // 1000 * 1000:,}") + joined, encoding="utf-8")
     print(f"{ALL.relative_to(ROOT)}  ({len(ALL.read_text(encoding='utf-8')):,} 字元)")
+
+
+def with_ids(text):
+    """合併版給 local model：每張卡標題前加一行「編號：L02-02」，模型才能用編號要卡。"""
+    out = []
+    for line in text.split("\n"):
+        cid = card_index.id_by_title_line(line) if line.startswith("【") else None
+        if cid:
+            out.append(f"編號：{cid}")
+        out.append(line)
+    return "\n".join(out)
+
+
+def update_tool_list(catalog_cards):
+    """總說明 2/3 最後一行：目錄頁碼（M01-xx）會隨卡片增減變動，這裡自動重寫。"""
+    pages = {}
+    for i, (title, _) in enumerate(catalog_cards, 1):
+        key = "規格卡" if title.startswith("規格卡") else "API / 片段 / 食譜" if title.startswith("軍火庫") \
+            else "參考卡" if title.startswith("參考卡") else "提示卡"
+        pages.setdefault(key, []).append(i)
+    span = lambda ns: f"M01-{ns[0]:02d}" + (f"～{ns[-1]:02d}" if len(ns) > 1 else "")
+    line = "每個系列有哪幾號、主題是什麼：目錄 " + "、".join(f"{span(v)} {k}" for k, v in pages.items()) + "。"
+    p = ROOT / "model" / "00-總說明.md"
+    s = p.read_text(encoding="utf-8")
+    s2 = re.sub(r"^每個系列有哪幾號、主題是什麼：.*$", line, s, count=1, flags=re.M)
+    if s2 == s and line not in s:
+        raise SystemExit("00-總說明.md 找不到「每個系列有哪幾號、主題是什麼：」那一行")
+    p.write_text(s2, encoding="utf-8")
+
+
+LOOKUP = ROOT / "編號卡"
+LOOKUP_FILES = [  # (檔名, 標題, 包含的字母)
+    ("1-G開頭_H要資料_M目錄_E規格卡.md", "開頭、要資料、目錄、規格卡", "GHME"),
+    ("2-A_API卡_C片段卡_F食譜卡.md", "軍火庫：API 卡、片段卡、食譜卡", "ACF"),
+    ("3-Q提示卡.md", "提示卡（固定流程）", "Q"),
+    ("4-L參考卡.md", "參考卡（硬體 / 軟體事實）", "L"),
+]
+LOOKUP_HEAD = """# {title}
+
+> 由 `model/gen_catalog.py` 自動產生，不要手改（改原始卡片後重跑）。
+> 用法：**Ctrl-F 編號**（例 `{ex}`）→ 跳到「## 編號」那一行 → 複製下面那張卡（從【 到下一條 --- 之前）。
+> 模型寫 `【要卡】編號` 時來這裡找；看不清楚就開 GitHub 的 Raw 檢視再 Ctrl-F。全部編號一覽：`00-編號總表.md`。
+> 包法：卡片包在 `<<<資料 開始>>>`…`<<<資料 結束>>>` 裡，最後一行寫「繼續」；**提示卡（Q、G02）直接貼，不要包**。
+"""
+
+
+def write_lookup():
+    idx = card_index.build_index()
+    LOOKUP.mkdir(exist_ok=True)
+    rows = ["# 編號總表（全部卡片）", "",
+            "> 由 `model/gen_catalog.py` 自動產生。編號＝系列代號-兩位數號碼。字母：G 開頭｜H 要資料｜M 目錄｜E 規格卡｜"
+            "A API卡｜C 片段卡｜F 食譜卡｜Q 提示卡｜L 參考卡。",
+            "> 找卡：看編號的字母 → 開下表「查找檔」那一份 → Ctrl-F 編號。", "",
+            "| 查找檔 | 字母 |", "|---|---|"]
+    rows += [f"| `{f}` | {', '.join(letters)} |" for f, _, letters in LOOKUP_FILES]
+    rows += ["", "| 編號 | 卡名 | 主題 | 原始檔 |", "|---|---|---|---|"]
+    for c in idx:
+        rows.append(f"| {c['id']} | {card_index.name_of(c)} | {c['topic']} | `{c['file']}` |")
+    (LOOKUP / "00-編號總表.md").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    for fname, title, letters in LOOKUP_FILES:
+        cs = [c for c in idx if c["id"][0] in letters]
+        body = [LOOKUP_HEAD.format(title=title, ex=cs[0]["id"] if cs else "")]
+        for c in cs:
+            body.append(f"## {c['id']}\n\n{c['text']}")
+        (LOOKUP / fname).write_text("\n\n---\n\n".join(body) + "\n", encoding="utf-8")
+        size = len((LOOKUP / fname).read_bytes())
+        print(f"編號卡/{fname}  {len(cs)} 張  {size // 1024} KB")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 # 軍火庫：電腦端程式片段（序列埠、多板、ROS 2、micro-ROS、演算法、效能）
-> 用法：一次只貼一張卡（兩條 `---` 之間），再寫你的問題。程式照抄，只換 `<尖括號>`；「要換」寫了每個要換的東西。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製這張卡，包在 `<<<資料 開始>>>`…`<<<資料 結束>>>` 裡、最後一行寫「繼續」再貼。本檔編號：C08（片段卡 HOST-SERIAL）、C09（片段卡 HOST-MULTI）、C10（片段卡 HOST-ROS）、C11（片段卡 HOST-UROS）、C12（片段卡 ALGO）、C13（片段卡 PERF）。每張 ≤ 1200 字元。
 > 來源與驗證：`預製程式碼/` 的 ros2、micro-ros、algo、bits-riscv、linux-perf。Python 用 pyserial + `fake_pico.py` 實跑；C 用 `gcc -O2 -Wall -Wextra -std=c11 -fsanitize=address,undefined` 實跑（PERF 另跑 `-fsanitize=thread`）；rclpy 沒裝 → ROS 卡從範本複製；micro-ROS 卡只驗編譯｜最後更新 2026-11-13
 
 ---

@@ -1,5 +1,5 @@
 # 貼上卡：考試當天前 30 分鐘
-> 用法：開考後照順序做 1 → 5。每張先在終端機跑「先跑」的指令，把輸出填進 `{{...}}`，再整張貼給模型。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q01（提示卡 開考）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 題目太長：前幾段只貼資料區塊（開頭寫「第 k/N 段」，模型會回「收到」），最後一段才貼開考 3/5。
 > 貼上長度：指令都用 `head` / `sed -n` 限制行數。模型說「太長」或回答變怪，就把行數砍半分兩次貼（先貼的那次加一句「先不要分析，回覆『收到』」）。
@@ -8,7 +8,7 @@
 
 ---
 
-【提示卡｜開考 1/5｜repo 結構地圖】→ 開考 2（約 0:00–0:05）
+【提示卡｜開考 1/5｜repo 結構地圖】→ Q01-02（約 0:00–0:05）
 Task (EN): Classify every path into one category A–G. Use only the data. Answer in Traditional Chinese.
 任務：把每個檔案或資料夾分類。
 先跑（在題目 repo 根目錄）：
@@ -27,7 +27,7 @@ Task (EN): Classify every path into one category A–G. Use only the data. Answe
 
 ---
 
-【提示卡｜開考 2/5｜評分流程（.gitlab-ci.yml）】→ 開考 3（約 0:05–0:12）
+【提示卡｜開考 2/5｜評分流程（.gitlab-ci.yml）】→ Q01-03（約 0:05–0:12）
 Task (EN): Explain each CI job in the fixed slots. Quote the YAML lines. Use only the data. Answer in Traditional Chinese.
 任務：說明 CI 怎麼評分、我怎麼在本地重現。
 先跑：
@@ -50,7 +50,7 @@ Task (EN): Explain each CI job in the fixed slots. Quote the YAML lines. Use onl
 
 ---
 
-【提示卡｜開考 3/5｜題目 → 理解卡】→ 開考 4（約 0:12–0:20）
+【提示卡｜開考 3/5｜題目 → 理解卡】→ Q01-04（約 0:12–0:20）
 Task (EN): Fill the understanding card using only the problem text. Write 「資料中沒有」 for anything not stated. Answer in Traditional Chinese.
 任務：只根據題目文字填理解卡。
 先跑：`wc -c README.md; sed -n 1,60p README.md`（太長就分段：`sed -n 61,120p README.md`…）。PDF 或 Wiki 就從瀏覽器複製文字。
@@ -74,7 +74,7 @@ Task (EN): Fill the understanding card using only the problem text. Write 「資
 
 ---
 
-【提示卡｜開考 4/5｜對應猜題 → 選範本】→ 開考 5（約 0:20–0:25）
+【提示卡｜開考 4/5｜對應猜題 → 選範本】→ Q01-05（約 0:20–0:25）
 Task (EN): For each sub-question, pick ONE category A–I from the list and quote the sentence that supports it. Answer in Traditional Chinese.
 任務：每一小題選一個最像的類別。
 <<<資料 開始>>>

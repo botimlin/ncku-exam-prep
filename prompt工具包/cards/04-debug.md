@@ -1,5 +1,5 @@
 # 貼上卡：除錯
-> 用法：一次只複製一張卡（兩條分隔線之間），把 `{{...}}` 換成你的內容，貼進對話送出。提示卡＝直接用的問句；參考卡＝貼給模型當正確資料。每張 ≤ 1200 字元，每張都能在新對話直接用。
+> 用法（照 `../../考場SOP.md`）：模型寫【要卡】編號時，到 `../編號卡/` Ctrl-F 那個編號複製；提示卡把 `{{...}}` 換成你的內容，**直接貼、不要包、不寫「繼續」**；同檔的參考卡要包起來＋「繼續」。手動模式（SOP 附錄 B）：開場 1/3 → 工具卡 → 這張，一個對話一張提示卡。本檔編號：Q05（提示卡 除錯）、L21（參考卡 除錯）。每張 ≤ 1200 字元。
 > 寫法：第一行 `Task (EN)` 是英文任務句；資料放在 `<<<資料 開始>>>` 和 `<<<資料 結束>>>` 之間；輸出格式放在資料後面。標題後的 `→` 是下一張。
 > 流程：除錯 1 或 3（定位）→ 除錯 2（分不出來時做實驗）→ `06-tools-debug.md` 工具 7（最小修改 + 驗證）→ 除錯 4（修好但不懂時）。gdb、sanitizer、卡住、板子、序列埠、ROS 2 連線的專用卡在 `06-tools-debug.md`；CMake / colcon 錯誤在 `05-cmake-build.md`。
 > 知識：小模型不知道硬體的預設值與陷阱（例如 DMA 預設不遞增寫入位址）。DMA / PIO / 多核 / USB 的問題，先在同一個對話貼對應的參考卡（`pico-dma.md` 2/8、`pio.md` 8/8、`multicore-sync.md`、`host-mcu-comm.md` 1/8），模型回「收到」後再貼這張。壓力測試：先貼參考卡，原本全錯的案例會答對。
@@ -7,7 +7,7 @@
 
 ---
 
-【提示卡｜除錯 1/6｜錯誤回報格式】→ 除錯 2 或工具 7
+【提示卡｜除錯 1/6｜錯誤回報格式】→ Q05-02 或 Q04-07
 Task (EN): List up to 3 likely causes ranked by likelihood, each with evidence and one check. Do not fix yet. Answer in Traditional Chinese.
 任務：列出可能原因與驗證方法，先不要修。
 <<<資料 開始>>>
@@ -31,7 +31,7 @@ Task (EN): List up to 3 likely causes ranked by likelihood, each with evidence a
 
 ---
 
-【提示卡｜除錯 2/6｜設計區分假設的實驗】→ 工具 7
+【提示卡｜除錯 2/6｜設計區分假設的實驗】→ Q04-07
 Task (EN): Design ONE minimal experiment that tells hypothesis A from B. Do not modify the program logic. Answer in Traditional Chinese.
 任務：設計一個最小實驗區分兩個假設，不修改程式邏輯。
 <<<資料 開始>>>
@@ -54,7 +54,7 @@ Task (EN): Design ONE minimal experiment that tells hypothesis A from B. Do not 
 
 ---
 
-【提示卡｜除錯 3/6｜看不懂的錯誤訊息】→ 除錯 1 或工具 7
+【提示卡｜除錯 3/6｜看不懂的錯誤訊息】→ Q05-01 或 Q04-07
 Task (EN): Explain the FIRST error in one plain sentence, then list its 3 most common causes and which to check first. Answer in Traditional Chinese.
 任務：解釋第一個錯誤訊息。
 <<<資料 開始>>>
