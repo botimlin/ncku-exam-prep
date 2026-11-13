@@ -25,7 +25,8 @@
 | `spec-algo.md` | 模型 | 規格卡 ALGO：`預製程式碼/algo/` |
 | `spec-bits-riscv.md` | 模型 | 規格卡 BITS：`預製程式碼/bits-riscv/` |
 | `spec-linux-perf.md` | 模型 | 規格卡 PERF：`預製程式碼/linux-perf/` |
-| `gen_catalog.py` | 你 | 卡片改了就重跑：`python3 model/gen_catalog.py`（在 `prompt工具包/` 執行） |
+| `gen_catalog.py` | 你 | 卡片改了就重跑：`python3 model/gen_catalog.py`（在 `prompt工具包/` 執行）；會重做目錄和合併版 |
+| `../print/05-給模型的說明書.md` | local model | 上面給模型看的檔案合成一份（約 82,000 字元），給 context 夠大的 local model 一次載入（system prompt 或知識檔）。整份都載入時，模型不用再跟你要卡片，只會要程式、資料、指令輸出 |
 
 ## 開新對話的步驟
 

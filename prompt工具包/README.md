@@ -69,6 +69,7 @@ prompt工具包/
     ├── 03-流程詳細版.pdf     full/00、02–07
     ├── 04-提示詞卡.pdf       cards/ 的提示卡
     ├── 05-給模型的說明書.pdf model/ 全部
+    ├── 05-給模型的說明書.md  model/ 給模型看的部分合成一份（給 local model 一次載入；gen_catalog.py 產生）
     └── build_print.py        重新產生 PDF（需 markdown-it-py + Node playwright 或 Chrome；`python3 print/build_print.py 05` 只做一本）
 ```
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""從卡片標題自動產生 01-資源目錄.md（給模型看的卡片名稱清單）。
+"""從卡片標題自動產生 01-資源目錄.md（給模型看的卡片名稱清單），
+再把給模型看的檔案合成一份 print/05-給模型的說明書.md（給 local model 一次載入用）。
 
 用法（在 prompt工具包/ 執行）：  python3 model/gen_catalog.py
 卡片有增減、改標題後重跑一次。每張目錄卡 ≤ 1200 字元，放不下就自動拆成下一張。
@@ -9,6 +10,24 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent       # prompt工具包/
 OUT = ROOT / "model" / "01-資源目錄.md"
+ALL = ROOT / "print" / "05-給模型的說明書.md"
+ALL_PARTS = ["model/00-總說明.md", "model/02-要資料.md", "model/01-資源目錄.md", "model/spec-ros2.md",
+             "model/spec-pico.md", "model/spec-micro-ros.md", "model/spec-algo.md",
+             "model/spec-bits-riscv.md", "model/spec-linux-perf.md"]
+ALL_HEAD = """# 給模型的說明書（合併版，給 local model 一次載入）
+
+> 這份是 `prompt工具包/model/` 給模型看的檔案合成的一份（`model/gen_catalog.py` 自動產生，不要手改）。
+> 用法：放進 local model 的 system prompt 或知識檔。整份約 {n} 字元；context 放不下時改用 `model/` 的單張卡片，一次貼一張。
+> 操作者說明在 `model/README.md`（沒有放進這份）。
+
+## 給模型：整份都在你的 context 裡時
+
+- 規格卡、目錄、資料代號你都已經看得到，**不用再跟操作者要卡片**；直接引用卡片名稱（例：「規格卡 PICO 6/13」）當證據。
+- 還是要跟操作者要的：程式碼本身（`【需要】程式 檔名 起-迄`）、考場的資料（`【需要】資料 B1` 這類代號）、指令輸出（`【需要】指令 …`）。
+- 每次最多要 2 樣；資料夠了就直接回答，缺的標【推測】。
+- 規格卡的行號是考前版本；操作者在考場改過的檔案，行號以操作者貼的為準。
+
+"""
 BUDGET = 1200
 TOPIC_MAX = 20                                               # 每張卡的主題最多取幾個字
 
@@ -94,6 +113,14 @@ def main():
     OUT.write_text(head + "\n---\n\n" + "\n\n---\n\n".join(body) + "\n", encoding="utf-8")
     for i, (title, lines) in enumerate(cards, 1):
         print(f"目錄 {i}/{n}  {title}  ({len(body[i-1])} 字元)")
+    parts = []
+    for rel in ALL_PARTS:
+        text = (ROOT / rel).read_text(encoding="utf-8").strip()
+        text = re.sub(r"^# ", "## ", text, count=1)        # 每個檔案的標題降一級
+        parts.append(f"<!-- 來源：{rel} -->\n{text}")
+    joined = "\n\n---\n\n".join(parts) + "\n"
+    ALL.write_text(ALL_HEAD.format(n=f"{len(joined) // 1000 * 1000:,}") + joined, encoding="utf-8")
+    print(f"{ALL.relative_to(ROOT)}  ({len(ALL.read_text(encoding='utf-8')):,} 字元)")
 
 
 if __name__ == "__main__":
